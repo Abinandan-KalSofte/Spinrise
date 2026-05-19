@@ -1,4 +1,5 @@
-import { Button, Layout, Typography } from 'antd'
+import { Button, Card, Layout, Typography } from 'antd'
+import { FileTextOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { authApi } from '../features/auth/api/authApi'
 import { useAuthStore } from '../features/auth/store/useAuthStore'
@@ -31,8 +32,24 @@ export default function DashboardPage() {
       <Content style={{ padding: 24 }}>
         <Typography.Title level={4}>Dashboard</Typography.Title>
         <Typography.Text type="secondary">
-          Welcome, {user?.userName}. Modules will appear here as they are built.
+          Welcome, {user?.userName}. Select a module to get started.
         </Typography.Text>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 24 }}>
+          <Card
+            hoverable
+            style={{ width: 220 }}
+            onClick={() => navigate('/purchase-requisition')}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <FileTextOutlined style={{ fontSize: 28, color: '#185FA5' }} />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Purchase Requisition</div>
+                <div style={{ fontSize: 12, color: '#888' }}>Create &amp; manage PRs</div>
+              </div>
+            </div>
+          </Card>
+        </div>
       </Content>
     </Layout>
   )

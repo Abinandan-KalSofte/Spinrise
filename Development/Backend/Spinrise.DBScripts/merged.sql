@@ -775,26 +775,25 @@ BEGIN
 
         DECLARE @SrSno INT = 1;
         DECLARE @LogItemCode VARCHAR(10), @LogMacNo VARCHAR(5),
-                @LogQty NUMERIC(15,0), @LogRate NUMERIC(13,4),
-                @LogLpoRate NUMERIC(13,4), @LogLpoDate DATE, @LogLpoFrom VARCHAR(40);
+                @LogQty NUMERIC(15,0), @LogRate NUMERIC(13,4);
 
         DECLARE audit_cur CURSOR FAST_FORWARD FOR
             SELECT itemcode, macno,
                    CAST(qtyind AS NUMERIC(15,0)),
-                   RATE, LPO_RATE, LPO_DATE, PUR_FROM
+                   RATE
             FROM dbo.PO_PRL
             WHERE divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate
             ORDER BY prsno;
 
         OPEN audit_cur;
-        FETCH NEXT FROM audit_cur INTO @LogItemCode, @LogMacNo, @LogQty, @LogRate, @LogLpoRate, @LogLpoDate, @LogLpoFrom;
+        FETCH NEXT FROM audit_cur INTO @LogItemCode, @LogMacNo, @LogQty, @LogRate;
 
         WHILE @@FETCH_STATUS = 0
         BEGIN
             INSERT INTO dbo.LogDet_po
             (
                 divcode, prno, prdate, prsno,
-                itemcode, macno, quantity, RATE, LPO_RATE, LPO_DATE,
+                itemcode, macno, quantity, RATE,
                 Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
                 Trans_UserId, Trans_date, moduleNo,
                 reqname, createdby
@@ -802,14 +801,14 @@ BEGIN
             VALUES
             (
                 @DivCode, @PrNo, @PrDate, @SrSno,
-                @LogItemCode, @LogMacNo, @LogQty, @LogRate, @LogLpoRate, @LogLpoDate,
+                @LogItemCode, @LogMacNo, @LogQty, @LogRate,
                 'Purchase Requisition', @Mode, @HostName, @IpAddress,
                 @UserId, GETDATE(), 4,
                 @ReqName, @UserId
             );
 
             SET @SrSno = @SrSno + 1;
-            FETCH NEXT FROM audit_cur INTO @LogItemCode, @LogMacNo, @LogQty, @LogRate, @LogLpoRate, @LogLpoDate, @LogLpoFrom;
+            FETCH NEXT FROM audit_cur INTO @LogItemCode, @LogMacNo, @LogQty, @LogRate;
         END
 
         CLOSE audit_cur;
