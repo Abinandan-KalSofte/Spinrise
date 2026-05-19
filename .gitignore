@@ -1,0 +1,39 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+*.DS_Store
+appsettings.Development.json
+appsettings.Production.json
+
+# Publish output
+publish/
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# Node / Frontend
+Development/spinrise-web/node_modules/
+Development/spinrise-web/dist/
+Development/spinrise-web/.env.local
+Development/spinrise-web/.env.production
+
+# Logs
+logs/
+*.log
+
+# Test results
+TestResults/
+coverage/
+allure-results/
+allure-report/
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp

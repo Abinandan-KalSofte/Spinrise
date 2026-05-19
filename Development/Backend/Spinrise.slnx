@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="Spinrise.API/Spinrise.API.csproj" />
+  <Project Path="Spinrise.Application/Spinrise.Application.csproj" />
+  <Project Path="Spinrise.DBScripts/Spinrise.DBScripts.csproj" />
+  <Project Path="Spinrise.Domain/Spinrise.Domain.csproj" />
+  <Project Path="Spinrise.Infrastructure/Spinrise.Infrastructure.csproj" />
+  <Project Path="Spinrise.Shared/Spinrise.Shared.csproj" />
+  <Project Path="Spinrise.Tests/Spinrise.Tests.csproj" />
+</Solution>
