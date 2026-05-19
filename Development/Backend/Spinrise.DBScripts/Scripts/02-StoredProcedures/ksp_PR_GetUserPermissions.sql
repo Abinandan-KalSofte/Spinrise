@@ -7,14 +7,28 @@ AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
+        DECLARE @ULevel DECIMAL;
+
+        SELECT @ULevel = alevel
+        FROM dbo.PP_PASSWD
+        WHERE RTRIM(user_id) = RTRIM(@UserId)
+          AND RTRIM(divcode)  = RTRIM(@DivCode)
+          AND UPPER(ISNULL(activeflg, 'N')) = 'Y';
+
+        IF @ULevel IS NULL
+        BEGIN
+            SELECT 1 AS CanAdd, 1 AS CanModify, 1 AS CanDelete;
+            RETURN;
+        END;
+
         SELECT TOP 1
-            CAST(ISNULL(ADD_FLG, 1) AS INT) AS CanAdd,
-            CAST(ISNULL(MOD_FLG, 1) AS INT) AS CanModify,
-            CAST(ISNULL(DEL_FLG, 1) AS INT) AS CanDelete
+            CAST(CASE WHEN UPPER(ISNULL(ADD_FLG, 'Y')) = 'Y' THEN 1 ELSE 0 END AS INT) AS CanAdd,
+            CAST(CASE WHEN UPPER(ISNULL(MOD_FLG, 'Y')) = 'Y' THEN 1 ELSE 0 END AS INT) AS CanModify,
+            CAST(CASE WHEN UPPER(ISNULL(DEL_FLG, 'Y')) = 'Y' THEN 1 ELSE 0 END AS INT) AS CanDelete
         FROM dbo.USERLEVEL
-        WHERE RTRIM(userid)  = RTRIM(@UserId)
-          AND RTRIM(divcode) = RTRIM(@DivCode)
-          AND sno = 4;
+        WHERE RTRIM(DIVCODE) = RTRIM(@DivCode)
+          AND MODULE          = 4
+          AND ULEVEL          = @ULevel;
 
         IF @@ROWCOUNT = 0
             SELECT 1 AS CanAdd, 1 AS CanModify, 1 AS CanDelete;
