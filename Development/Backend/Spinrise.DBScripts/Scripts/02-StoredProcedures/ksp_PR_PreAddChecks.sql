@@ -31,10 +31,9 @@ BEGIN
     IF EXISTS (SELECT 1 FROM dbo.PO_DOC_PARA WHERE TC = 'IND')
         SET @DocParaExists = 1;
 
-    -- Backdate flag from IN_PARA (Store Inventory parameter)
-    SELECT @BackDateFlag = ISNULL(UPPER(RTRIM(ip.BACKDATE)), 'Y')
-    FROM dbo.IN_PARA ip
-    WHERE ip.divcode = @DivCode;
+    -- Backdate flag from IN_PARA (single-row config table — no divcode column)
+    SELECT TOP 1 @BackDateFlag = ISNULL(UPPER(RTRIM(ip.BACKDATE)), 'Y')
+    FROM dbo.IN_PARA ip;
 
     -- Max existing PR date in current financial year
     SELECT @MaxPrDate = CAST(MAX(h.prdate) AS DATE)

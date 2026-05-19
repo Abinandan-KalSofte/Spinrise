@@ -10,6 +10,10 @@
 USE JAT;
 GO
 
+-- Ensure OPENJSON is available (required by ksp_PR_Save)
+ALTER DATABASE JAT SET COMPATIBILITY_LEVEL = 130;
+GO
+
 -- ── Auth ─────────────────────────────────────────────────────
 -- ksp_Auth_ValidateUser
 CREATE OR ALTER PROCEDURE dbo.ksp_Auth_ValidateUser
@@ -127,9 +131,9 @@ BEGIN
     IF EXISTS (SELECT 1 FROM dbo.PO_DOC_PARA WHERE TC = 'IND')
         SET @DocParaExists = 1;
 
-    SELECT @BackDateFlag = ISNULL(UPPER(RTRIM(ip.BACKDATE)), 'Y')
-    FROM dbo.IN_PARA ip
-    WHERE ip.divcode = @DivCode;
+    -- IN_PARA is a single-row config table — no divcode column
+    SELECT TOP 1 @BackDateFlag = ISNULL(UPPER(RTRIM(ip.BACKDATE)), 'Y')
+    FROM dbo.IN_PARA ip;
 
     SELECT @MaxPrDate = CAST(MAX(h.prdate) AS DATE)
     FROM dbo.PO_PRH h
