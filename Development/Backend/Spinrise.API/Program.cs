@@ -6,8 +6,11 @@ using Spinrise.API.Middleware;
 using Spinrise.Application.Areas.Security.Auth.Interfaces;
 using Spinrise.Application.Areas.Security.Auth.Services;
 using Spinrise.Application.Areas.Security.Division.Interfaces;
+using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Interfaces;
+using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Services;
 using Spinrise.Infrastructure.Areas.Security.Auth;
 using Spinrise.Infrastructure.Areas.Security.Division;
+using Spinrise.Infrastructure.Areas.PurchaseOrder.PurchaseRequisition;
 using Spinrise.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -87,6 +90,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
 builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
+builder.Services.AddScoped<IPrRepository, PrRepository>();
+builder.Services.AddScoped<IPrService, PrService>();
 
 // ══════════════════════════════════════════════════════════════════════════
 var app = builder.Build();

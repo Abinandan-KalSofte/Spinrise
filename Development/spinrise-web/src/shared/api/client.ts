@@ -46,6 +46,14 @@ export const apiHelpers = {
     const res = await api.post<ApiResponse<T>>(url, payload, config)
     return res.data.data as T
   },
+  async put<T>(url: string, payload: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const res = await api.put<ApiResponse<T>>(url, payload, config)
+    return res.data.data as T
+  },
+  async del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const res = await api.delete<ApiResponse<T>>(url, config)
+    return res.data.data as T
+  },
 }
 
 export default api

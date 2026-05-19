@@ -3,8 +3,9 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Spin } from 'antd'
 import ProtectedRoute from './shared/components/ProtectedRoute'
 
-const LoginPage     = lazy(() => import('./features/auth/pages/LoginPage'))
-const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const LoginPage                = lazy(() => import('./features/auth/pages/LoginPage'))
+const DashboardPage            = lazy(() => import('./pages/DashboardPage'))
+const PurchaseRequisitionPage  = lazy(() => import('./features/pr/pages/PurchaseRequisitionPage'))
 
 export default function App() {
   return (
@@ -17,6 +18,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/purchase-requisition"
+            element={
+              <ProtectedRoute>
+                <PurchaseRequisitionPage />
               </ProtectedRoute>
             }
           />
