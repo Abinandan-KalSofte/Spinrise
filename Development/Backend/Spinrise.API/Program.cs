@@ -11,7 +11,10 @@ using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Services;
 using Spinrise.Infrastructure.Areas.Security.Auth;
 using Spinrise.Infrastructure.Areas.Security.Division;
 using Spinrise.Infrastructure.Areas.PurchaseOrder.PurchaseRequisition;
+using Dapper;
 using Spinrise.Infrastructure.Data;
+
+SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
 
 var builder = WebApplication.CreateBuilder(args);
 

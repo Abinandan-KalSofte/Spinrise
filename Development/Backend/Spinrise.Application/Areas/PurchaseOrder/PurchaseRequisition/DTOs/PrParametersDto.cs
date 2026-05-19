@@ -1,18 +1,19 @@
 namespace Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.DTOs;
 
-public record PrParametersDto(
-    string ManualIndNo,
-    string BudgetQty,
-    string PendingOrderPara,
-    string Penpodetails,
-    string InditemGrp,
-    int    PurTypeFlg,
-    string EmpMasterComm,
-    string PdfExportFlag,
-    string PrSmsSendFlg,
-    string PrSmsStatusFlg,
-    string PrILevel,
-    string PrFLevel,
-    string? DefaultPrType,
-    string MultiSelectLookup
-);
+public class PrParametersDto
+{
+    public string ManualIndNo     { get; set; } = "";
+    public string BudgetQty       { get; set; } = "";
+    public string PendingOrderPara{ get; set; } = "";
+    public string Penpodetails    { get; set; } = "";
+    public string InditemGrp      { get; set; } = "";
+    public int    PurTypeFlg      { get; set; }
+    public string EmpMasterComm   { get; set; } = "";
+    public string PdfExportFlag   { get; set; } = "";
+    public string PrSmsSendFlg    { get; set; } = "";
+    public string PrSmsStatusFlg  { get; set; } = "";
+    public string PrILevel        { get; set; } = "";
+    public string PrFLevel        { get; set; } = "";
+    public int?   DefaultPrType   { get; set; }
+    public string MultiSelectLookup { get; set; } = "N";
+}
