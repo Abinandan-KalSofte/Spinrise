@@ -1,6 +1,6 @@
 -- ============================================================
 -- Spinrise ERP V2 — Merged Stored Procedures
--- Database: SpinRiseSaranya
+-- Database: JAT
 -- Deploy: Execute this entire file in SSMS against SpinRiseSaranya
 -- Rule: NEVER run individual SP files in production — use this file
 -- ============================================================
