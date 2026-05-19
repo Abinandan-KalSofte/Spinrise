@@ -2,10 +2,11 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Spin } from 'antd'
 import ProtectedRoute from './shared/components/ProtectedRoute'
+import AppShell from './shared/components/AppShell'
 
-const LoginPage                = lazy(() => import('./features/auth/pages/LoginPage'))
-const DashboardPage            = lazy(() => import('./pages/DashboardPage'))
-const PurchaseRequisitionPage  = lazy(() => import('./features/pr/pages/PurchaseRequisitionPage'))
+const LoginPage               = lazy(() => import('./features/auth/pages/LoginPage'))
+const DashboardPage           = lazy(() => import('./pages/DashboardPage'))
+const PurchaseRequisitionPage = lazy(() => import('./features/pr/pages/PurchaseRequisitionPage'))
 
 export default function App() {
   return (
@@ -14,21 +15,15 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route
-            path="/dashboard"
             element={
               <ProtectedRoute>
-                <DashboardPage />
+                <AppShell />
               </ProtectedRoute>
             }
-          />
-          <Route
-            path="/purchase-requisition"
-            element={
-              <ProtectedRoute>
-                <PurchaseRequisitionPage />
-              </ProtectedRoute>
-            }
-          />
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/purchase-requisition" element={<PurchaseRequisitionPage />} />
+          </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Suspense>

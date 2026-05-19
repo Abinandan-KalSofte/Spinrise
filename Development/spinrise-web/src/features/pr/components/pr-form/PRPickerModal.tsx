@@ -45,7 +45,8 @@ export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalP
     setLoading(true)
     try {
       const data = await prApi.getList(divCode, yfDate, ylDate, apiMode, { pageSize: 500 })
-      setAllRows(data)
+      // Only show PRs eligible for Modify/Delete: unapproved, non-cancelled, non-amended (FSD §4.4)
+      setAllRows(data.filter((r) => r.prStatus === 'REQUESTED'))
     } catch { /* stay as-is */ }
     finally { setLoading(false) }
   }, [divCode, apiMode])

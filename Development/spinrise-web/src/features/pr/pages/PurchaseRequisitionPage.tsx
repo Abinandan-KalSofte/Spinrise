@@ -358,6 +358,7 @@ export default function PurchaseRequisitionPage() {
         prDate={savedPr?.prDate ?? null}
         prStatus={prStatus}
         savedPrNo={savedPrNo}
+        isNewMode={mode === 'new'}
       />
 
       {/* ── Unsaved-changes confirmation ── */}
