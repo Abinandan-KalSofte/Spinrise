@@ -26,12 +26,9 @@ BEGIN
     IF EXISTS (SELECT 1 FROM dbo.IN_DEP WHERE divcode = @DivCode)
         SET @DeptExists = 1;
 
-    -- Check 3: PO_DOC_PARA has an entry for PURCHASE REQUISITION
-    IF EXISTS (
-        SELECT 1 FROM dbo.PO_DOC_PARA
-        WHERE UPPER(RTRIM(DOCNAME)) = 'PURCHASE REQUISITION'
-          AND divcode = @DivCode
-    )
+    -- Check 3: PO_DOC_PARA has a starting number defined for IND (Indent/PR)
+    -- PO_DOC_PARA only has TC and STDOCNO columns
+    IF EXISTS (SELECT 1 FROM dbo.PO_DOC_PARA WHERE TC = 'IND')
         SET @DocParaExists = 1;
 
     -- Backdate flag from IN_PARA (Store Inventory parameter)

@@ -8,7 +8,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetItems
 (
     @DivCode       VARCHAR(2),
     @Search        VARCHAR(50) = NULL,   -- partial code or name
-    @ItemGrpCode   VARCHAR(3)  = NULL,   -- filter by group when InditemGrp='Y'
+    @ItemGrpCode   VARCHAR(10) = NULL,   -- filter by sgrpcode when InditemGrp='Y'
     @PageNumber    INT         = 1,
     @PageSize      INT         = 50
 )
@@ -22,7 +22,7 @@ BEGIN
         RTRIM(i.uom)                   AS Uom,
         ISNULL(i.minlevel,   0)        AS MinLevel,
         ISNULL(i.maxlevel,   0)        AS MaxLevel,
-        i.IMAGE                        AS ItemImage,
+        i.ITEMIMAGE                    AS ItemImage,
         -- Last PO Rate for this item + division
         (
             SELECT TOP 1 pl.RATE
@@ -37,7 +37,7 @@ BEGIN
             ORDER BY ph.porddt DESC
         ) AS LpoRate,
         (
-            SELECT TOP 1 ph.porddt
+            SELECT TOP 1 CAST(ph.porddt AS DATE)
             FROM dbo.PO_ORDL pl
             INNER JOIN dbo.PO_ORDH ph
                 ON ph.divcode = pl.divcode
@@ -52,7 +52,7 @@ BEGIN
     WHERE ISNULL(i.IsItemActive, 1) = 1
       AND (
             @ItemGrpCode IS NULL
-            OR RTRIM(i.itemgrpcode) = @ItemGrpCode
+            OR RTRIM(i.sgrpcode) = @ItemGrpCode
           )
       AND (
             @Search IS NULL

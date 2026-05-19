@@ -4,6 +4,8 @@
 -- Add:    generates PR number, inserts header + lines + audit.
 -- Modify: deletes all lines, reinserts, updates header.
 -- Returns: new PrNo on success.
+-- NOTE: Requires database compatibility level >= 130 for OPENJSON.
+--       Run if needed: ALTER DATABASE JAT SET COMPATIBILITY_LEVEL = 130;
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PR_Save
 (
@@ -29,8 +31,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PR_Save
 
     -- Lines JSON (parsed inside SP via OPENJSON)
     -- Each element: {"ItemCode","MacNo","QtyInd","ReqdDate","Rate","LpoRate","LpoDate","LpoFrom",
-    --                "RateSource","RateJustification","CurStock","CcCode","CatCode","BgrpCode",
-    --                "AppCost","Remarks","Sample"}
+    --                "CurStock","CcCode","CatCode","BgrpCode","AppCost","Remarks","Sample"}
     @LinesJson      NVARCHAR(MAX),
 
     -- Financial year boundaries for doc number generation
@@ -50,11 +51,11 @@ BEGIN
 
         IF @Mode = 'ADD'
         BEGIN
+            -- PO_DOC_PARA only has TC and STDOCNO columns
             DECLARE @StartDocNo NUMERIC(6,0) = 1;
             SELECT @StartDocNo = ISNULL(STDOCNO, 1)
             FROM dbo.PO_DOC_PARA
-            WHERE divcode = @DivCode
-              AND UPPER(RTRIM(DOCNAME)) = 'PURCHASE REQUISITION';
+            WHERE TC = 'IND';
 
             SELECT @PrNo = ISNULL(MAX(prno), 0) + 1
             FROM dbo.PO_PRH
@@ -89,11 +90,11 @@ BEGIN
             VALUES
             (
                 @DivCode, @PrNo, @PrDate, @DepCode,
-                ISNULL(NULLIF(RTRIM(@RefNo),''), '0'),  -- blank refno stored as '0'
+                ISNULL(NULLIF(RTRIM(@RefNo),''), '0'),
                 @IType, @Section, @PoGrp, @ReqName,
                 'N', 0, 0,
                 'N', @UserId, @UserId, @CreatedDt,
-                NULL, NULL  -- scopecode and SubCost not rendered in SPINRISE
+                NULL, NULL
             );
         END
         ELSE
@@ -123,7 +124,6 @@ BEGIN
             divcode, prno, prdate, prsno,
             itemcode, macno, qtyind, reqddate,
             RATE, LPO_RATE, LPO_DATE, PUR_FROM,
-            RATE_SOURCE, RATE_JUSTIFICATION,
             curstock, CCCODE, CATCODE, BGRPCODE,
             APPCOST, remarks, Sample, Depcode,
             FirstAppQty, SecondAppQty, ThirdAppQty
@@ -141,14 +141,12 @@ BEGIN
             j.LpoRate,
             NULLIF(j.LpoDate,         ''),
             NULLIF(RTRIM(j.LpoFrom),  ''),
-            ISNULL(NULLIF(RTRIM(j.RateSource), ''), 'LPO'),
-            NULLIF(RTRIM(j.RateJustification), ''),
             j.CurStock,
             NULLIF(j.CcCode,          0),
             NULLIF(RTRIM(j.CatCode),  ''),
             NULLIF(RTRIM(j.BgrpCode), ''),
             NULLIF(j.AppCost,         0),
-            UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)),  -- DB is varchar(50)
+            UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)),
             ISNULL(NULLIF(j.Sample, ''), 'N'),
             @DepCode,
             0, 0, 0
@@ -162,8 +160,6 @@ BEGIN
             LpoRate             NUMERIC(13,4)   '$.LpoRate',
             LpoDate             DATE            '$.LpoDate',
             LpoFrom             VARCHAR(40)     '$.LpoFrom',
-            RateSource          VARCHAR(6)      '$.RateSource',
-            RateJustification   VARCHAR(200)    '$.RateJustification',
             CurStock            NUMERIC(12,3)   '$.CurStock',
             CcCode              NUMERIC(4,0)    '$.CcCode',
             CatCode             VARCHAR(1)      '$.CatCode',
@@ -172,7 +168,7 @@ BEGIN
             Remarks             VARCHAR(100)    '$.Remarks',
             Sample              CHAR(1)         '$.Sample'
         ) j
-        WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';  -- silent purge of blank-item lines
+        WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
 
         -- ── 4. Audit log (LogDet_po) ───────────────────────────────────────
         DECLARE @SrSno INT = 1;
@@ -182,7 +178,7 @@ BEGIN
 
         DECLARE audit_cur CURSOR FAST_FORWARD FOR
             SELECT itemcode, macno,
-                   CAST(qtyind AS NUMERIC(15,0)),  -- integer truncation per schema
+                   CAST(qtyind AS NUMERIC(15,0)),
                    RATE, LPO_RATE, LPO_DATE, PUR_FROM
             FROM dbo.PO_PRL
             WHERE divcode = @DivCode
@@ -225,7 +221,6 @@ BEGIN
 
         COMMIT TRANSACTION;
 
-        -- Return the PR number to the caller
         SELECT @PrNo AS PrNo;
 
     END TRY

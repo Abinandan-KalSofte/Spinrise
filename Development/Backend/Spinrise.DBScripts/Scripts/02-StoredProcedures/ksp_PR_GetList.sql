@@ -3,7 +3,7 @@
 -- Returns PR list for Find / Modify / Delete lookups.
 -- Modify/Delete: excludes approved, cancelled, amended PRs.
 -- Find: returns all (read-only view).
--- Supports status filter, date range, dept, requester.
+-- Supports date range, dept, requester, order type filters.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetList
 (
@@ -11,7 +11,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetList
     @FDate         DATE,
     @LDate         DATE,
     @Mode          VARCHAR(10) = 'FIND',  -- FIND | MODIFY | DELETE
-    @StatusFilter  VARCHAR(30) = NULL,    -- e.g. 'REQUESTED','FIRST LEVEL APPROVED'
+    @StatusFilter  VARCHAR(30) = NULL,
     @DepCode       VARCHAR(3)  = NULL,
     @ReqName       VARCHAR(10) = NULL,
     @PoGrp         VARCHAR(5)  = NULL,
@@ -34,29 +34,49 @@ BEGIN
         RTRIM(ISNULL(it.IDESC, ''))     AS IDesc,
         RTRIM(ISNULL(h.PO_GRP,''))      AS PoGrp,
         ISNULL(h.APPFLG, 'N')           AS AppFlg,
+        -- PR Status: derived from PO_PRL line-level prstatus (not a PO_PRH column)
         CASE
-            WHEN h.PRSTATUS = 'O' AND ISNULL(
-                (SELECT SUM(l.qtyord) FROM dbo.PO_PRL l
-                 WHERE l.divcode=h.divcode AND l.prno=h.prno AND l.prdate=h.prdate), 0) > 0
+            WHEN ISNULL(h.cancelflag, '') <> ''
+                THEN 'PR. CANCELLED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.prstatus='O' AND ISNULL(lx.qtyord,0)>0)
                 THEN 'ORDERED'
-            WHEN h.PRSTATUS = 'O'   THEN 'ORDER CANCELLED'
-            WHEN h.PRSTATUS = 'E'   THEN 'ENQUIRED'
-            WHEN h.PRSTATUS = 'C'   THEN 'RECEIVED'
-            WHEN h.PRSTATUS IS NULL AND EXISTS(
+            WHEN EXISTS(
                 SELECT 1 FROM dbo.PO_PRL lx
-                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate AND lx.DirectApp='Y')
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.prstatus='O')
+                THEN 'ORDER CANCELLED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.prstatus='E')
+                THEN 'ENQUIRED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.prstatus='C')
+                THEN 'RECEIVED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.DirectApp='Y')
                 THEN 'FINAL LEVEL APPROVED'
-            WHEN h.PRSTATUS IS NULL AND EXISTS(
+            WHEN EXISTS(
                 SELECT 1 FROM dbo.PO_PRL lx
-                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate AND lx.ThirdApp='Y')
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.ThirdApp='Y')
                 THEN 'THIRD LEVEL APPROVED'
-            WHEN h.PRSTATUS IS NULL AND EXISTS(
+            WHEN EXISTS(
                 SELECT 1 FROM dbo.PO_PRL lx
-                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate AND lx.SecondApp='Y')
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.SecondApp='Y')
                 THEN 'SECOND LEVEL APPROVED'
-            WHEN h.PRSTATUS IS NULL AND EXISTS(
+            WHEN EXISTS(
                 SELECT 1 FROM dbo.PO_PRL lx
-                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate AND lx.FirstApp='Y')
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.FirstApp='Y')
                 THEN 'FIRST LEVEL APPROVED'
             ELSE 'REQUESTED'
         END                             AS PrStatus,

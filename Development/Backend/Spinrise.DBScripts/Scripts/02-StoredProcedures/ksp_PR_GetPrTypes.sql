@@ -17,7 +17,7 @@ BEGIN
         RTRIM(t.IDESC)  AS IDesc
     FROM dbo.PO_INDENTTYPE t
     WHERE @ActiveOnly = 0
-       OR ISNULL(t.ACTIVEFLAG, 'Y') = 'Y'
+       OR ISNULL(t.active, 'Y') = 'Y'
     ORDER BY t.ITYPE;
 END;
 GO

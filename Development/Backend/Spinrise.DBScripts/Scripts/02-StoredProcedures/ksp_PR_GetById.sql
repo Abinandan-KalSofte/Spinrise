@@ -31,33 +31,49 @@ BEGIN
         ISNULL(h.APPFLG, 'N')                                   AS AppFlg,
         ISNULL(h.cancelflag, '')                                AS CancelFlag,
         ISNULL(h.amendno, 0)                                    AS AmendNo,
+        -- PR Status: derived from PO_PRL line-level prstatus (not a PO_PRH column)
         CASE
-            WHEN h.PRSTATUS = 'O' AND ISNULL(
-                (SELECT SUM(l2.qtyord) FROM dbo.PO_PRL l2
-                 WHERE l2.divcode=h.divcode AND l2.prno=h.prno AND l2.prdate=h.prdate), 0) > 0
-                THEN 'ORDERED'
-            WHEN h.PRSTATUS = 'O'   THEN 'ORDER CANCELLED'
-            WHEN h.PRSTATUS = 'E'   THEN 'ENQUIRED'
-            WHEN h.PRSTATUS = 'C'   THEN 'RECEIVED'
-            WHEN h.PRSTATUS IS NULL AND ISNULL(
-                (SELECT TOP 1 l3.QTYREQD FROM dbo.PO_PRL l3
-                 WHERE l3.divcode=h.divcode AND l3.prno=h.prno AND l3.prdate=h.prdate), 1) = 0
+            WHEN ISNULL(h.cancelflag, '') <> ''
                 THEN 'PR. CANCELLED'
-            WHEN h.PRSTATUS IS NULL AND EXISTS(
-                SELECT 1 FROM dbo.PO_PRL l4
-                WHERE l4.divcode=h.divcode AND l4.prno=h.prno AND l4.prdate=h.prdate AND l4.DirectApp='Y')
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.prstatus='O' AND ISNULL(lx.qtyord,0)>0)
+                THEN 'ORDERED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.prstatus='O')
+                THEN 'ORDER CANCELLED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.prstatus='E')
+                THEN 'ENQUIRED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.prstatus='C')
+                THEN 'RECEIVED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.DirectApp='Y')
                 THEN 'FINAL LEVEL APPROVED'
-            WHEN h.PRSTATUS IS NULL AND EXISTS(
-                SELECT 1 FROM dbo.PO_PRL l5
-                WHERE l5.divcode=h.divcode AND l5.prno=h.prno AND l5.prdate=h.prdate AND l5.ThirdApp='Y')
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.ThirdApp='Y')
                 THEN 'THIRD LEVEL APPROVED'
-            WHEN h.PRSTATUS IS NULL AND EXISTS(
-                SELECT 1 FROM dbo.PO_PRL l6
-                WHERE l6.divcode=h.divcode AND l6.prno=h.prno AND l6.prdate=h.prdate AND l6.SecondApp='Y')
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.SecondApp='Y')
                 THEN 'SECOND LEVEL APPROVED'
-            WHEN h.PRSTATUS IS NULL AND EXISTS(
-                SELECT 1 FROM dbo.PO_PRL l7
-                WHERE l7.divcode=h.divcode AND l7.prno=h.prno AND l7.prdate=h.prdate AND l7.FirstApp='Y')
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.FirstApp='Y')
                 THEN 'FIRST LEVEL APPROVED'
             ELSE 'REQUESTED'
         END                                                     AS PrStatus,
@@ -88,8 +104,8 @@ BEGIN
         ISNULL(l.LPO_RATE,       0)                 AS LpoRate,
         CAST(l.LPO_DATE AS DATE)                    AS LpoDate,
         RTRIM(ISNULL(l.PUR_FROM, ''))               AS LpoFrom,
-        RTRIM(ISNULL(l.RATE_SOURCE,      'LPO'))    AS RateSource,
-        RTRIM(ISNULL(l.RATE_JUSTIFICATION,''))      AS RateJustification,
+        'LPO'                                       AS RateSource,
+        ''                                          AS RateJustification,
         ISNULL(l.curstock,       0)                 AS CurStock,
         l.CCCODE                                    AS CcCode,
         RTRIM(ISNULL(l.CATCODE,  ''))               AS CatCode,

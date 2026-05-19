@@ -25,8 +25,8 @@ BEGIN
         ISNULL(p.PRSMSStatusFlg,   'N') AS PrSmsStatusFlg,
         ISNULL(p.Pr_ILevel,        'N') AS PrILevel,
         ISNULL(p.Pr_FLevel,        'N') AS PrFLevel,
-        p.DefaultPRType                 AS DefaultPrType,
-        ISNULL(p.MultiSelectLookup,'N') AS MultiSelectLookup
+        NULL                            AS DefaultPrType,
+        'N'                             AS MultiSelectLookup
     FROM dbo.PO_PARA p
     WHERE p.divcode = @DivCode;
 END;
