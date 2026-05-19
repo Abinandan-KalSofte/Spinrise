@@ -18,4 +18,5 @@ public interface IPrService
     Task<decimal>                    ModifyAsync(string divCode, SavePrRequest request, string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate);
     Task                             DeleteAsync(string divCode, DeletePrRequest request, string userId);
     Task<PendingOrderDto?>           CheckPendingOrderAsync(string divCode, DateOnly fDate, DateOnly lDate, string depCode, string itemCode);
+    Task<UserPermissionsDto>         GetUserPermissionsAsync(string userId, string divCode);
 }

@@ -169,6 +169,7 @@ export function ItemPickerModal({
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
+              <th style={{ ...TH, width: 36, textAlign: 'center' }}>Img</th>
               <th style={{ ...TH, width: 90 }}>Item Code</th>
               <th style={{ ...TH, minWidth: 180 }}>Description</th>
               <th style={{ ...TH, width: 60, textAlign: 'center' }}>UOM</th>
@@ -181,13 +182,13 @@ export function ItemPickerModal({
           <tbody>
             {loading && items.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: 13 }}>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: 13 }}>
                   Loading items…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: 13 }}>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: 13 }}>
                   {search ? `No items match "${search}"` : 'No active items found.'}
                 </td>
               </tr>
@@ -208,6 +209,19 @@ export function ItemPickerModal({
                       onClick={() => handleRowClick(item)}
                       onDoubleClick={() => handleRowDblClick(item)}
                     >
+                      <td style={{ ...TD, width: 36, textAlign: 'center', padding: '4px' }}>
+                        {item.itemImage ? (
+                          <img
+                            src={`data:image/*;base64,${item.itemImage}`}
+                            alt=""
+                            style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 4, border: '1px solid #e2e8f0' }}
+                          />
+                        ) : (
+                          <div style={{ width: 28, height: 28, borderRadius: 4, background: '#f1f5f9', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 10, color: '#cbd5e1' }}>—</span>
+                          </div>
+                        )}
+                      </td>
                       <td style={TD}>
                         <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: '#1e293b' }}>
                           {item.itemCode}
@@ -243,7 +257,7 @@ export function ItemPickerModal({
                   )
                 })}
                 <tr ref={sentinelRef}>
-                  <td colSpan={7} style={{ padding: '8px', textAlign: 'center' }}>
+                  <td colSpan={8} style={{ padding: '8px', textAlign: 'center' }}>
                     {loadingMore && <Spin size="small" />}
                     {!loadingMore && !hasMore && items.length > 0 && (
                       <span style={{ fontSize: 11, color: '#cbd5e1' }}>All items loaded</span>

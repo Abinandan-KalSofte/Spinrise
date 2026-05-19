@@ -67,6 +67,9 @@ public class PrService : IPrService
         string depCode, string itemCode) =>
         _repo.CheckPendingOrderAsync(divCode, fDate, lDate, depCode, itemCode);
 
+    public Task<UserPermissionsDto> GetUserPermissionsAsync(string userId, string divCode) =>
+        _repo.GetUserPermissionsAsync(userId, divCode);
+
     private static void ValidateForSave(SavePrRequest request, string mode)
     {
         if (string.IsNullOrWhiteSpace(request.DepCode))

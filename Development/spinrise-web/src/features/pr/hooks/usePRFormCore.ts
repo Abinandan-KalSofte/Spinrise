@@ -10,7 +10,7 @@ import type { PRLineItem } from '../components/pr-form/PRLineItemsTable'
 import type {
   PrHeader, PrLine,
   DepartmentOption, EmployeeOption, PrTypeOption,
-  PrParameters, PreAddChecks,
+  PrParameters, PreAddChecks, UserPermissions,
 } from '../types'
 
 export type PRFormMode = 'new' | 'view' | 'edit'
@@ -42,6 +42,10 @@ export function usePRFormCore() {
   // ── Pre-check state ───────────────────────────────────────────────────────
   const [preCheckMsg,     setPreCheckMsg]     = useState<string | null>(null)
   const [preCheckLoading, setPreCheckLoading] = useState(false)
+  const [preCheckResult,  setPreCheckResult]  = useState<PreAddChecks | null>(null)
+
+  // ── Permissions ───────────────────────────────────────────────────────────
+  const [permissions, setPermissions] = useState<UserPermissions>({ canAdd: true, canModify: true, canDelete: true })
 
   // ── Lookup state ──────────────────────────────────────────────────────────
   const [departments,    setDepartments]    = useState<DepartmentOption[]>([])
@@ -97,7 +101,13 @@ export function usePRFormCore() {
     }
   }, [divCode])
 
-  useEffect(() => { if (divCode) void loadAll() }, [divCode, loadAll])
+  useEffect(() => {
+    if (!divCode) return
+    void loadAll()
+    prApi.getUserPermissions(divCode)
+      .then((p) => setPermissions(p))
+      .catch(() => { /* permissive fallback already set as default */ })
+  }, [divCode, loadAll])
 
   // ── Pre-checks ────────────────────────────────────────────────────────────
   const runPreChecks = async (): Promise<PreAddChecks | null> => {
@@ -109,6 +119,7 @@ export function usePRFormCore() {
       else if (!result.deptMasterExists) setPreCheckMsg('No departments configured for this division.')
       else if (!result.docParaExists)    setPreCheckMsg('PR document number series is not configured.')
       else                               setPreCheckMsg(null)
+      setPreCheckResult(result)
       return result
     } catch { return null }
     finally { setPreCheckLoading(false) }
@@ -207,10 +218,64 @@ export function usePRFormCore() {
       return
     }
 
+    // G7: Duplicate item + machine check
+    const seen = new Set<string>()
+    for (const l of validLines) {
+      const dupeKey = `${l.itemCode}|${l.macNo || ''}`
+      if (seen.has(dupeKey)) {
+        void message.error(`Duplicate item found: ${l.itemCode}${l.macNo ? ` / Machine: ${l.macNo}` : ''}. Remove or change the machine number.`)
+        return
+      }
+      seen.add(dupeKey)
+    }
+
     const belowMin = validLines.filter((l) => (l.qtyInd ?? 0) <= 0)
     if (belowMin.length > 0) {
       void message.error(`Quantity must be greater than 0 for: ${belowMin.map((l) => l.itemCode).join(', ')}.`)
       return
+    }
+
+    // G4: MANUAL rate must have justification
+    const manualNoJustification = validLines.filter(
+      (l) => l.rateSource === 'MANUAL' && !l.rateJustification?.trim()
+    )
+    if (manualNoJustification.length > 0) {
+      void message.error(`Rate justification is required for: ${manualNoJustification.map((l) => l.itemCode).join(', ')}.`)
+      return
+    }
+
+    // G5: Required date must be >= today (Add) or >= PR date (Modify)
+    const prDateVal = dayjs(values.prDate.format('YYYY-MM-DD'))
+    const today     = dayjs().startOf('day')
+    const invalidDate = validLines.filter((l) => {
+      if (!l.reqdDate) return false
+      const rd = dayjs(l.reqdDate)
+      return mode === 'new' ? rd.isBefore(today) : rd.isBefore(prDateVal)
+    })
+    if (invalidDate.length > 0) {
+      void message.error(
+        `Required date cannot be before ${mode === 'new' ? 'today' : 'the PR date'} for: ${invalidDate.map((l) => l.itemCode).join(', ')}.`
+      )
+      return
+    }
+
+    // G9: Backdate check — if backDateFlag='N', PR date must be >= maxPrDate
+    if (mode === 'new' && preCheckResult?.backDateFlag === 'N' && preCheckResult.maxPrDate) {
+      const maxDate = dayjs(preCheckResult.maxPrDate)
+      if (prDateVal.isBefore(maxDate)) {
+        void message.error(`Backdating is not allowed. PR date must be ${maxDate.format('DD-MMM-YYYY')} or later.`)
+        return
+      }
+    }
+
+    // G6: Qty below MINLEVEL — warning only, does not block save
+    const belowMinLevel = validLines.filter(
+      (l) => (l.minLevel ?? 0) > 0 && (l.qtyInd ?? 0) < (l.minLevel ?? 0)
+    )
+    if (belowMinLevel.length > 0) {
+      void message.warning(
+        `Quantity is below minimum order level for: ${belowMinLevel.map((l) => l.itemCode).join(', ')}. Saving anyway.`
+      )
     }
 
     setSaving(true)
@@ -348,7 +413,9 @@ export function usePRFormCore() {
     departments, employees, prTypes, parameters,
     lookupsLoaded, lookupsLoading, lookupsError, loadAll,
     // pre-checks
-    preCheckMsg, preCheckLoading, runPreChecks,
+    preCheckMsg, preCheckLoading, preCheckResult, runPreChecks,
+    // permissions
+    permissions,
     // KPI
     validLines, totalCost, totalQtyByUOM, totalQtyDisplay,
     // actions

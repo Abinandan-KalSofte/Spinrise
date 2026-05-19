@@ -128,7 +128,7 @@ BEGIN
         SET @DeptExists = 1;
 
     -- PO_DOC_PARA only has TC and STDOCNO columns
-    IF EXISTS (SELECT 1 FROM dbo.PO_DOC_PARA WHERE TC = 'IND')
+    IF EXISTS (SELECT 1 FROM dbo.PO_DOC_PARA WHERE TC = 'PURCHASE REQUISITION')
         SET @DocParaExists = 1;
 
     -- IN_PARA is a single-row config table — no divcode column
@@ -940,5 +940,33 @@ BEGIN
       AND l.ITEMCODE             = @ItemCode
       AND CAST(l.PRDATE AS DATE) BETWEEN @FDate AND @LDate
     HAVING SUM(ISNULL(l.ORDQTY, 0) - ISNULL(l.RCVDQTY, 0)) > 0;
+END;
+GO
+
+-- ── ksp_PR_GetUserPermissions ─────────────────────────────────
+CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetUserPermissions
+(
+    @UserId  VARCHAR(50),
+    @DivCode VARCHAR(2)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT TOP 1
+            CAST(ISNULL(ADD_FLG, 1) AS INT) AS CanAdd,
+            CAST(ISNULL(MOD_FLG, 1) AS INT) AS CanModify,
+            CAST(ISNULL(DEL_FLG, 1) AS INT) AS CanDelete
+        FROM dbo.USERLEVEL
+        WHERE RTRIM(userid)  = RTRIM(@UserId)
+          AND RTRIM(divcode) = RTRIM(@DivCode)
+          AND sno = 4;
+
+        IF @@ROWCOUNT = 0
+            SELECT 1 AS CanAdd, 1 AS CanModify, 1 AS CanDelete;
+    END TRY
+    BEGIN CATCH
+        SELECT 1 AS CanAdd, 1 AS CanModify, 1 AS CanDelete;
+    END CATCH
 END;
 GO

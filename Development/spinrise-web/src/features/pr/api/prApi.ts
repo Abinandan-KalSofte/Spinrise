@@ -1,4 +1,4 @@
-import { apiHelpers } from '@/shared/api/client'
+import api, { apiHelpers } from '@/shared/api/client'
 import type {
   PrParameters, PreAddChecks,
   DepartmentOption, EmployeeOption, PrTypeOption,
@@ -6,6 +6,7 @@ import type {
   PrHeader, PrSummary,
   SavePrRequest, DeletePrRequest,
   PendingOrder,
+  UserPermissions,
 } from '../types'
 
 const BASE = 'pr'
@@ -88,3 +89,21 @@ export const modifyPr = (divCode: string, fDate: string, lDate: string, request:
 
 export const deletePr = (divCode: string, request: DeletePrRequest) =>
   apiHelpers.del<void>(`${BASE}?divCode=${divCode}`, { data: request })
+
+// ── Permissions ────────────────────────────────────────────────────────────────
+
+export const getUserPermissions = (divCode: string) =>
+  apiHelpers.get<UserPermissions>(`${BASE}/permissions?divCode=${divCode}`)
+
+// ── Print ──────────────────────────────────────────────────────────────────────
+
+export const printPr = async (divCode: string, prNo: number, prDate: string): Promise<void> => {
+  const params = new URLSearchParams({ divCode, prDate })
+  const response = await api.get(`${BASE}/${prNo}/print?${params}`, { responseType: 'blob' })
+  const url  = URL.createObjectURL(new Blob([response.data as BlobPart], { type: 'application/pdf' }))
+  const link = document.createElement('a')
+  link.href     = url
+  link.download = `PR-${String(prNo).padStart(5, '0')}.pdf`
+  link.click()
+  URL.revokeObjectURL(url)
+}

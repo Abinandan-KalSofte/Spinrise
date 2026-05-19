@@ -23,6 +23,7 @@ public static class StoredProcedures
         public const string GetList             = "ksp_PR_GetList";
         public const string Save                = "ksp_PR_Save";
         public const string Delete              = "ksp_PR_Delete";
-        public const string CheckPendingOrder   = "ksp_PR_CheckPendingOrder";
+        public const string CheckPendingOrder    = "ksp_PR_CheckPendingOrder";
+        public const string GetUserPermissions  = "ksp_PR_GetUserPermissions";
     }
 }

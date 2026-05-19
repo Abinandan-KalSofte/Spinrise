@@ -207,4 +207,18 @@ public class PrRepository : IPrRepository
             new { DivCode = divCode, FDate = fDate, LDate = lDate, DepCode = depCode, ItemCode = itemCode },
             commandType: CommandType.StoredProcedure);
     }
+
+    public async Task<UserPermissionsDto> GetUserPermissionsAsync(string userId, string divCode)
+    {
+        var row = await _uow.Connection.QueryFirstOrDefaultAsync<dynamic>(
+            StoredProcedures.Pr.GetUserPermissions,
+            new { UserId = userId, DivCode = divCode },
+            commandType: CommandType.StoredProcedure);
+
+        if (row is null) return new UserPermissionsDto(true, true, true);
+        return new UserPermissionsDto(
+            CanAdd:    row.CanAdd    == 1,
+            CanModify: row.CanModify == 1,
+            CanDelete: row.CanDelete == 1);
+    }
 }

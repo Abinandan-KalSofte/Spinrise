@@ -177,6 +177,14 @@ export interface PendingOrder {
   pendingQty: number | null
 }
 
+// ── User permissions ───────────────────────────────────────────────────────────
+
+export interface UserPermissions {
+  canAdd:    boolean
+  canModify: boolean
+  canDelete: boolean
+}
+
 // ── Screen mode ────────────────────────────────────────────────────────────────
 
 export type ScreenMode = 'VIEW' | 'ADD' | 'EDIT' | 'DELETE'

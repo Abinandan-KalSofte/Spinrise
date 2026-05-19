@@ -14,6 +14,7 @@ import { PRKPIStrip } from '../components/pr-form/PRKPIStrip'
 import { PRLineItemsTable } from '../components/pr-form/PRLineItemsTable'
 import PrListModal from '../components/PrListModal'
 import { getFYBounds } from '@/shared/lib/dateUtils'
+import * as prApi from '../api/prApi'
 import type { PrSummary } from '../types'
 
 export default function PurchaseRequisitionPage() {
@@ -31,6 +32,7 @@ export default function PurchaseRequisitionPage() {
     lookupsLoaded, lookupsLoading, lookupsError, loadAll,
     validLines, totalCost, totalQtyDisplay,
     mode, setMode, isDirty, markDirty, clearDirty,
+    permissions,
     doSave, handleDeleteClick, handleDeleteConfirm,
     navigateRecord, loadRecord, loadLastRecord, initNewMode,
   } = usePRFormCore()
@@ -75,6 +77,34 @@ export default function PurchaseRequisitionPage() {
     pendingActionRef.current?.()
     pendingActionRef.current = null
   }
+
+  // ── Line delete (G12) ─────────────────────────────────────────────────────
+  const handleLineDelete = useCallback(async (prSno: number, itemCode: string) => {
+    if (!savedPrNo || !savedPr) return
+    try {
+      await prApi.deletePr(divCode, {
+        prNo:         savedPrNo,
+        prDate:       savedPr.prDate,
+        deleteMode:   'LINE',
+        prSno,
+        deleteReason: null,
+      })
+      await loadRecord(savedPrNo, savedPr.prDate)
+      void message.success(`Line ${itemCode} deleted.`)
+    } catch (err) {
+      void message.error(err instanceof Error ? err.message : 'Failed to delete line.')
+    }
+  }, [divCode, savedPrNo, savedPr, loadRecord, message])
+
+  // ── Print (G14) ───────────────────────────────────────────────────────────
+  const handlePrint = useCallback(async () => {
+    if (!savedPrNo || !savedPr) return
+    try {
+      await prApi.printPr(divCode, savedPrNo, savedPr.prDate)
+    } catch (err) {
+      void message.error(err instanceof Error ? err.message : 'Failed to generate print.')
+    }
+  }, [divCode, savedPrNo, savedPr, message])
 
   // ── Add ───────────────────────────────────────────────────────────────────
   const handleAdd = useCallback(async () => {
@@ -204,20 +234,20 @@ export default function PurchaseRequisitionPage() {
           variant="primary"
           icon={<PlusOutlined style={{ fontSize: 11 }} />}
           label="New" kbd="F3"
-          disabled={isEditing || pageBusy}
+          disabled={isEditing || pageBusy || !permissions.canAdd}
           onClick={() => void handleAdd()}
         />
         <TbBtn
           icon={<EditOutlined style={{ fontSize: 11 }} />}
           label="Modify"
-          disabled={isEditing || pageBusy || isDeleteMode}
+          disabled={isEditing || pageBusy || isDeleteMode || !permissions.canModify}
           onClick={() => setPickerMode('modify')}
         />
         <TbBtn
           variant="danger"
           icon={<DeleteOutlined style={{ fontSize: 11 }} />}
           label="Delete"
-          disabled={pageBusy || isEditing || isDeleteMode}
+          disabled={pageBusy || isEditing || isDeleteMode || !permissions.canDelete}
           onClick={() => setPickerMode('delete')}
         />
         {isDeleteMode && savedPrNo && (
@@ -267,8 +297,8 @@ export default function PurchaseRequisitionPage() {
         <TbBtn
           icon={<PrinterOutlined style={{ fontSize: 11 }} />}
           label="Print"
-          disabled={isEditing || !savedPrNo || isDeleteMode}
-          title="Print (not yet configured)"
+          disabled={isEditing || !savedPrNo || isDeleteMode || pageBusy}
+          onClick={() => void handlePrint()}
         />
         <TbBtn
           icon={<CloseOutlined style={{ fontSize: 11 }} />}
@@ -332,8 +362,9 @@ export default function PurchaseRequisitionPage() {
           onAdd={(item) => {
             markDirty()
             setItems((prev) => {
-              if (prev.some((l) => l.itemCode === item.itemCode)) {
-                void message.warning(`${item.itemCode} is already in the list.`)
+              const dupeKey = `${item.itemCode}|${item.macNo || ''}`
+              if (prev.some((l) => `${l.itemCode}|${l.macNo || ''}` === dupeKey)) {
+                void message.warning(`${item.itemCode} with the same machine is already in the list.`)
                 return prev
               }
               return [...prev, item]
@@ -347,6 +378,7 @@ export default function PurchaseRequisitionPage() {
             markDirty()
             setItems((prev) => prev.filter((l) => l.key !== key))
           }}
+          onLineDelete={handleLineDelete}
         />
       </div>
 

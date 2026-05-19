@@ -18,23 +18,24 @@ import type { PrLine, ItemLookup } from '../../types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type PRLineItem = PrLine & { key: string }
+export type PRLineItem = PrLine & { key: string; minLevel?: number; itemImage?: string | null }
 
 export interface PRLineItemsTableHandle {
   flushEdit: () => Promise<void>
 }
 
 interface PRLineItemsTableProps {
-  items:      PRLineItem[]
-  divCode:    string
-  depCode:    string
-  prDate?:    string
-  disabled:   boolean
-  savedPrNo?: number
-  onAdd:      (item: PRLineItem) => void
-  onUpdate:   (item: PRLineItem) => void
-  onDelete:   (key: string) => void
-  onWarning?: (msg: string) => void
+  items:         PRLineItem[]
+  divCode:       string
+  depCode:       string
+  prDate?:       string
+  disabled:      boolean
+  savedPrNo?:    number
+  onAdd:         (item: PRLineItem) => void
+  onUpdate:      (item: PRLineItem) => void
+  onDelete:      (key: string) => void
+  onLineDelete?: (prSno: number, itemCode: string) => Promise<void>
+  onWarning?:    (msg: string) => void
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -265,7 +266,7 @@ EditRow.displayName = 'EditRow'
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export const PRLineItemsTable = forwardRef<PRLineItemsTableHandle, PRLineItemsTableProps>(
-function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd, onUpdate, onDelete }, ref) {
+function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd, onUpdate, onDelete, onLineDelete }, ref) {
   const itemsRef = useRef<PRLineItem[]>(items)
   useEffect(() => { itemsRef.current = items }, [items])
 
@@ -385,17 +386,19 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
 
     for (const line of newLines) {
       try {
-        const detail = await prApi.getItemDetail(divCode, line.itemCode, yfDate, ylDate, today)
+        const detail  = await prApi.getItemDetail(divCode, line.itemCode, yfDate, ylDate, today)
         const current = itemsRef.current.find((i) => i.key === line.key)
         if (!current) continue
         const rate = detail.lpoRate ?? current.lpoRate
         onUpdate({
           ...current,
           rate,
-          lpoRate:  detail.lpoRate  ?? current.lpoRate,
-          lpoDate:  detail.lpoDate  ?? current.lpoDate,
-          curStock: detail.currentStock,
-          appCost:  calcAppCost(rate, current.qtyInd),
+          lpoRate:   detail.lpoRate       ?? current.lpoRate,
+          lpoDate:   detail.lpoDate       ?? current.lpoDate,
+          curStock:  detail.currentStock,
+          minLevel:  detail.minLevel,
+          itemImage: detail.itemImage,
+          appCost:   calcAppCost(rate, current.qtyInd),
         })
       } catch { /* non-critical */ }
     }
@@ -532,7 +535,11 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
           if (!lineDeleteRow) return
           setLineDeleting(true)
           try {
-            onDelete(lineDeleteRow.key)
+            if (onLineDelete && lineDeleteRow.prSno > 0) {
+              await onLineDelete(lineDeleteRow.prSno, lineDeleteRow.itemCode)
+            } else {
+              onDelete(lineDeleteRow.key)
+            }
             setLineDeleteRow(null)
           } finally { setLineDeleting(false) }
         }}
@@ -540,7 +547,7 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
         okButtonProps={{ danger: true, loading: lineDeleting }}
         destroyOnClose
       >
-        <p>Are you sure you want to delete this line item?</p>
+        <p>Are you sure you want to permanently delete <strong>{lineDeleteRow?.itemCode}</strong> from this PR?</p>
       </Modal>
 
       {/* Line Detail Drawer */}
@@ -574,14 +581,24 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
                 </Typography.Text>
               </div>
             ))}
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              margin: '20px 8px', height: 160, border: '2px dashed #d9d9d9',
-              borderRadius: 8, background: '#fafafa',
-            }}>
-              <FileImageOutlined style={{ fontSize: 36, color: '#bfbfbf' }} />
-              <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>Item Image</Typography.Text>
-            </div>
+            {viewRow.itemImage ? (
+              <div style={{ margin: '20px 8px', borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e2e2' }}>
+                <img
+                  src={`data:image/*;base64,${viewRow.itemImage}`}
+                  alt={viewRow.itemCode}
+                  style={{ width: '100%', maxHeight: 200, objectFit: 'contain', display: 'block', background: '#fafafa' }}
+                />
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                margin: '20px 8px', height: 160, border: '2px dashed #d9d9d9',
+                borderRadius: 8, background: '#fafafa',
+              }}>
+                <FileImageOutlined style={{ fontSize: 36, color: '#bfbfbf' }} />
+                <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>No Image Available</Typography.Text>
+              </div>
+            )}
           </div>
         )}
       </Drawer>

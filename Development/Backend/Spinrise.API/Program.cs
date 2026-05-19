@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
+using QuestPDF.Infrastructure;
 using Spinrise.API.Middleware;
 using Spinrise.Application.Areas.Security.Auth.Interfaces;
 using Spinrise.Application.Areas.Security.Auth.Services;
@@ -15,6 +16,7 @@ using Dapper;
 using Spinrise.Infrastructure.Data;
 
 SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 

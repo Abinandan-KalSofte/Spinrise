@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Spinrise.API.Areas.PurchaseOrder.Print;
 using Spinrise.API.Controllers;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.DTOs;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Interfaces;
@@ -18,6 +19,16 @@ public class PurchaseRequisitionController : BaseApiController
     public PurchaseRequisitionController(IPrService service)
     {
         _service = service;
+    }
+
+    // ── Permissions ───────────────────────────────────────────────────────────
+
+    [HttpGet("permissions")]
+    public async Task<IActionResult> GetUserPermissions([FromQuery] string divCode)
+    {
+        var userId = User.FindFirstValue(SpinriseClaims.UserId) ?? string.Empty;
+        var result = await _service.GetUserPermissionsAsync(userId, divCode);
+        return OkResponse(result);
     }
 
     // ── Screen init ────────────────────────────────────────────────────────────
@@ -171,5 +182,16 @@ public class PurchaseRequisitionController : BaseApiController
         var userId = User.FindFirstValue(SpinriseClaims.UserId) ?? string.Empty;
         await _service.DeleteAsync(divCode, request, userId);
         return OkResponse("PR deleted successfully.");
+    }
+
+    // ── Print ──────────────────────────────────────────────────────────────────
+
+    [HttpGet("{prNo}/print")]
+    public async Task<IActionResult> Print(decimal prNo, [FromQuery] string divCode, [FromQuery] DateOnly prDate)
+    {
+        var pr = await _service.GetByIdAsync(divCode, prNo, prDate);
+        if (pr is null) return NotFoundResponse("PR not found.");
+        var pdfBytes = PrPrintDocument.Generate(pr);
+        return File(pdfBytes, "application/pdf", $"PR-{(long)prNo:D5}.pdf");
     }
 }
