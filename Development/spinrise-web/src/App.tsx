@@ -1,12 +1,12 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { Spin } from 'antd';
-import ProtectedRoute from './shared/components/ProtectedRoute';
+import { lazy, Suspense } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { Spin } from 'antd'
+import ProtectedRoute from './shared/components/ProtectedRoute'
 
-const LoginPage = lazy(() => import('./features/auth/pages/LoginPage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const LoginPage     = lazy(() => import('./features/auth/pages/LoginPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<Spin fullscreen />}>
@@ -20,11 +20,9 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
-  );
+  )
 }
-
-export default App;

@@ -8,12 +8,12 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        p.div_code  AS DivCode,
+        p.divcode   AS DivCode,
         p.user_id   AS UserId,
         p.user_name AS UserName,
         p.alevel    AS ALevel
     FROM dbo.PP_PASSWD p
     WHERE p.user_id  = @UserId
-      AND p.div_code = @DivCode
+      AND p.divcode  = @DivCode
       AND UPPER(ISNULL(p.activeflg, 'N')) = 'Y';
 END;

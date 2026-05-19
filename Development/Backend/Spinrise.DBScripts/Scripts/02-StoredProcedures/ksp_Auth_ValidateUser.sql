@@ -9,13 +9,13 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        p.div_code  AS DivCode,
+        p.divcode   AS DivCode,
         p.user_id   AS UserId,
         p.user_name AS UserName,
         p.alevel    AS ALevel
     FROM dbo.PP_PASSWD p
-    WHERE p.div_code  = @DivCode
-      AND p.user_id   = @UserName
+    WHERE p.divcode  = @DivCode
+      AND p.user_name = @UserName
       AND dbo.DecryptString(p.password) = @Password
       AND UPPER(ISNULL(p.activeflg, 'N')) = 'Y';
 END;

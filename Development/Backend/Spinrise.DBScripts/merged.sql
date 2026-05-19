@@ -5,7 +5,7 @@
 -- Rule: NEVER run individual SP files in production — use this file
 -- ============================================================
 
-USE SpinRiseSaranya;
+USE JAT;
 GO
 
 -- ── Auth ─────────────────────────────────────────────────────
@@ -21,15 +21,29 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        p.div_code  AS DivCode,
+        p.divcode  AS DivCode,
         p.user_id   AS UserId,
         p.user_name AS UserName,
         p.alevel    AS ALevel
     FROM dbo.PP_PASSWD p
-    WHERE p.div_code  = @DivCode
-      AND p.user_id   = @UserName
+    WHERE p.divcode  = @DivCode
+      AND p.user_name = @UserName
       AND dbo.DecryptString(p.password) = @Password
       AND UPPER(ISNULL(p.activeflg, 'N')) = 'Y';
+END;
+GO
+
+-- ksp_Auth_GetActiveDivisions
+CREATE OR ALTER PROCEDURE dbo.ksp_Auth_GetActiveDivisions
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        RTRIM(d.DIVCODE) AS DivCode,
+        RTRIM(d.DIVNAME) AS DivName
+    FROM dbo.pp_divmas d
+    ORDER BY d.DIVCODE;
 END;
 GO
 
@@ -44,13 +58,13 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        p.div_code  AS DivCode,
+        p.divcode  AS DivCode,
         p.user_id   AS UserId,
         p.user_name AS UserName,
         p.alevel    AS ALevel
     FROM dbo.PP_PASSWD p
     WHERE p.user_id  = @UserId
-      AND p.div_code = @DivCode
+      AND p.divcode = @DivCode
       AND UPPER(ISNULL(p.activeflg, 'N')) = 'Y';
 END;
 GO

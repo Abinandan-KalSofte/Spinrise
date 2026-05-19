@@ -1,26 +1,27 @@
-import { Button, Layout, Typography } from 'antd';
-import { useNavigate } from 'react-router-dom';
-import { logout } from '../features/auth/api/authApi';
-import { useAuthStore } from '../features/auth/store/authStore';
+import { Button, Layout, Typography } from 'antd'
+import { useNavigate } from 'react-router-dom'
+import { authApi } from '../features/auth/api/authApi'
+import { useAuthStore } from '../features/auth/store/useAuthStore'
 
-const { Header, Content } = Layout;
+const { Header, Content } = Layout
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-  const { user, clearAuth } = useAuthStore();
+  const navigate          = useNavigate()
+  const user              = useAuthStore((s) => s.user)
+  const tokens            = useAuthStore((s) => s.tokens)
+  const clearAuthSession  = useAuthStore((s) => s.clearAuthSession)
 
   const handleLogout = async () => {
-    const token = localStorage.getItem('refreshToken');
-    if (token) await logout(token).catch(() => {});
-    clearAuth();
-    navigate('/login', { replace: true });
-  };
+    await authApi.logout(tokens?.refreshToken).catch(() => {})
+    clearAuthSession()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
-          Spinrise ERP
+          Spinrise ERP V2
         </Typography.Title>
         <div style={{ color: '#fff', display: 'flex', gap: 16, alignItems: 'center' }}>
           <span>{user?.userName}</span>
@@ -34,5 +35,5 @@ export default function DashboardPage() {
         </Typography.Text>
       </Content>
     </Layout>
-  );
+  )
 }
