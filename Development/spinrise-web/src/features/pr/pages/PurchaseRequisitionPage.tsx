@@ -1,450 +1,420 @@
-import { useEffect, useState, useMemo } from 'react'
-import { Button, Form, Divider, message, Modal, Spin, Tooltip, Space, Typography } from 'antd'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { App, Alert, Modal, Skeleton, Spin, Typography } from 'antd'
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined,
-  SearchOutlined, SaveOutlined, CloseOutlined, PrinterOutlined,
+  CheckOutlined, CloseOutlined, DeleteOutlined,
+  DoubleLeftOutlined, DoubleRightOutlined, EditOutlined,
+  LeftOutlined, PlusOutlined, PrinterOutlined, RightOutlined, UnorderedListOutlined,
 } from '@ant-design/icons'
-import dayjs, { type Dayjs } from 'dayjs'
-import type { PrLine, PrSummary } from '../types'
-import { usePrStore } from '../store/usePrStore'
-import { useAuthStore } from '@/features/auth/store/useAuthStore'
-import {
-  getParameters, runPreAddChecks, getLastRecord, getById,
-  addPr, modifyPr, deletePr,
-} from '../api/prApi'
-import PrHeaderForm from '../components/PrHeaderForm'
-import PrItemGrid from '../components/PrItemGrid'
-import PrKpiStrip from '../components/PrKpiStrip'
-import PrStatusBadge from '../components/PrStatusBadge'
+import { useSearchParams } from 'react-router-dom'
+import { usePRFormCore } from '../hooks/usePRFormCore'
+import { PRDocBand, TbBtn, TbSep } from '../components/pr-form/PRToolbar'
+import { PRPickerModal } from '../components/pr-form/PRPickerModal'
+import { PRHeaderV1 } from '../components/pr-form/PRHeaderV1'
+import { PRKPIStrip } from '../components/pr-form/PRKPIStrip'
+import { PRLineItemsTable } from '../components/pr-form/PRLineItemsTable'
 import PrListModal from '../components/PrListModal'
-
-const { Text } = Typography
-
-// Financial year helpers — April-March
-const getFY = (today: Dayjs) => {
-  const yr = today.month() >= 3 ? today.year() : today.year() - 1
-  return {
-    fDate: dayjs(`${yr}-04-01`).format('YYYY-MM-DD'),
-    lDate: dayjs(`${yr + 1}-03-31`).format('YYYY-MM-DD'),
-  }
-}
+import { getFYBounds } from '@/shared/lib/dateUtils'
+import type { PrSummary } from '../types'
 
 export default function PurchaseRequisitionPage() {
-  const [form] = Form.useForm()
-  const user   = useAuthStore((s) => s.user)
-  const store  = usePrStore()
+  const { message } = App.useApp()
+  const [searchParams] = useSearchParams()
 
-  const pDate  = dayjs()
-  const { fDate, lDate } = useMemo(() => getFY(pDate), [])
-  const divCode = user?.divCode ?? ''
+  const {
+    headerForm, depCode, authUser, divCode,
+    items, setItems,
+    savedPrNo, savedPr, prStatus,
+    deleting, pageBusy, navLoading,
+    preCheckMsg, preCheckLoading, runPreChecks,
+    deleteModalOpen, setDeleteModalOpen,
+    departments, employees, prTypes,
+    lookupsLoaded, lookupsLoading, lookupsError, loadAll,
+    validLines, totalCost, totalQtyDisplay,
+    mode, setMode, isDirty, markDirty, clearDirty,
+    doSave, handleDeleteClick, handleDeleteConfirm,
+    navigateRecord, loadRecord, loadLastRecord, initNewMode,
+  } = usePRFormCore()
 
-  const [listModal, setListModal] = useState<false | 'VIEW' | 'EDIT' | 'DELETE'>(false)
-  const [draftLines, setDraftLines] = useState<PrLine[]>([])
+  const { yfDate, ylDate } = getFYBounds()
 
-  // ── Screen boot ────────────────────────────────────────────────────────────
+  const [dirtyConfirmOpen, setDirtyConfirmOpen] = useState(false)
+  const pendingActionRef   = useRef<(() => void) | null>(null)
+  const [pickerMode,       setPickerMode]        = useState<'modify' | 'delete' | null>(null)
+  const [findOpen,         setFindOpen]          = useState(false)
+  const [isDeleteMode,     setIsDeleteMode]      = useState(false)
+
+  // ── Load on mount ─────────────────────────────────────────────────────────
   useEffect(() => {
-    void boot()
-  }, [divCode])
-
-  const boot = async () => {
-    if (!divCode) return
-    store.setLoading(true)
-    try {
-      // Load parameters
-      const params = await getParameters(divCode)
-      if (params) store.setParameters(params)
-
-      // Load last PR record
-      const last = await getLastRecord(divCode, fDate, lDate)
-      store.setCurrentPr(last)
-      store.setMode('VIEW')
-    } catch {
-      // handled by interceptor
-    } finally {
-      store.setLoading(false)
+    const prNoParam   = searchParams.get('prNo')
+    const prDateParam = searchParams.get('prDate')
+    const modeParam   = searchParams.get('mode')
+    if (prNoParam && prDateParam) {
+      void (async () => {
+        const status = await loadRecord(Number(prNoParam), prDateParam)
+        if (modeParam === 'edit' && status) setMode('edit')
+        else if (modeParam === 'delete' && status) setIsDeleteMode(true)
+      })()
+    } else {
+      void loadLastRecord()
     }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Guard dirty ───────────────────────────────────────────────────────────
+  const guardDirty = useCallback((action: () => void) => {
+    if (isDirty) {
+      pendingActionRef.current = action
+      setDirtyConfirmOpen(true)
+    } else {
+      action()
+    }
+  }, [isDirty])
+
+  const confirmDirtyLeave = () => {
+    setDirtyConfirmOpen(false)
+    clearDirty()
+    pendingActionRef.current?.()
+    pendingActionRef.current = null
   }
 
-  // ── Add (F3 / Add button) ──────────────────────────────────────────────────
-  const handleAdd = async () => {
-    store.setLoading(true)
-    try {
-      const checks = await runPreAddChecks(divCode)
-      if (!checks.itemMasterExists) { void message.error('Please Define Item in Item Master'); return }
-      if (!checks.deptMasterExists) { void message.error('Please Define Department in Setup'); return }
-      if (!checks.docParaExists)    { void message.error('Please Define Document No. for Requisition in Housekeeping'); return }
+  // ── Add ───────────────────────────────────────────────────────────────────
+  const handleAdd = useCallback(async () => {
+    const checks = await runPreChecks()
+    if (!checks) return
+    if (!checks.itemMasterExists) { void message.error('Please Define Item in Item Master'); return }
+    if (!checks.deptMasterExists) { void message.error('Please Define Department in Setup'); return }
+    if (!checks.docParaExists)    { void message.error('Please Define Document No. for Requisition'); return }
+    guardDirty(() => { setIsDeleteMode(false); initNewMode() })
+  }, [runPreChecks, guardDirty, initNewMode, message])
 
-      // Backdate check
-      if (checks.backDateFlag === 'N' && checks.maxPrDate) {
-        const maxDate = dayjs(checks.maxPrDate)
-        if (pDate.isBefore(maxDate, 'day')) {
-          void message.error('Date should be Equal to Current Date Or Max PR. Date')
-          return
-        }
-      }
-
-      store.setMode('ADD')
-      setDraftLines([makeEmptyLine(1)])
-    } finally {
-      store.setLoading(false)
+  // ── PR picker select ──────────────────────────────────────────────────────
+  const handlePickerSelect = useCallback((prNo: number, prDate: string) => {
+    const pm = pickerMode
+    setPickerMode(null)
+    if (pm === 'modify') {
+      void (async () => {
+        const status = await loadRecord(prNo, prDate)
+        if (!status) return
+        setMode('edit')
+      })()
+    } else {
+      void (async () => {
+        await loadRecord(prNo, prDate)
+        setIsDeleteMode(true)
+      })()
     }
-  }
+  }, [pickerMode, loadRecord, setMode])
 
-  // ── Modify ─────────────────────────────────────────────────────────────────
-  const handleModifySelect = async (summary: PrSummary) => {
-    store.setLoading(true)
-    try {
-      const pr = await getById(divCode, summary.prNo, summary.prDate)
-      store.setCurrentPr(pr)
-      setDraftLines([...pr.lines, makeEmptyLine(pr.lines.length + 1)])
-      store.setMode('EDIT')
-    } finally {
-      store.setLoading(false)
+  // ── Find select (PrListModal) ─────────────────────────────────────────────
+  const handleFindSelect = useCallback((summary: PrSummary) => {
+    setFindOpen(false)
+    void loadRecord(summary.prNo, summary.prDate)
+  }, [loadRecord])
+
+  // ── Cancel ────────────────────────────────────────────────────────────────
+  const handleCancel = useCallback(() => {
+    if (isDeleteMode) { setIsDeleteMode(false); return }
+    if (mode === 'edit' && savedPrNo && savedPr) {
+      guardDirty(() => void loadRecord(savedPrNo, savedPr.prDate))
+    } else {
+      guardDirty(() => void loadLastRecord())
     }
-  }
+  }, [isDeleteMode, mode, savedPrNo, savedPr, guardDirty, loadRecord, loadLastRecord])
 
-  // ── Delete selection ───────────────────────────────────────────────────────
-  const handleDeleteSelect = async (summary: PrSummary) => {
-    store.setLoading(true)
-    try {
-      const pr = await getById(divCode, summary.prNo, summary.prDate)
-      store.setCurrentPr(pr)
-      store.setMode('DELETE')
-    } finally {
-      store.setLoading(false)
-    }
-  }
-
-  // ── Find ───────────────────────────────────────────────────────────────────
-  const handleFindSelect = async (summary: PrSummary) => {
-    store.setLoading(true)
-    try {
-      const pr = await getById(divCode, summary.prNo, summary.prDate)
-      store.setCurrentPr(pr)
-      store.setMode('VIEW')
-    } finally {
-      store.setLoading(false)
-    }
-  }
-
-  // ── Save ───────────────────────────────────────────────────────────────────
-  const handleSave = async () => {
-    try {
-      await form.validateFields()
-    } catch {
-      return
-    }
-
-    const values = form.getFieldsValue()
-    const validLines = draftLines.filter((l) => l.itemCode.trim() !== '')
-
-    if (validLines.length === 0) {
-      void message.error('Purchase Requisition Requires at least one Item')
-      return
-    }
-
-    store.setSaving(true)
-    try {
-      const request = {
-        prDate:         values.prDate?.format('YYYY-MM-DD') ?? pDate.format('YYYY-MM-DD'),
-        depCode:        values.depCode,
-        reqName:        values.reqName ?? null,
-        section:        values.section ?? null,
-        iType:          values.iType ?? null,
-        refNo:          values.refNo ?? null,
-        poGrp:          values.poGrp ?? null,
-        existingPrNo:   store.mode === 'EDIT' ? (store.currentPr?.prNo ?? null) : null,
-        existingPrDate: store.mode === 'EDIT' ? (store.currentPr?.prDate ?? null) : null,
-        lines: validLines.map((l) => ({
-          itemCode:          l.itemCode,
-          macNo:             l.macNo,
-          qtyInd:            l.qtyInd,
-          reqdDate:          l.reqdDate,
-          rate:              l.rate,
-          lpoRate:           l.lpoRate,
-          lpoDate:           l.lpoDate,
-          lpoFrom:           l.lpoFrom,
-          rateSource:        l.rateSource,
-          rateJustification: l.rateJustification,
-          curStock:          l.curStock,
-          ccCode:            l.ccCode,
-          catCode:           l.catCode,
-          bgrpCode:          l.bgrpCode,
-          appCost:           l.appCost,
-          remarks:           l.remarks,
-          sample:            l.sample,
-        })),
-      }
-
-      let result: { prNo: number }
-      if (store.mode === 'ADD') {
-        result = await addPr(divCode, fDate, lDate, request)
-      } else {
-        result = await modifyPr(divCode, fDate, lDate, request)
-      }
-
-      void message.success(`PR No. for your transaction is ${result.prNo}`)
-
-      // Reload the saved PR
-      const saved = await getById(divCode, result.prNo, request.prDate)
-      store.setCurrentPr(saved)
-      store.resetToView()
-      setDraftLines([])
-    } catch {
-      // handled by interceptor
-    } finally {
-      store.setSaving(false)
-    }
-  }
-
-  // ── Cancel ─────────────────────────────────────────────────────────────────
-  const handleCancel = () => {
-    form.resetFields()
-    setDraftLines([])
-    store.resetToView()
-  }
-
-  // ── Delete confirm ─────────────────────────────────────────────────────────
-  const handleDeleteConfirm = () => {
-    if (!store.currentPr) return
-    Modal.confirm({
-      title:   'Confirm Delete',
-      content: `Delete entire PR No. ${store.currentPr.prNo}? This cannot be undone.`,
-      okText:  'Delete',
-      okButtonProps: { danger: true },
-      onOk:    async () => {
-        try {
-          await deletePr(divCode, {
-            prNo:         store.currentPr!.prNo,
-            prDate:       store.currentPr!.prDate,
-            deleteMode:   'FULL',
-            prSno:        null,
-            deleteReason: null,
-          })
-          void message.success('PR deleted successfully.')
-          store.setCurrentPr(null)
-          store.resetToView()
-        } catch {
-          // handled by interceptor
-        }
-      },
-    })
-  }
-
-  const makeEmptyLine = (sno: number): PrLine => ({
-    prSno: sno, itemCode: '', itemName: '', uom: '', macNo: '', qtyInd: 0,
-    reqdDate: null, rate: 0, lpoRate: 0, lpoDate: null, lpoFrom: '',
-    rateSource: 'LPO', rateJustification: '', curStock: 0,
-    ccCode: null, catCode: '', bgrpCode: '', appCost: 0, remarks: '', sample: 'N', lineStatus: '',
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  const shortcutRef = useRef({
+    guardDirty, initNewMode, navigateRecord, handleCancel, handleAdd,
+    mode, savedPrNo, pageBusy, handleDeleteClick, isDeleteMode, setPickerMode, setIsDeleteMode,
   })
+  shortcutRef.current = {
+    guardDirty, initNewMode, navigateRecord, handleCancel, handleAdd,
+    mode, savedPrNo, pageBusy, handleDeleteClick, isDeleteMode, setPickerMode, setIsDeleteMode,
+  }
 
-  const isEditingMode = store.mode === 'ADD' || store.mode === 'EDIT'
-  const isDeleteMode  = store.mode === 'DELETE'
-  const gridLines     = isEditingMode ? draftLines : (store.currentPr?.lines ?? [])
-
-  // KPI draft quantities
-  const draftQtyGroups = useMemo(() => {
-    const map: Record<string, number> = {}
-    draftLines.filter((l) => l.itemCode).forEach((l) => {
-      map[l.uom] = (map[l.uom] ?? 0) + l.qtyInd
-    })
-    return Object.entries(map).map(([uom, qty]) => ({ uom, qty }))
-  }, [draftLines])
-
-  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey) {
-        if (e.key === 'a' || e.key === 'A') { e.preventDefault(); if (!isEditingMode) void handleAdd() }
-        if (e.key === 's' || e.key === 'S') { e.preventDefault(); if (isEditingMode) void handleSave() }
-        if (e.key === 'Backspace')           { e.preventDefault(); if (isEditingMode) handleCancel() }
-        if (e.key === 'm' || e.key === 'M') { e.preventDefault(); if (!isEditingMode) setListModal('EDIT') }
-        if (e.key === 'd' || e.key === 'D') { e.preventDefault(); if (!isEditingMode) setListModal('DELETE') }
-        if (e.key === 'f' || e.key === 'F') { e.preventDefault(); if (!isEditingMode) setListModal('VIEW') }
+    const handler = (e: KeyboardEvent) => {
+      const s      = shortcutRef.current
+      const tag    = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      const inInput = tag === 'input' || tag === 'textarea'
+
+      if (e.key === 'F3') {
+        e.preventDefault()
+        void s.handleAdd()
+        return
       }
-      if (e.key === 'F3') { e.preventDefault(); if (!isEditingMode) void handleAdd() }
+      if (e.altKey && e.key === 'x') {
+        e.preventDefault()
+        s.handleCancel()
+        return
+      }
+      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+        switch (e.key) {
+          case 'ArrowLeft':
+            if (!inInput) { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('PREV') }) }
+            break
+          case 'ArrowRight':
+            if (!inInput) { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('NEXT') }) }
+            break
+          case 'Home':
+            if (!inInput) { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('FIRST') }) }
+            break
+          case 'End':
+            if (!inInput) { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('LAST') }) }
+            break
+          case 'd':
+            e.preventDefault()
+            if (!s.pageBusy) {
+              if (s.isDeleteMode && s.mode === 'view' && s.savedPrNo) s.handleDeleteClick()
+              else if (s.mode !== 'new' && s.mode !== 'edit') s.setPickerMode('delete')
+            }
+            break
+        }
+      }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isEditingMode])
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '12px 16px', gap: 10, overflow: 'hidden' }}>
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const isEditing    = mode === 'new' || mode === 'edit'
+  const formDisabled = mode === 'view' || pageBusy
 
-      {/* ── Toolbar ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #E2E2E2', paddingBottom: 10 }}>
-        <Text style={{ fontWeight: 700, fontSize: 15, color: '#0C447C', marginRight: 8 }}>
-          Purchase Requisition
-        </Text>
-
-        {store.currentPr && store.mode === 'VIEW' && (
-          <Text style={{ fontSize: 12, color: '#888', marginRight: 12 }}>
-            PR No. <strong style={{ color: '#185FA5' }}>{store.currentPr.prNo}</strong>
-            &nbsp;·&nbsp;
-            {dayjs(store.currentPr.prDate).format('DD/MM/YYYY')}
-            &nbsp;·&nbsp;
-            <PrStatusBadge status={store.currentPr.prStatus} />
-          </Text>
-        )}
-
-        <Space wrap>
-          <Tooltip title="Add (Ctrl+A / F3)">
-            <Button
-              icon={<PlusOutlined />}
-              type="primary"
-              disabled={isEditingMode}
-              onClick={() => void handleAdd()}
-            >
-              Add
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Modify (Ctrl+M)">
-            <Button
-              icon={<EditOutlined />}
-              disabled={isEditingMode}
-              onClick={() => setListModal('EDIT')}
-            >
-              Modify
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Delete (Ctrl+D)">
-            <Button
-              icon={<DeleteOutlined />}
-              danger
-              disabled={isEditingMode}
-              onClick={() => setListModal('DELETE')}
-            >
-              Delete
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Find (Ctrl+F)">
-            <Button
-              icon={<SearchOutlined />}
-              disabled={isEditingMode}
-              onClick={() => setListModal('VIEW')}
-            >
-              Find
-            </Button>
-          </Tooltip>
-
-          <Divider type="vertical" />
-
-          <Tooltip title="Save (Ctrl+S)">
-            <Button
-              icon={<SaveOutlined />}
-              type="primary"
-              disabled={!isEditingMode && !isDeleteMode}
-              loading={store.saving}
-              onClick={isDeleteMode ? handleDeleteConfirm : () => void handleSave()}
-            >
-              Save
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Cancel (Ctrl+Backspace)">
-            <Button
-              icon={<CloseOutlined />}
-              disabled={!isEditingMode && !isDeleteMode}
-              onClick={handleCancel}
-            >
-              Cancel
-            </Button>
-          </Tooltip>
-
-          <Divider type="vertical" />
-
-          <Tooltip title="Print (Ctrl+Y)">
-            <Button icon={<PrinterOutlined />} disabled={!store.currentPr || isEditingMode}>
-              Print
-            </Button>
-          </Tooltip>
-        </Space>
-      </div>
-
-      {/* ── Header form ── */}
-      <div style={{ background: '#ffffff', border: '1px solid #E2E2E2', borderRadius: 8, padding: '12px 16px' }}>
-        <Spin spinning={store.loading} size="small">
-          <PrHeaderForm
-            mode={store.mode}
-            parameters={store.parameters}
-            initialPr={store.currentPr}
-            form={form}
-            pDate={pDate}
-          />
+  if (lookupsLoading) {
+    return (
+      <div style={{ padding: 32 }}>
+        <Spin tip="Loading reference data…">
+          <Skeleton active paragraph={{ rows: 8 }} />
         </Spin>
       </div>
+    )
+  }
 
-      {/* ── Delete mode info panel ── */}
-      {isDeleteMode && store.currentPr && (
+  return (
+    <div className="pr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f3' }}>
+
+      {/* ── Header band ── */}
+      <PRDocBand savedPrNo={savedPrNo} prStatus={prStatus} />
+
+      {/* ── Toolbar ── */}
+      <div style={{
+        background: '#fff', borderBottom: '1px solid #e2e2e2',
+        display: 'flex', alignItems: 'center', gap: 4,
+        padding: '0 12px', height: 44, flexShrink: 0,
+      }}>
+        <TbBtn
+          variant="primary"
+          icon={<PlusOutlined style={{ fontSize: 11 }} />}
+          label="New" kbd="F3"
+          disabled={isEditing || pageBusy}
+          onClick={() => void handleAdd()}
+        />
+        <TbBtn
+          icon={<EditOutlined style={{ fontSize: 11 }} />}
+          label="Modify"
+          disabled={isEditing || pageBusy || isDeleteMode}
+          onClick={() => setPickerMode('modify')}
+        />
+        <TbBtn
+          variant="danger"
+          icon={<DeleteOutlined style={{ fontSize: 11 }} />}
+          label="Delete"
+          disabled={pageBusy || isEditing || isDeleteMode}
+          onClick={() => setPickerMode('delete')}
+        />
+        {isDeleteMode && savedPrNo && (
+          <TbBtn
+            variant="danger-filled"
+            icon={<DeleteOutlined style={{ fontSize: 11 }} />}
+            label={`Delete PR-${String(savedPrNo).padStart(5, '0')}`}
+            disabled={pageBusy}
+            onClick={handleDeleteClick}
+          />
+        )}
+        <TbBtn
+          icon={<UnorderedListOutlined style={{ fontSize: 11 }} />}
+          label="Find"
+          disabled={isEditing}
+          onClick={() => setFindOpen(true)}
+        />
+        <TbSep />
+        <TbBtn variant="icon" icon={<DoubleLeftOutlined style={{ fontSize: 10 }} />}
+          disabled={isEditing || pageBusy || isDeleteMode}
+          title="First record (Ctrl+Home)"
+          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('FIRST') })}
+        />
+        <TbBtn variant="icon" icon={<LeftOutlined style={{ fontSize: 10 }} />}
+          disabled={isEditing || pageBusy || isDeleteMode}
+          title="Previous record (Ctrl+←)"
+          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('PREV') })}
+        />
+        <TbBtn variant="icon" icon={<RightOutlined style={{ fontSize: 10 }} />}
+          disabled={isEditing || pageBusy || isDeleteMode}
+          title="Next record (Ctrl+→)"
+          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('NEXT') })}
+        />
+        <TbBtn variant="icon" icon={<DoubleRightOutlined style={{ fontSize: 10 }} />}
+          disabled={isEditing || pageBusy || isDeleteMode}
+          title="Last record (Ctrl+End)"
+          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('LAST') })}
+        />
+        <TbSep />
+        <TbBtn
+          variant="success"
+          icon={<CheckOutlined style={{ fontSize: 11 }} />}
+          label="Save" kbd="Ctrl+S"
+          disabled={!isEditing || pageBusy}
+          onClick={() => void doSave()}
+        />
+        <TbBtn
+          icon={<PrinterOutlined style={{ fontSize: 11 }} />}
+          label="Print"
+          disabled={isEditing || !savedPrNo || isDeleteMode}
+          title="Print (not yet configured)"
+        />
+        <TbBtn
+          icon={<CloseOutlined style={{ fontSize: 11 }} />}
+          label="Cancel" kbd="Alt+X"
+          disabled={!isEditing && !isDeleteMode}
+          onClick={handleCancel}
+        />
+      </div>
+
+      {/* ── Status bars ── */}
+      {navLoading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 16px', background: '#e6f4ff', flexShrink: 0 }}>
+          <Spin size="small" />
+          <span style={{ fontSize: 12, color: '#1677ff' }}>Loading record…</span>
+        </div>
+      )}
+      {lookupsError && (
+        <Alert type="error" showIcon banner message={lookupsError}
+          action={<span style={{ fontSize: 12, color: '#185FA5', cursor: 'pointer' }} onClick={() => void loadAll()}>Retry</span>}
+        />
+      )}
+      {preCheckMsg && <Alert type="warning" showIcon banner message={preCheckMsg} />}
+      {preCheckLoading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: '#fff', flexShrink: 0 }}>
+          <Spin size="small" />
+          <span style={{ fontSize: 12, color: '#888' }}>Running pre-checks…</span>
+        </div>
+      )}
+      {isDeleteMode && savedPrNo && (
         <div style={{
-          background: '#FCEBEB', border: '1px solid #A32D2D', borderRadius: 8,
-          padding: '10px 16px', color: '#A32D2D', fontWeight: 500, fontSize: 13,
+          background: '#FCEBEB', borderBottom: '1px solid #fca5a5',
+          padding: '6px 16px', color: '#A32D2D', fontWeight: 500, fontSize: 12, flexShrink: 0,
         }}>
-          You are about to delete PR No. {store.currentPr.prNo}.
-          Click Save to confirm deletion, or Cancel to abort.
+          Delete mode — PR-{String(savedPrNo).padStart(5, '0')} · Click the red Delete button in the toolbar to confirm.
         </div>
       )}
 
-      {/* ── Item grid ── */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Spin spinning={store.loading} size="small">
-          <PrItemGrid
-            mode={store.mode}
-            lines={gridLines}
-            fDate={fDate}
-            lDate={lDate}
-            pDate={pDate.format('YYYY-MM-DD')}
-            depCode={form.getFieldValue('depCode') ?? ''}
-            parameters={store.parameters}
-            onLinesChange={setDraftLines}
-          />
-        </Spin>
+      {/* ── Header form ── */}
+      <Skeleton active loading={!lookupsLoaded && !lookupsError}>
+        <PRHeaderV1
+          form={headerForm}
+          departments={departments}
+          employees={employees}
+          prTypes={prTypes}
+          savedPrNo={savedPrNo}
+          disabled={formDisabled}
+          createdBy={savedPr?.createdBy ?? authUser?.userId ?? null}
+          onValuesChange={markDirty}
+        />
+      </Skeleton>
+
+      {/* ── Item grid (flex-fill) ── */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <PRLineItemsTable
+          items={items}
+          divCode={divCode}
+          depCode={depCode}
+          prDate={headerForm.getFieldValue('prDate')?.format('YYYY-MM-DD')}
+          disabled={formDisabled}
+          savedPrNo={savedPrNo ?? undefined}
+          onAdd={(item) => {
+            markDirty()
+            setItems((prev) => {
+              if (prev.some((l) => l.itemCode === item.itemCode)) {
+                void message.warning(`${item.itemCode} is already in the list.`)
+                return prev
+              }
+              return [...prev, item]
+            })
+          }}
+          onUpdate={(updated) => {
+            markDirty()
+            setItems((prev) => prev.map((l) => l.key === updated.key ? updated : l))
+          }}
+          onDelete={(key) => {
+            markDirty()
+            setItems((prev) => prev.filter((l) => l.key !== key))
+          }}
+        />
       </div>
 
-      {/* ── KPI Strip ── */}
-      <div>
-        <PrKpiStrip
-          pr={store.currentPr}
-          mode={store.mode}
-          draftLineCount={draftLines.filter((l) => l.itemCode).length}
-          draftTotalQty={draftQtyGroups}
-        />
-      </div>
+      {/* ── KPI strip ── */}
+      <PRKPIStrip
+        validLinesCount={validLines.length}
+        totalQtyDisplay={totalQtyDisplay}
+        totalCost={totalCost}
+        prDate={savedPr?.prDate ?? null}
+        prStatus={prStatus}
+        savedPrNo={savedPrNo}
+      />
 
-      {/* ── Modals ── */}
-      {listModal === 'VIEW' && (
-        <PrListModal
-          open
-          mode="VIEW"
-          fDate={fDate}
-          lDate={lDate}
-          onSelect={handleFindSelect}
-          onClose={() => setListModal(false)}
+      {/* ── Unsaved-changes confirmation ── */}
+      <Modal
+        title="Unsaved Changes"
+        open={dirtyConfirmOpen}
+        onOk={confirmDirtyLeave}
+        onCancel={() => { setDirtyConfirmOpen(false); pendingActionRef.current = null }}
+        okText="Leave without saving"
+        cancelText="Stay"
+        width={400}
+        destroyOnClose
+      >
+        <Typography.Text>You have unsaved changes. Leave without saving?</Typography.Text>
+      </Modal>
+
+      {/* ── PR Picker (Modify / Delete) ── */}
+      {pickerMode && (
+        <PRPickerModal
+          open={pickerMode !== null}
+          mode={pickerMode}
+          onSelect={handlePickerSelect}
+          onCancel={() => setPickerMode(null)}
         />
       )}
-      {listModal === 'EDIT' && (
-        <PrListModal
-          open
-          mode="EDIT"
-          fDate={fDate}
-          lDate={lDate}
-          onSelect={handleModifySelect}
-          onClose={() => setListModal(false)}
-        />
-      )}
-      {listModal === 'DELETE' && (
-        <PrListModal
-          open
-          mode="DELETE"
-          fDate={fDate}
-          lDate={lDate}
-          onSelect={handleDeleteSelect}
-          onClose={() => setListModal(false)}
-        />
-      )}
+
+      {/* ── Find (PrListModal — existing V2 component) ── */}
+      <PrListModal
+        open={findOpen}
+        mode="VIEW"
+        fDate={yfDate}
+        lDate={ylDate}
+        onSelect={handleFindSelect}
+        onClose={() => setFindOpen(false)}
+      />
+
+      {/* ── Delete confirmation ── */}
+      <Modal
+        title={<span><DeleteOutlined style={{ color: '#dc2626', marginRight: 8 }} />Delete Purchase Requisition</span>}
+        open={deleteModalOpen}
+        onCancel={() => setDeleteModalOpen(false)}
+        onOk={() => void (async () => {
+          const ok = await handleDeleteConfirm()
+          if (ok) setIsDeleteMode(false)
+        })()}
+        okText="Confirm Delete"
+        okButtonProps={{ danger: true }}
+        confirmLoading={deleting}
+        width={420}
+        destroyOnClose
+      >
+        <Typography.Paragraph style={{ color: '#374151', marginBottom: 0 }}>
+          You are about to permanently delete{' '}
+          <Typography.Text strong>PR-{String(savedPrNo).padStart(5, '0')}</Typography.Text>.
+          This action cannot be undone.
+        </Typography.Paragraph>
+      </Modal>
     </div>
   )
 }
