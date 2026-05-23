@@ -56,7 +56,7 @@ export default function LoginPage() {
       const session = await execute(loginPayload)
       setAuthSession(session)
       setProcessingDate(procDate)
-      message.success('Login successful')
+      void message.success(`Welcome, ${session.user.userName} — ${session.user.divName || session.user.divCode}`)
       navigate('/dashboard', { replace: true })
     } catch (error) {
       message.error(getErrorMessage(error))

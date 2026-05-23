@@ -18,6 +18,7 @@ export interface AuthUser {
   email:    string
   role:     UserRole
   divCode:  string
+  divName:  string
 }
 
 export interface AuthTokens {

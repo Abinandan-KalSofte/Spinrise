@@ -8,11 +8,13 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        p.divcode   AS DivCode,
-        p.user_id   AS UserId,
-        p.user_name AS UserName,
-        p.alevel    AS ALevel
+        p.divcode                        AS DivCode,
+        p.user_id                        AS UserId,
+        p.user_name                      AS UserName,
+        p.alevel                         AS ALevel,
+        RTRIM(ISNULL(d.DIVNAME, ''))     AS DivName
     FROM dbo.PP_PASSWD p
+    LEFT JOIN dbo.PP_DIVMAS d ON d.DIVCODE = p.divcode
     WHERE p.user_id  = @UserId
       AND p.divcode  = @DivCode
       AND UPPER(ISNULL(p.activeflg, 'N')) = 'Y';

@@ -90,7 +90,7 @@ BEGIN
             VALUES
             (
                 @DivCode, @PrNo, @PrDate, @DepCode,
-                ISNULL(NULLIF(RTRIM(@RefNo),''), '0'),
+                NULLIF(RTRIM(@RefNo), ''),
                 @IType, @Section, @PoGrp, @ReqName,
                 'N', 0, 0,
                 'N', @UserId, @UserId, @CreatedDt,
@@ -102,7 +102,7 @@ BEGIN
             UPDATE dbo.PO_PRH
             SET
                 depcode  = @DepCode,
-                refno    = ISNULL(NULLIF(RTRIM(@RefNo),''), '0'),
+                refno    = NULLIF(RTRIM(@RefNo), ''),
                 ITYPE    = @IType,
                 SECTION  = @Section,
                 PO_GRP   = @PoGrp,

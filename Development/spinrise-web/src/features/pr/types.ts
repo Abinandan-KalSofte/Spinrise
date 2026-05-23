@@ -40,6 +40,17 @@ export interface PrTypeOption {
   iDesc: string
 }
 
+export interface MachineLookup {
+  macNo:    string
+  macDesc:  string
+  macModel: string
+}
+
+export interface CostCentreOption {
+  ccCode: number
+  ccName: string
+}
+
 export interface ItemLookup {
   itemCode:  string
   itemName:  string
@@ -73,6 +84,7 @@ export interface PrLine {
   itemName:           string
   uom:                string
   macNo:              string
+  macDesc?:           string   // display-only; not persisted to DB
   qtyInd:             number
   reqdDate:           string | null
   rate:               number
@@ -83,6 +95,7 @@ export interface PrLine {
   rateJustification:  string
   curStock:           number
   ccCode:             number | null
+  ccName?:            string   // display-only; not persisted to DB
   catCode:            string
   bgrpCode:           string
   appCost:            number

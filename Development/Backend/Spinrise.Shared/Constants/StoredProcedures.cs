@@ -23,7 +23,11 @@ public static class StoredProcedures
         public const string GetList             = "ksp_PR_GetList";
         public const string Save                = "ksp_PR_Save";
         public const string Delete              = "ksp_PR_Delete";
-        public const string CheckPendingOrder    = "ksp_PR_CheckPendingOrder";
-        public const string GetUserPermissions  = "ksp_PR_GetUserPermissions";
+        public const string CheckPendingOrder      = "ksp_PR_CheckPendingOrder";
+        public const string GetUserPermissions    = "ksp_PR_GetUserPermissions";
+        public const string GetMachineLookup      = "ksp_PR_GetMachineLookup";
+        public const string GetCostCentreLookup   = "ksp_PR_GetCostCentreLookup";
+        public const string GetPrint              = "ksp_PR_GetPrint";
+        public const string GetItemImagePath      = "ksp_PR_GetItemImagePath";
     }
 }

@@ -22,6 +22,33 @@ body {
   flex-direction: column;
 }
 
+/* ── Ant Design message — solid background with white text ────── */
+.ant-message-notice-content {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.22) !important;
+  font-weight: 500 !important;
+}
+.ant-message-success .ant-message-notice-content {
+  background: #185FA5 !important;
+  color: #fff !important;
+}
+.ant-message-success .ant-message-notice-content .anticon { color: #fff !important; }
+.ant-message-error .ant-message-notice-content {
+  background: #dc2626 !important;
+  color: #fff !important;
+}
+.ant-message-error .ant-message-notice-content .anticon { color: #fff !important; }
+.ant-message-warning .ant-message-notice-content {
+  background: #d97706 !important;
+  color: #fff !important;
+}
+.ant-message-warning .ant-message-notice-content .anticon { color: #fff !important; }
+.ant-message-info .ant-message-notice-content {
+  background: #1a2236 !important;
+  color: #fff !important;
+}
+.ant-message-info .ant-message-notice-content .anticon { color: #fff !important; }
+
 /* ── Login screen ─────────────────────────────────────────────── */
 
 /* Root — bg.jpg + dark overlay */

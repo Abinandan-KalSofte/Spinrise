@@ -3,6 +3,7 @@ import type {
   PrParameters, PreAddChecks,
   DepartmentOption, EmployeeOption, PrTypeOption,
   ItemLookup, ItemDetail,
+  MachineLookup, CostCentreOption,
   PrHeader, PrSummary,
   SavePrRequest, DeletePrRequest,
   PendingOrder,
@@ -33,6 +34,18 @@ export const getEmployees = (divCode: string, empCommon: string, search?: string
 
 export const getPrTypes = (activeOnly = true) =>
   apiHelpers.get<PrTypeOption[]>(`${BASE}/pr-types?activeOnly=${activeOnly}`)
+
+export const getMachineLookup = (divCode: string, depCode: string, search?: string) => {
+  const params = new URLSearchParams({ divCode, depCode })
+  if (search) params.set('search', search)
+  return apiHelpers.get<MachineLookup[]>(`${BASE}/machine-lookup?${params}`)
+}
+
+export const getCostCentreLookup = (divCode: string, search?: string) => {
+  const params = new URLSearchParams({ divCode })
+  if (search) params.set('search', search)
+  return apiHelpers.get<CostCentreOption[]>(`${BASE}/cost-centre-lookup?${params}`)
+}
 
 export const getItems = (divCode: string, search?: string, itemGrpCode?: string, page = 1, pageSize = 50) => {
   const params = new URLSearchParams({ divCode, page: String(page), pageSize: String(pageSize) })
@@ -95,15 +108,23 @@ export const deletePr = (divCode: string, request: DeletePrRequest) =>
 export const getUserPermissions = (divCode: string) =>
   apiHelpers.get<UserPermissions>(`${BASE}/permissions?divCode=${divCode}`)
 
+// ── Item image ─────────────────────────────────────────────────────────────────
+
+export const getItemImageUrl = (itemCode: string): string => {
+  const base = import.meta.env.VITE_API_URL || '/api/v1'
+  return `${base}/pr/items/${encodeURIComponent(itemCode)}/image`
+}
+
 // ── Print ──────────────────────────────────────────────────────────────────────
 
-export const printPr = async (divCode: string, prNo: number, prDate: string): Promise<void> => {
+export const getPrintBlobUrl = async (
+  divCode: string,
+  prNo: number,
+  prDate: string,
+): Promise<{ blobUrl: string; filename: string }> => {
   const params = new URLSearchParams({ divCode, prDate })
   const response = await api.get(`${BASE}/${prNo}/print?${params}`, { responseType: 'blob' })
-  const url  = URL.createObjectURL(new Blob([response.data as BlobPart], { type: 'application/pdf' }))
-  const link = document.createElement('a')
-  link.href     = url
-  link.download = `PR-${String(prNo).padStart(5, '0')}.pdf`
-  link.click()
-  URL.revokeObjectURL(url)
+  const blobUrl = URL.createObjectURL(new Blob([response.data as BlobPart], { type: 'application/pdf' }))
+  const filename = `PR-${String(prNo).padStart(5, '0')}.pdf`
+  return { blobUrl, filename }
 }

@@ -9,6 +9,7 @@ function mapAuthUser(user: AuthResponse['user']): AuthUser {
     email:    user.email    ?? '',
     role:     (user.role    ?? 'User') as UserRole,
     divCode:  user.divCode  ?? '',
+    divName:  user.divName  ?? '',
   }
 }
 

@@ -8,11 +8,12 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetById
 (
     @DivCode VARCHAR(2),
     @PrNo    NUMERIC(6,0),
-    @PrDate  DATE
+    @PrDate  DATE = NULL
 )
 AS
 BEGIN
     SET NOCOUNT ON;
+    IF @PrDate IS NULL RETURN;
 
     -- Header
     SELECT
@@ -26,7 +27,7 @@ BEGIN
         RTRIM(ISNULL(h.SECTION, ''))                            AS Section,
         RTRIM(ISNULL(h.ITYPE,   ''))                            AS IType,
         RTRIM(ISNULL(it.IDESC,  ''))                            AS IDesc,
-        RTRIM(ISNULL(h.refno,   ''))                            AS RefNo,
+        RTRIM(ISNULL(NULLIF(RTRIM(h.refno), '0'), ''))          AS RefNo,
         RTRIM(ISNULL(h.PO_GRP,  ''))                            AS PoGrp,
         ISNULL(h.APPFLG, 'N')                                   AS AppFlg,
         ISNULL(h.cancelflag, '')                                AS CancelFlag,
@@ -77,7 +78,7 @@ BEGIN
                 THEN 'FIRST LEVEL APPROVED'
             ELSE 'REQUESTED'
         END                                                     AS PrStatus,
-        RTRIM(ISNULL(h.createdby, ''))                          AS CreatedBy,
+        RTRIM(ISNULL(pwd.user_name, ISNULL(h.createdby, '')))   AS CreatedBy,
         RTRIM(ISNULL(h.createddt, ''))                          AS CreatedDt,
         RTRIM(ISNULL(h.userId,    ''))                          AS UserId
     FROM dbo.PO_PRH h
@@ -87,6 +88,9 @@ BEGIN
         ON CAST(e.empno AS VARCHAR(10)) = h.REQNAME
     LEFT JOIN dbo.PO_INDENTTYPE it
         ON it.ITYPE = h.ITYPE
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(h.createdby)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))       pwd
     WHERE h.divcode = @DivCode
       AND h.prno    = @PrNo
       AND CAST(h.prdate AS DATE) = @PrDate;

@@ -20,11 +20,12 @@ BEGIN
 
     -- Result set 1: Item master
     SELECT
-        RTRIM(i.itemcode)      AS ItemCode,
-        RTRIM(i.itemname)      AS ItemName,
-        RTRIM(i.uom)           AS Uom,
-        ISNULL(i.minlevel, 0)  AS MinLevel,
-        i.ITEMIMAGE            AS ItemImage
+        RTRIM(i.itemcode)             AS ItemCode,
+        RTRIM(i.itemname)             AS ItemName,
+        RTRIM(i.uom)                  AS Uom,
+        ISNULL(i.minlevel, 0)         AS MinLevel,
+        i.ITEMIMAGE                   AS ItemImage,
+        RTRIM(ISNULL(i.ImagePath,'')) AS ImagePath
     FROM dbo.IN_ITEM i
     WHERE i.itemcode = @ItemCode
       AND ISNULL(i.IsItemActive, 1) = 1;

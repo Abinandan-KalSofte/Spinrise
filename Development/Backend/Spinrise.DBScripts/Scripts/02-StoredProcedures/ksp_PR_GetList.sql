@@ -29,7 +29,10 @@ BEGIN
         RTRIM(ISNULL(h.depcode,''))     AS DepCode,
         RTRIM(ISNULL(d.depname,''))     AS DepName,
         RTRIM(ISNULL(h.REQNAME,''))     AS ReqName,
-        RTRIM(ISNULL(e.ename,  ''))     AS ReqEmpName,
+        RTRIM(ISNULL(
+            (SELECT TOP 1 e2.ename FROM dbo.PR_EMP e2
+             WHERE CAST(e2.empno AS VARCHAR(10)) = h.REQNAME),
+        ''))                            AS ReqEmpName,
         RTRIM(ISNULL(h.ITYPE,  ''))     AS IType,
         RTRIM(ISNULL(it.IDESC, ''))     AS IDesc,
         RTRIM(ISNULL(h.PO_GRP,''))      AS PoGrp,
@@ -86,8 +89,6 @@ BEGIN
     FROM dbo.PO_PRH h
     LEFT JOIN dbo.IN_DEP d
         ON d.divcode = h.divcode AND d.depcode = h.depcode
-    LEFT JOIN dbo.PR_EMP e
-        ON CAST(e.empno AS VARCHAR(10)) = h.REQNAME
     LEFT JOIN dbo.PO_INDENTTYPE it
         ON it.ITYPE = h.ITYPE
     WHERE h.divcode = @DivCode

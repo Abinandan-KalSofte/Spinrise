@@ -76,9 +76,12 @@ export function TbSep() {
 interface PRDocBandProps {
   savedPrNo: number | null
   prStatus:  string | null
+  divName?:  string | null
+  divCode?:  string | null
 }
 
-export function PRDocBand({ savedPrNo, prStatus: _prStatus }: PRDocBandProps) {
+export function PRDocBand({ savedPrNo, prStatus: _prStatus, divName, divCode }: PRDocBandProps) {
+  const displayDiv = divName || divCode
   return (
     <div style={{
       background: 'linear-gradient(135deg, #0C447C 0%, #185FA5 100%)',
@@ -99,6 +102,12 @@ export function PRDocBand({ savedPrNo, prStatus: _prStatus }: PRDocBandProps) {
             {savedPrNo ? `PR-${String(savedPrNo).padStart(5, '0')}` : 'Auto-generated on save'}
           </div>
         </div>
+        {displayDiv && (
+          <div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginBottom: 1 }}>Division</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{displayDiv}</div>
+          </div>
+        )}
       </div>
     </div>
   )

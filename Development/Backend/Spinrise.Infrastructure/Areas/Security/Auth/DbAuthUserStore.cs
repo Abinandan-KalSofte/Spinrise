@@ -43,6 +43,7 @@ public class DbAuthUserStore : IAuthUserStore
         UserName = r.UserName.Trim(),
         Email = r.UserId.Trim(),
         DivCode = r.DivCode.Trim(),
+        DivName = r.DivName.Trim(),
         Role = r.ALevel switch
         {
             1 => UserRoles.Admin,
@@ -57,5 +58,6 @@ public class DbAuthUserStore : IAuthUserStore
         public string UserId { get; set; } = null!;
         public string UserName { get; set; } = null!;
         public decimal ALevel { get; set; }
+        public string DivName { get; set; } = "";
     }
 }

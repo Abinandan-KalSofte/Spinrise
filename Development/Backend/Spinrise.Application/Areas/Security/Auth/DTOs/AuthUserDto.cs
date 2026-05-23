@@ -8,4 +8,5 @@ public class AuthUserDto
     public string Email { get; set; } = null!;
     public string Role { get; set; } = null!;
     public string DivCode { get; set; } = null!;
+    public string DivName { get; set; } = "";
 }
