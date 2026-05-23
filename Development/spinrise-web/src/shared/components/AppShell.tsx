@@ -37,12 +37,6 @@ const NAV_ITEMS: MenuItem[] = [
   ]),
 ]
 
-const BREADCRUMB_MAP: Record<string, string[]> = {
-  '/dashboard':             ['Dashboard'],
-  '/purchase-requisition':  ['Purchase Order', 'Purchase Requisition'],
-  '/rmi-purchase-order':    ['Purchase Order', 'RMI Purchase Order'],
-}
-
 function getOpenKeys(path: string): string[] {
   if (path.startsWith('/purchase-requisition') || path.startsWith('/rmi-purchase-order')) {
     return ['grp-purchase']
@@ -66,7 +60,6 @@ export default function AppShell() {
   }
 
   const selectedKeys = [location.pathname]
-  const breadcrumbs  = BREADCRUMB_MAP[location.pathname] ?? []
 
   const userMenuItems: MenuProps['items'] = [
     {
@@ -160,16 +153,11 @@ export default function AppShell() {
             onClick={() => setCollapsed(!collapsed)}
             style={{ color: '#64748b', fontSize: 14, marginRight: 4 }}
           />
-          {/* Breadcrumb */}
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', minWidth: 0, gap: 6, fontSize: 13 }}>
-            {breadcrumbs.map((crumb, i) => (
-              <span key={crumb} style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: i === breadcrumbs.length - 1 ? 1 : 0, overflow: 'hidden' }}>
-                {i > 0 && <span style={{ color: '#cbd5e1', flexShrink: 0 }}>/</span>}
-                <span style={{ color: i === breadcrumbs.length - 1 ? '#1e293b' : '#94a3b8', fontWeight: i === breadcrumbs.length - 1 ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {crumb}
-                </span>
-              </span>
-            ))}
+          {/* Company name */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em' }}>
+              {user?.divName ?? ''}
+            </span>
           </div>
 
           {/* User info */}

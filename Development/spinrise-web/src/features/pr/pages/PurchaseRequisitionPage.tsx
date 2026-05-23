@@ -257,7 +257,7 @@ export default function PurchaseRequisitionPage() {
     <div className="pr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f3', padding: '0 12px' }}>
 
       {/* ── Header band ── */}
-      <PRDocBand savedPrNo={savedPrNo} prStatus={prStatus} divName={authUser?.divName} divCode={divCode} />
+      <PRDocBand savedPrNo={savedPrNo} prStatus={prStatus} />
 
       {/* ── Toolbar ── */}
       <div style={{
@@ -382,6 +382,8 @@ export default function PurchaseRequisitionPage() {
           disabled={formDisabled}
           createdBy={savedPr?.createdBy ?? authUser?.userName ?? null}
           maxPrDate={preCheckResult?.maxPrDate ?? null}
+          isNewMode={mode === 'new'}
+          prDateDisabled={mode === 'edit'}
           onValuesChange={markDirty}
           onTabToGrid={!gridDisabled && depCode ? () => lineItemsTableRef.current?.openPicker() : undefined}
         />

@@ -6,44 +6,50 @@ namespace Spinrise.API.Areas.PurchaseOrder.Print;
 public static class QuestPdfTemplateEngine
 {
     // ── Company Header ────────────────────────────────────────────────────────────
+    // Company name is centred over the full page width (same alignment as the
+    // "Purchase Requisition" title in the InfoSection below). Logo is overlaid
+    // at the left via a secondary layer so it does not offset the centre point.
     public static void RenderHeader(IContainer c, HeaderConfig cfg)
     {
         c.PaddingHorizontal(cfg.InsetMm, Unit.Millimetre)
          .PaddingBottom(cfg.PadBottomMm, Unit.Millimetre)
          .Border(cfg.BorderPt).BorderColor(cfg.BorderColor)
-         .Row(row =>
+         .Layers(layers =>
          {
-             row.ConstantItem(cfg.Logo.WidthMm, Unit.Millimetre)
-                .Padding(2).AlignMiddle().AlignCenter()
-                .Element(slot =>
-                {
-                    if (cfg.Logo.Data is { Length: > 0 })
-                        slot.MaxWidth(cfg.Logo.WidthMm, Unit.Millimetre)
-                            .MaxHeight(cfg.Logo.MaxHeightMm, Unit.Millimetre)
-                            .Image(cfg.Logo.Data).FitArea();
-                    else
-                        slot.AlignCenter()
-                            .Text("LOGO").Bold().FontSize(cfg.CompanyFont.Size).FontColor(cfg.CompanyFont.Color);
-                });
+             // Primary layer: company name + address centred over full width
+             layers.PrimaryLayer()
+                   .AlignMiddle()
+                   .PaddingVertical(3)
+                   .Column(col =>
+                   {
+                       col.Spacing(2);
+                       col.Item().Text(t =>
+                       {
+                           t.AlignCenter();
+                           t.Span(cfg.CompanyName).Bold().FontSize(cfg.CompanyFont.Size).FontColor(cfg.CompanyFont.Color);
+                       });
+                       if (!string.IsNullOrWhiteSpace(cfg.UnitName))
+                           col.Item().Text(t =>
+                           {
+                               t.AlignCenter();
+                               t.Span(cfg.UnitName).Bold().FontSize(cfg.UnitFont.Size).FontColor(cfg.UnitFont.Color);
+                           });
+                       foreach (var line in cfg.AddressLines.Where(l => !string.IsNullOrWhiteSpace(l)))
+                           col.Item().Text(t => { t.AlignCenter(); t.Span(line).FontSize(cfg.AddressFont.Size); });
+                   });
 
-             row.ConstantItem(cfg.Logo.GapMm, Unit.Millimetre);
-
-             row.RelativeItem().AlignMiddle().PaddingVertical(3).Column(col =>
-             {
-                 col.Spacing(2);
-                 col.Item().Text(t =>
-                 {
-                     t.AlignCenter();
-                     t.Span(cfg.CompanyName).Bold().FontSize(cfg.CompanyFont.Size).FontColor(cfg.CompanyFont.Color);
-                 });
-                 col.Item().Text(t =>
-                 {
-                     t.AlignCenter();
-                     t.Span(cfg.UnitName).Bold().FontSize(cfg.UnitFont.Size).FontColor(cfg.UnitFont.Color);
-                 });
-                 foreach (var line in cfg.AddressLines.Where(l => !string.IsNullOrWhiteSpace(l)))
-                     col.Item().Text(t => { t.AlignCenter(); t.Span(line).FontSize(cfg.AddressFont.Size); });
-             });
+             // Logo pinned to left, overlaid — does not shift the centre
+             layers.Layer()
+                   .AlignLeft().AlignMiddle()
+                   .Width(cfg.Logo.WidthMm, Unit.Millimetre)
+                   .Padding(2)
+                   .Element(slot =>
+                   {
+                       if (cfg.Logo.Data is { Length: > 0 })
+                           slot.MaxWidth(cfg.Logo.WidthMm, Unit.Millimetre)
+                               .MaxHeight(cfg.Logo.MaxHeightMm, Unit.Millimetre)
+                               .Image(cfg.Logo.Data).FitArea();
+                   });
          });
     }
 

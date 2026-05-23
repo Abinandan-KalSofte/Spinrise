@@ -76,38 +76,28 @@ export function TbSep() {
 interface PRDocBandProps {
   savedPrNo: number | null
   prStatus:  string | null
-  divName?:  string | null
-  divCode?:  string | null
 }
 
-export function PRDocBand({ savedPrNo, prStatus: _prStatus, divName, divCode }: PRDocBandProps) {
-  const displayDiv = divName || divCode
+export function PRDocBand({ savedPrNo }: PRDocBandProps) {
   return (
     <div style={{
       background: 'linear-gradient(135deg, #0C447C 0%, #185FA5 100%)',
-      padding: '8px 18px',
+      padding: '6px 18px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       flexShrink: 0,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-        <div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginBottom: 1 }}>Document</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', letterSpacing: '.3px' }}>
-            Purchase Requisition
-          </div>
+      {/* Breadcrumb path */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+        <span style={{ color: 'rgba(255,255,255,.55)', fontWeight: 400 }}>Purchase Order</span>
+        <span style={{ color: 'rgba(255,255,255,.35)' }}>/</span>
+        <span style={{ color: '#fff', fontWeight: 600, letterSpacing: '.2px' }}>Purchase Requisition</span>
+      </div>
+      {/* PR Number */}
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginBottom: 1 }}>PR Number</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+          {savedPrNo ? `PR-${String(savedPrNo).padStart(5, '0')}` : 'Auto-generated on save'}
         </div>
-        <div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginBottom: 1 }}>PR Number</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
-            {savedPrNo ? `PR-${String(savedPrNo).padStart(5, '0')}` : 'Auto-generated on save'}
-          </div>
-        </div>
-        {displayDiv && (
-          <div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginBottom: 1 }}>Division</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{displayDiv}</div>
-          </div>
-        )}
       </div>
     </div>
   )
