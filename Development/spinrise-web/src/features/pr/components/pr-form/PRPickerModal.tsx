@@ -7,6 +7,11 @@ import { getFYBounds } from '@/shared/lib/dateUtils'
 import { PR_STATUS_BADGE, type PrSummary } from '../../types'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 
+function toSentenceCase(s: string): string {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+}
+
 interface PRPickerModalProps {
   open:     boolean
   mode:     'modify' | 'delete'
@@ -66,7 +71,9 @@ export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalP
         return (
           String(r.prNo).includes(q) ||
           (r.depName ?? '').toLowerCase().includes(q) ||
-          (r.reqEmpName ?? '').toLowerCase().includes(q)
+          (r.reqEmpName ?? '').toLowerCase().includes(q) ||
+          (r.iType ?? '').toLowerCase().includes(q) ||
+          (r.iDesc ?? '').toLowerCase().includes(q)
         )
       })
     : allRows
@@ -188,10 +195,10 @@ export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalP
                           border: `1px solid ${statusInfo.color}40`,
                           fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                         }}>
-                          {row.prStatus}
+                          {toSentenceCase(row.prStatus)}
                         </span>
                       ) : (
-                        <span style={{ fontSize: 11, color: '#888' }}>{row.prStatus}</span>
+                        <span style={{ fontSize: 11, color: '#888' }}>{toSentenceCase(row.prStatus)}</span>
                       )}
                     </td>
                   </tr>

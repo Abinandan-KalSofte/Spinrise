@@ -5,163 +5,299 @@ using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.DTOs;
 
 namespace Spinrise.API.Areas.PurchaseOrder.Print;
 
-public static class PrPrintDocument
+internal sealed class PrPrintDocument : IDocument
 {
-    public static byte[] Generate(PrHeaderDto pr)
-    {
-        return Document.Create(container =>
-        {
-            container.Page(page =>
-            {
-                page.Size(PageSizes.A4.Landscape());
-                page.Margin(18, Unit.Point);
-                page.DefaultTextStyle(t => t.FontSize(8).FontFamily("Arial"));
+    private readonly PrPrintDto _pr;
 
-                page.Header().Element(ComposeHeader(pr));
-                page.Content().Element(ComposeContent(pr));
-                page.Footer().AlignRight().Text(t =>
-                {
-                    t.Span("Page ").FontSize(7).FontColor(Colors.Grey.Medium);
-                    t.CurrentPageNumber().FontSize(7).FontColor(Colors.Grey.Medium);
-                    t.Span(" of ").FontSize(7).FontColor(Colors.Grey.Medium);
-                    t.TotalPages().FontSize(7).FontColor(Colors.Grey.Medium);
-                });
+    // ── Page ──────────────────────────────────────────────────────────────────────
+    private const float PageMargin = 6.3f;
+    private const float TableInset = 2.2f;
+
+    // ── Font ──────────────────────────────────────────────────────────────────────
+    private const string FontFamily = "Calibri";
+    private const float FsCompany  = 14f;
+    private const float FsDivision = 9f;
+    private const float FsAddress  = 8f;
+    private const float FsTitle    = 12f;
+    private const float FsInfo     = 10f;
+    private const float FsTh       = 10f;
+    private const float FsData     = 9f;
+    private const float FsSig      = 10f;
+
+    // ── Colours ───────────────────────────────────────────────────────────────────
+    private const string Navy  = "#185FA5";
+    private const string Black = "#000000";
+
+    // ── Borders (pt) ─────────────────────────────────────────────────────────────
+    private const float BdBox  = 1.5f;
+    private const float BdCell = 0.5f;
+    private const float BdData = 0.67f;
+
+    // ── Column widths (mm) — 12 cols, Σ = 277.27 mm ──────────────────────────────
+    //  0=S.No  1=ItemCode  2=ItemName  3=Unit  4=ReqQty  5=ReqDate  6=CurrStk
+    //  7=Rate  8=Value     9=Date      10=AppCost         11=Remarks
+    private static readonly float[] Cols =
+        { 8.9f, 17.8f, 64.6f, 11.1f, 21.2f, 19f, 23.0f, 19.1f, 24.1f, 21.8f, 22.7f, 24.77f };
+
+    // ── Info section widths (mm) ──────────────────────────────────────────────────
+    private const float LeftPanelW  = 141.5f;
+    private const float LeftLabelW  = 34.2f;
+    private const float LeftIndent  = 8.5f;
+    private const float RightLabelW = 29.4f;
+    private const float RightIndent = 10.8f;
+    private const float SepW        = 2.1f;
+
+    // ── Row heights (mm) ─────────────────────────────────────────────────────────
+    private const float DataRowH = 8.4f;
+    private const float MachRowH = 5.0f;
+    private const float SigH     = 22.9f;
+
+    public PrPrintDocument(PrPrintDto pr) => _pr = pr;
+
+    public static byte[] Generate(PrPrintDto pr) => new PrPrintDocument(pr).GeneratePdf();
+
+    public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
+    public DocumentSettings GetSettings() => DocumentSettings.Default;
+
+    public void Compose(IDocumentContainer container)
+    {
+        var totalValue = _pr.Lines.Sum(l => l.Rate * l.QtyInd);
+        var totalAppCost = _pr.Lines.Sum(l =>
+        {
+            var rateValue = l.Rate * l.QtyInd;
+            return l.AppCost <= 0m ? rateValue : l.AppCost;
+        });
+
+        var printStamp = $"Printed: {DateTime.Now:dd/MM/yyyy  hh:mm tt}";
+
+        container.Page(page =>
+        {
+            page.Size(PageSizes.A4.Landscape());
+            page.MarginHorizontal(PageMargin, Unit.Millimetre);
+            page.MarginVertical(PageMargin, Unit.Millimetre);
+            page.DefaultTextStyle(x => x.FontFamily(FontFamily).FontSize(FsData).FontColor(Black));
+
+            page.Header().Element(c => QuestPdfTemplateEngine.RenderHeader(c, BuildHeader()));
+
+            page.Content().Column(col =>
+            {
+                col.Spacing(4);
+                col.Item().PaddingTop(3f, Unit.Millimetre)
+                   .Element(c => QuestPdfTemplateEngine.RenderInfoSection(c, BuildInfo()));
+                col.Item()
+                   .PaddingBottom(2)
+                   .BorderBottom(1)
+                   .BorderColor(Colors.Grey.Darken1)
+                   .Element(c => QuestPdfTemplateEngine.RenderTable(c, BuildTable(totalValue, totalAppCost)));
+                col.Item()
+                   .Element(c => QuestPdfTemplateEngine.RenderSignature(c, BuildSignature()));
+                col.Item()
+                   .PaddingHorizontal(TableInset, Unit.Millimetre)
+                   .PaddingVertical(2)
+                   .Text(t => { t.AlignRight(); t.Span(printStamp).FontSize(FsAddress).FontColor(Black); });
             });
-        }).GeneratePdf();
+        });
     }
 
-    private static Action<IContainer> ComposeHeader(PrHeaderDto pr) => (container) =>
+    // ── Config builders ───────────────────────────────────────────────────────────
+
+    private HeaderConfig BuildHeader()
     {
-        container.Column(col =>
-        {
-            // Company + document title row
-            col.Item().Row(row =>
+        var name = string.IsNullOrWhiteSpace(_pr.DivPrintName) ? _pr.DivName : _pr.DivPrintName;
+
+        return new HeaderConfig(
+            InsetMm:      TableInset,
+            PadBottomMm:  1f,
+            BorderPt:     BdBox,
+            BorderColor:  Black,
+            Logo:         new LogoConfig(_pr.DivLogo, WidthMm: 51.6f, MaxHeightMm: 28.7f, GapMm: 9.8f),
+            CompanyFont:  new StyleFont(FontFamily, FsCompany,  Bold: true, Color: Navy),
+            UnitFont:     new StyleFont(FontFamily, FsDivision, Bold: true, Color: Navy),
+            AddressFont:  new StyleFont(FontFamily, FsAddress),
+            CompanyName:  name,
+            UnitName:     _pr.DivUnitName,
+            AddressLines: new[]
             {
-                row.RelativeItem().Column(c =>
-                {
-                    c.Item().Text("SPINRISE ERP").FontSize(14).Bold().FontColor("#1a2236");
-                    c.Item().Text("Purchase Requisition").FontSize(10).FontColor(Colors.Grey.Darken2);
-                });
-                row.ConstantItem(200).AlignRight().Column(c =>
-                {
-                    c.Item().Text($"PR No: {(long)pr.PrNo:D5}").FontSize(11).Bold();
-                    c.Item().Text($"Date: {pr.PrDate:dd-MMM-yyyy}").FontSize(9);
-                    c.Item().Text($"Status: {pr.PrStatus}").FontSize(8).FontColor(Colors.Grey.Darken2);
-                });
+                $"{_pr.DivAddress1}, {_pr.DivAddress2}".Trim(' ', ','),
+                $"{_pr.DivAddress3} - {_pr.DivPinCode}, {_pr.DivState}".Trim(' ', ',', '-'),
+                string.IsNullOrWhiteSpace(_pr.DivPhone) ? "" : $"Phone: {_pr.DivPhone}",
+                string.IsNullOrWhiteSpace(_pr.DivEmail) ? "" : $"Email: {_pr.DivEmail}",
             });
+    }
 
-            col.Item().PaddingTop(4).BorderBottom(1).BorderColor(Colors.Grey.Lighten1).Element(_ => { });
-
-            // Info row
-            col.Item().PaddingTop(6).Row(row =>
-            {
-                void InfoCell(RowDescriptor r, string label, string value)
-                {
-                    r.RelativeItem().Column(c =>
-                    {
-                        c.Item().Text(label).FontSize(7).FontColor(Colors.Grey.Medium).Bold();
-                        c.Item().Text(string.IsNullOrWhiteSpace(value) ? "—" : value).FontSize(8.5f);
-                    });
-                }
-
-                InfoCell(row, "Division",    pr.DivCode);
-                InfoCell(row, "Department",  $"{pr.DepCode} — {pr.DepName}");
-                InfoCell(row, "Requested By",!string.IsNullOrWhiteSpace(pr.ReqEmpName) ? pr.ReqEmpName : pr.ReqName);
-                InfoCell(row, "Section",     pr.Section);
-                InfoCell(row, "Ref. No.",    pr.RefNo);
-                InfoCell(row, "Type",        !string.IsNullOrWhiteSpace(pr.IDesc) ? pr.IDesc : pr.IType);
-                InfoCell(row, "PO Group",    pr.PoGrp);
-            });
-
-            col.Item().PaddingTop(6).BorderBottom(1).BorderColor(Colors.Grey.Lighten1).Element(_ => { });
-        });
-    };
-
-    private static Action<IContainer> ComposeContent(PrHeaderDto pr) => (container) =>
+    private InfoSectionConfig BuildInfo()
     {
-        container.PaddingTop(8).Table(table =>
+        var requester = !string.IsNullOrWhiteSpace(_pr.ReqEmpName) ? _pr.ReqEmpName : _pr.ReqName;
+        var depLabel  = string.IsNullOrWhiteSpace(_pr.DepName) ? _pr.DepCode : _pr.DepName;
+
+        return new InfoSectionConfig(
+            InsetMm:     TableInset,
+            BorderPt:    BdBox,
+            BorderColor: Black,
+            Title:       "Purchase Requisition",
+            TitleFont:   new StyleFont(FontFamily, FsTitle, Bold: true, Color: Navy),
+            TitlePadVMm: 3f,
+            LabelFont:   new StyleFont(FontFamily, FsInfo, Bold: true),
+            ValueFont:   new StyleFont(FontFamily, FsInfo, Bold: false),
+            DividerMm:   0.53f,
+            LeftPanel: new InfoPanelConfig(
+                WidthMm: LeftPanelW, IndentMm: LeftIndent, PadVMm: 3f, RowSpacingMm: 3f,
+                Rows: new InfoRowConfig[]
+                {
+                    new("Requester Name", requester,       LeftLabelW, SepW),
+                    new("Created By",     _pr.CreatedBy,   LeftLabelW, SepW),
+                    new("Department",     depLabel,        LeftLabelW, SepW),
+                    new("Reference",      _pr.RefNo,       LeftLabelW, SepW),
+                }),
+            RightPanel: new InfoPanelConfig(
+                WidthMm: 0, IndentMm: RightIndent, PadVMm: 3f, RowSpacingMm: 3f,
+                Rows: new InfoRowConfig[]
+                {
+                    new("PR.No.",        ((long)_pr.PrNo).ToString(),               RightLabelW, SepW),
+                    new("PR.Date/Time",  FormatCreatedDt(),                              RightLabelW, SepW),
+                    new("Approved Date", _pr.PresidentAppDate,                      RightLabelW, SepW),
+                }));
+    }
+
+    private TableConfig BuildTable(decimal totalValue, decimal totalAppCost)
+    {
+        var emptyMach = new MachCellConfig(MinHeightMm: MachRowH, BdSidePt: BdData, BdColor: Black);
+
+        var rows = _pr.Lines.Select((line, i) =>
         {
-            table.ColumnsDefinition(cols =>
+            var rate       = line.Rate;
+            var rateValue  = rate * line.QtyInd;
+            var approxCost = line.AppCost <= 0m ? rateValue : line.AppCost;
+            var stock      = line.CurrentStock;
+
+            DcCellConfig Dc(string text, DA align) =>
+                new(text, align, MinHeightMm: DataRowH, FontSizePt: FsData, BdSidePt: BdData, BdColor: Black);
+            DcCellConfig DcMono(string text, DA align) =>
+                new(text, align, MinHeightMm: DataRowH, FontSizePt: FsData, BdSidePt: BdData, BdColor: Black, FontFamily: "Courier New");
+
+            DcCellConfig[] cells =
             {
-                cols.ConstantColumn(18);   // #
-                cols.ConstantColumn(62);   // Item Code
-                cols.RelativeColumn(3);    // Description
-                cols.ConstantColumn(30);   // UOM
-                cols.ConstantColumn(64);   // Machine
-                cols.ConstantColumn(52);   // Req Qty
-                cols.ConstantColumn(64);   // Rate
-                cols.ConstantColumn(72);   // Approx Cost
-                cols.ConstantColumn(58);   // Req Date
-                cols.ConstantColumn(22);   // Sample
-                cols.RelativeColumn(2);    // Remarks
+                Dc((i + 1).ToString(),                                                                    DA.Center),
+                DcMono(line.ItemCode,                                                                     DA.Left),
+                Dc(line.ItemName,                                                                         DA.Left),
+                Dc(line.Uom,                                                                              DA.Center),
+                Dc(line.QtyInd == 0m ? "" : line.QtyInd.ToString("N3"),                                  DA.Right),
+                Dc(line.ReqdDate.HasValue ? line.ReqdDate.Value.ToString("dd/MM/yyyy") : "",              DA.Center),
+                Dc(stock < 1m ? "" : stock.ToString("N3"),                                               DA.Right),
+                Dc(rate == 0m ? "" : rate.ToString("N4"),                                                DA.Right),
+                Dc(rateValue == 0m ? "" : rateValue.ToString("N2"),                                      DA.Right),
+                Dc(line.LastPoDate.HasValue ? line.LastPoDate.Value.ToString("dd/MM/yyyy") : "",          DA.Center),
+                Dc(approxCost == 0m ? "" : approxCost.ToString("N2"),                                    DA.Right),
+                Dc(line.Remarks,                                                                          DA.Left),
+            };
+
+            var childRows = new List<ChildRowConfig>();
+            if (!string.IsNullOrWhiteSpace(line.DrawNo))
+                childRows.Add(new($"DRAWING NO.:  {line.DrawNo}", FsData));
+            if (!string.IsNullOrWhiteSpace(line.CatNo))
+                childRows.Add(new($"CATALOGUE NO.:  {line.CatNo}", FsData));
+            if (!string.IsNullOrWhiteSpace(line.MacNo))
+                childRows.Add(new($"Machine:  {line.MacNo}", FsData));
+
+            return new DataRowConfig(cells, childRows.ToArray());
+        }).ToList();
+
+        var totalsRow = new TotalsRowConfig(
+            Cells: new TotalsCellConfig[]
+            {
+                new("Grand Total", DA.Right, ColumnSpan: 8u, Bold: true, Color: Navy),
+                new(totalValue   == 0m ? "" : totalValue.ToString("N2"), DA.Right, Bold: true, Color: Navy),
+                new("", DA.Center),
+                new(totalAppCost == 0m ? "" : totalAppCost.ToString("N2"), DA.Right, Bold: true, Color: Navy),
+                new("", DA.Left),
+            },
+            MinHeightMm: DataRowH,
+            FontSizePt:  FsData,
+            BdSidePt:    BdData,
+            BdColor:     Black);
+
+        return new TableConfig(
+            InsetMm:       TableInset,
+            Columns:       Cols.Select(w => new ColDef(w)).ToArray(),
+            Header:        BuildTableHeader(),
+            EmptyMachCell: emptyMach,
+            Rows:          rows,
+            TotalsRow:     totalsRow);
+    }
+
+    private static TableHeaderConfig BuildTableHeader()
+    {
+        ThCellConfig Th(string text, int rowSpan, bool topBd) => new(
+            Text:     text,
+            RowSpan:  (uint)rowSpan,
+            ColSpan:  1u,
+            BdTop:    topBd ? (float?)BdBox : null,
+            BdRight:  BdCell,
+            BdBottom: BdBox,
+            BdLeft:   BdCell,
+            BdColor:  Black);
+
+        ThCellConfig[] cells =
+        {
+            Th("S.No",                    rowSpan: 2, topBd: true),
+            Th("Item ID",                 rowSpan: 2, topBd: true),
+            Th("Item Name",               rowSpan: 2, topBd: true),
+            Th("Unit",                    rowSpan: 2, topBd: true),
+            Th("Required\nQuantity",      rowSpan: 2, topBd: true),
+            Th("Required\nDate",          rowSpan: 2, topBd: true),
+            Th("Current stock\nQuantity", rowSpan: 2, topBd: true),
+
+            new ThCellConfig(
+                Text:     "Previous Purchase Details",
+                RowSpan:  1u,
+                ColSpan:  3u,
+                BdTop:    BdBox,
+                BdRight:  BdCell,
+                BdBottom: BdCell,
+                BdLeft:   BdCell,
+                BdColor:  Black),
+
+            Th("App. Cost\nValue", rowSpan: 2, topBd: true),
+            Th("Remarks",          rowSpan: 2, topBd: true),
+
+            Th("Rate/Unit", rowSpan: 1, topBd: false),
+            Th("Value",     rowSpan: 1, topBd: false),
+            Th("Date",      rowSpan: 1, topBd: false),
+        };
+
+        return new TableHeaderConfig(cells, Font: new StyleFont(FontFamily, FsTh, Bold: true, Color: Black));
+    }
+
+    private string FormatCreatedDt()
+    {
+        if (string.IsNullOrWhiteSpace(_pr.CreatedDt))
+            return _pr.PrDate.ToString("dd-MM-yyyy");
+
+        // CreatedDt format: "DD/MM/YYYY HH:MM:SS AM/PM" — 24-hour clock with trailing AM/PM marker
+        var parts = _pr.CreatedDt.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2 &&
+            DateTime.TryParseExact(parts[0] + " " + parts[1], "dd/MM/yyyy HH:mm:ss",
+                null, System.Globalization.DateTimeStyles.None, out var dt))
+            return dt.ToString("dd-MM-yyyy  hh:mm tt");
+
+        return _pr.PrDate.ToString("dd-MM-yyyy");
+    }
+
+    private SignatureConfig BuildSignature()
+    {
+        var requester = !string.IsNullOrWhiteSpace(_pr.ReqEmpName) ? _pr.ReqEmpName : _pr.ReqName;
+
+        return new SignatureConfig(
+            InsetMm:     TableInset,
+            MinHeightMm: SigH,
+            BorderPt:    BdBox,
+            BorderColor: Black,
+            Font:        new StyleFont(FontFamily, FsSig),
+            Blocks: new SigBlockConfig[]
+            {
+                new("Requested By",         requester,         Date: null,                 RightBorder: true,  PadV: 8f, PadH: 10f, NamePadTop: 6f),
+                new("Approved By",          _pr.FirstAppUser,  Date: null,                 RightBorder: true,  PadV: 8f, PadH: 10f, NamePadTop: 6f),
+                new("Authorised Signatory", _pr.FinalAppUser,  Date: _pr.PresidentAppDate, RightBorder: false, PadV: 8f, PadH: 10f, NamePadTop: 6f),
             });
-
-            // Header row
-            static IContainer HeaderCell(IContainer c) =>
-                c.Background("#1e293b").Padding(4).AlignCenter();
-
-            static TextSpanDescriptor HeaderText(TextDescriptor t, string label) =>
-                t.Span(label).FontSize(7).Bold().FontColor(Colors.White);
-
-            table.Header(h =>
-            {
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "#"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "Item Code"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "Description"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "UOM"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "Machine No"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "Req. Qty"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "Rate"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "Approx. Cost"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "Req. Date"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "S"));
-                h.Cell().Element(HeaderCell).Text(t => HeaderText(t, "Remarks"));
-            });
-
-            // Data rows
-            for (var i = 0; i < pr.Lines.Count; i++)
-            {
-                var line = pr.Lines[i];
-                var even = i % 2 == 0;
-
-                static IContainer DataCell(IContainer c, bool isEven) =>
-                    c.Background(isEven ? Colors.White : "#f8fafc")
-                     .BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2)
-                     .Padding(3);
-
-                table.Cell().Element(c => DataCell(c, even)).AlignCenter()
-                    .Text((i + 1).ToString()).FontSize(7).FontColor(Colors.Grey.Medium);
-
-                table.Cell().Element(c => DataCell(c, even))
-                    .Text(line.ItemCode).FontSize(7.5f).FontFamily("Courier New").Bold();
-
-                table.Cell().Element(c => DataCell(c, even))
-                    .Text(line.ItemName).FontSize(7.5f);
-
-                table.Cell().Element(c => DataCell(c, even)).AlignCenter()
-                    .Text(line.Uom).FontSize(7.5f);
-
-                table.Cell().Element(c => DataCell(c, even)).AlignCenter()
-                    .Text(line.MacNo ?? "—").FontSize(7.5f);
-
-                table.Cell().Element(c => DataCell(c, even)).AlignRight()
-                    .Text(line.QtyInd.ToString("N3")).FontSize(7.5f);
-
-                table.Cell().Element(c => DataCell(c, even)).AlignRight()
-                    .Text(line.Rate > 0 ? line.Rate.ToString("N4") : "—").FontSize(7.5f);
-
-                table.Cell().Element(c => DataCell(c, even)).AlignRight()
-                    .Text(line.AppCost > 0 ? $"₹ {line.AppCost:N2}" : "—").FontSize(7.5f);
-
-                table.Cell().Element(c => DataCell(c, even)).AlignCenter()
-                    .Text(line.ReqdDate.HasValue ? line.ReqdDate.Value.ToString("dd-MMM-yy") : "—").FontSize(7.5f);
-
-                table.Cell().Element(c => DataCell(c, even)).AlignCenter()
-                    .Text(line.Sample == "Y" ? "✓" : "").FontSize(8f);
-
-                table.Cell().Element(c => DataCell(c, even))
-                    .Text(line.Remarks ?? "").FontSize(7f).FontColor(Colors.Grey.Darken2);
-            }
-        });
-    };
+    }
 }

@@ -112,7 +112,11 @@ function ROCell({ value, type = 'text', precision = 3 }: {
   if (value === null || value === undefined || value === '') {
     return <span style={{ color: '#d1d5db' }}>—</span>
   }
-  if (type === 'number') return <span style={{ fontVariantNumeric: 'tabular-nums' }}>{Number(value).toFixed(precision)}</span>
+  if (type === 'number') return (
+    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+      {Number(value).toLocaleString('en-IN', { minimumFractionDigits: precision, maximumFractionDigits: precision })}
+    </span>
+  )
   if (type === 'date')   return <span>{dayjs(value as string).format('DD-MMM-YYYY')}</span>
   return <span>{value as string}</span>
 }
@@ -132,7 +136,7 @@ const RORow = memo(({ row, idx, onView }: RORowProps) => (
     <td style={{ ...TD_TEXT, width: 120, textAlign: 'right' }}>
       {row.appCost > 0
         ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-            ₹ {row.appCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            ₹ {row.appCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         : <span style={{ color: '#d1d5db' }}>—</span>}
     </td>
@@ -233,7 +237,7 @@ const EditRow = memo(({
       </td>
       <td style={{ ...TD, width: 120, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: 11 }}>
         {row.appCost > 0
-          ? `₹ ${row.appCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+          ? `₹ ${row.appCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           : <span style={{ color: '#d1d5db' }}>—</span>}
       </td>
       <td style={{ ...TD, width: 140 }}>

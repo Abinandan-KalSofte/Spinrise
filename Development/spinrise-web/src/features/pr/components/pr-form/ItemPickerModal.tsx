@@ -11,6 +11,7 @@ const PAGE_SIZE = 50
 interface ItemPickerModalProps {
   open:             boolean
   depCode:          string
+  depName?:         string
   initialSearch?:   string
   onSelectMultiple: (items: ItemLookup[]) => void
   onCancel:         () => void
@@ -28,7 +29,7 @@ const TD: React.CSSProperties = {
 }
 
 export function ItemPickerModal({
-  open, depCode, initialSearch = '', onSelectMultiple, onCancel,
+  open, depCode, depName, initialSearch = '', onSelectMultiple, onCancel,
 }: ItemPickerModalProps) {
   const divCode = useAuthStore((s) => s.user?.divCode ?? '')
 
@@ -139,7 +140,7 @@ export function ItemPickerModal({
               Item Selection — Purchase Requisition
             </div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-              Dept: <strong style={{ color: '#1677ff' }}>{depCode || 'All'}</strong>
+              Dept: <strong style={{ color: '#1677ff' }}>{depName || depCode || 'All'}</strong>
               {' · '}Click to select · Double-click to add instantly
             </div>
           </div>
@@ -246,7 +247,7 @@ export function ItemPickerModal({
                       <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
                         {item.lpoRate != null
                           ? <span style={{ fontWeight: 600, color: '#b45309' }}>
-                              ₹ {Number(item.lpoRate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                              ₹ {Number(item.lpoRate).toLocaleString('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                             </span>
                           : <span style={{ color: '#d1d5db' }}>—</span>}
                       </td>
