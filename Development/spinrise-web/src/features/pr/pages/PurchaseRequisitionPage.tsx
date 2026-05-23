@@ -297,7 +297,7 @@ export default function PurchaseRequisitionPage() {
         <TbBtn
           icon={<UnorderedListOutlined style={{ fontSize: 11 }} />}
           label="Find"
-          disabled={isEditing}
+          disabled={isEditing || isDeleteMode}
           onClick={() => setFindOpen(true)}
         />
         <TbSep />

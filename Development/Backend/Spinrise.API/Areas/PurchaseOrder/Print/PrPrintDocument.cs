@@ -33,11 +33,11 @@ internal sealed class PrPrintDocument : IDocument
     private const float BdCell = 0.5f;
     private const float BdData = 0.67f;
 
-    // ── Column widths (mm) — 12 cols, Σ = 277.27 mm ──────────────────────────────
+    // ── Column widths (mm) — 12 cols, Σ = 277.97 mm ──────────────────────────────
     //  0=S.No  1=ItemCode  2=ItemName  3=Unit  4=ReqQty  5=ReqDate  6=CurrStk
     //  7=Rate  8=Value     9=Date      10=AppCost         11=Remarks
     private static readonly float[] Cols =
-        { 8.9f, 17.8f, 64.6f, 11.1f, 21.2f, 19f, 23.0f, 19.1f, 24.1f, 21.8f, 22.7f, 24.77f };
+        { 8.9f, 17.8f, 58.0f, 11.1f, 21.2f, 19f, 23.0f, 22.0f, 27.7f, 21.8f, 22.7f, 24.77f };
 
     // ── Info section widths (mm) ──────────────────────────────────────────────────
     private const float LeftPanelW  = 141.5f;
