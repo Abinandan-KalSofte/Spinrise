@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Layout, Menu, Button, Dropdown, Tag } from 'antd'
+import { Layout, Menu, Button, Dropdown } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   DashboardOutlined,
@@ -33,7 +33,7 @@ const NAV_ITEMS: MenuItem[] = [
   mk('/dashboard', 'Dashboard', <DashboardOutlined />),
   mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined />, [
     mk('/purchase-requisition', 'Purchase Requisition', <FileTextOutlined />),
-    mk('/rmi-purchase-order', 'RMI Purchase Order', <FileTextOutlined />, undefined, true),
+   
   ]),
 ]
 
@@ -84,7 +84,7 @@ export default function AppShell() {
       {/* ── Sidebar ── */}
       <Sider
         collapsed={collapsed}
-        width={220}
+        width={240}
         collapsedWidth={52}
         style={{
           background: '#1a2236',
@@ -137,21 +137,6 @@ export default function AppShell() {
           />
         </div>
 
-        {/* Collapse toggle */}
-        <div style={{
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          padding: '8px',
-          display: 'flex',
-          justifyContent: collapsed ? 'center' : 'flex-end',
-          flexShrink: 0,
-        }}>
-          <Button
-            type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
-            style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}
-          />
-        </div>
       </Sider>
 
       {/* ── Main area ── */}
@@ -168,12 +153,19 @@ export default function AppShell() {
           justifyContent: 'space-between',
           flexShrink: 0,
         }}>
+          {/* Sidebar toggle */}
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{ color: '#64748b', fontSize: 14, marginRight: 4 }}
+          />
           {/* Breadcrumb */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', minWidth: 0, gap: 6, fontSize: 13 }}>
             {breadcrumbs.map((crumb, i) => (
-              <span key={crumb} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {i > 0 && <span style={{ color: '#cbd5e1' }}>/</span>}
-                <span style={{ color: i === breadcrumbs.length - 1 ? '#1e293b' : '#94a3b8', fontWeight: i === breadcrumbs.length - 1 ? 600 : 400 }}>
+              <span key={crumb} style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: i === breadcrumbs.length - 1 ? 1 : 0, overflow: 'hidden' }}>
+                {i > 0 && <span style={{ color: '#cbd5e1', flexShrink: 0 }}>/</span>}
+                <span style={{ color: i === breadcrumbs.length - 1 ? '#1e293b' : '#94a3b8', fontWeight: i === breadcrumbs.length - 1 ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {crumb}
                 </span>
               </span>
@@ -184,21 +176,23 @@ export default function AppShell() {
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
-                width: 28, height: 28, borderRadius: '50%',
+                width: 32, height: 32, borderRadius: '50%',
                 background: 'linear-gradient(135deg, #185FA5, #1677ff)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <UserOutlined style={{ color: '#fff', fontSize: 13 }} />
+                <UserOutlined style={{ color: '#fff', fontSize: 14 }} />
               </div>
-              <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
-                {user?.userName}
-              </span>
-              {user?.divCode && (
-                <Tag color="blue" style={{ fontSize: 11, margin: 0, lineHeight: '18px' }}>
-                  {user.divCode}
-                </Tag>
-              )}
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                <span style={{ fontSize: 13, color: '#1e293b', fontWeight: 600 }}>
+                  {user?.userName}
+                </span>
+                {(user?.divName || user?.divCode) && (
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                    {user.divName || user.divCode}
+                  </span>
+                )}
+              </div>
               <DownOutlined style={{ color: '#94a3b8', fontSize: 10 }} />
             </div>
           </Dropdown>

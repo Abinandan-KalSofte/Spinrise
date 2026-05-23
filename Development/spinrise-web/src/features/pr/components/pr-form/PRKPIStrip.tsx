@@ -2,6 +2,11 @@ import { Fragment } from 'react'
 import dayjs from 'dayjs'
 import { PR_STATUS_BADGE } from '../../types'
 
+function toSentenceCase(s: string): string {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+}
+
 const C = {
   blue:   '#185FA5',
   blueL:  '#E6F1FB',
@@ -129,48 +134,52 @@ function KPICard({
 // ── Component ──────────────────────────────────────────────────────────────────
 
 interface PRKPIStripProps {
-  validLinesCount: number
-  totalQtyDisplay: string
-  totalCost:       number
-  prDate?:         string | null
-  prStatus:        string | null
-  savedPrNo:       number | null
-  isNewMode?:      boolean
+  validLinesCount:     number
+  totalQtyDisplay:     string
+  totalCost:           number
+  prDate?:             string | null
+  prStatus:            string | null
+  savedPrNo:           number | null
+  isNewMode?:          boolean
+  hideApprovalStatus?: boolean
 }
 
-export function PRKPIStrip({ validLinesCount, totalQtyDisplay, totalCost, prDate, prStatus, savedPrNo, isNewMode = false }: PRKPIStripProps) {
+export function PRKPIStrip({ validLinesCount, totalQtyDisplay, totalCost, prDate, prStatus, savedPrNo, isNewMode = false, hideApprovalStatus = false }: PRKPIStripProps) {
   const statusInfo  = prStatus ? (PR_STATUS_BADGE[prStatus] ?? null) : null
   const daysOpen    = savedPrNo && prDate ? dayjs().diff(dayjs(prDate), 'day') : null
   const daysColor   = daysOpen === null ? C.text3 : daysOpen < 5 ? C.green : daysOpen <= 14 ? C.amber : C.red
   const statusColor = statusInfo?.color ?? C.text3
 
   // FSD §2 (CEO R2.0 #17): cards 3-5 hidden in Add mode; only visible after first save
-  const cols = isNewMode ? 2 : 5
+  const showExtended = !isNewMode && !hideApprovalStatus
+  const cols = isNewMode ? 2 : hideApprovalStatus ? 4 : 5
 
   return (
     <div style={{ background: C.bg2, borderTop: `1px solid ${C.border}`, padding: '8px 16px', flexShrink: 0 }}>
-      <ApprovalStageBar prStatus={prStatus} savedPrNo={savedPrNo} />
+      {!hideApprovalStatus && <ApprovalStageBar prStatus={prStatus} savedPrNo={savedPrNo} />}
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
         <KPICard label="Total Lines" value={validLinesCount}
-          sub={`${validLinesCount === 1 ? 'item' : 'items'} in this PR`}
+          sub={`${validLinesCount === 1 ? 'Item' : 'Items'} in this PR`}
           valueColor={C.blue} accent={C.blue} />
-        <KPICard label="Total Quantity" value={totalQtyDisplay} sub="By unit of measure" mono />
+        <KPICard label="Total Quantity" value={totalQtyDisplay} sub="By Unit of Measure" mono />
         {!isNewMode && (
           <>
             <KPICard label="Approx. Budget"
-              value={totalCost > 0 ? `₹ ${totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-              sub="Indicative cost" valueColor={totalCost > 0 ? C.amber : C.text3}
+              value={totalCost > 0 ? `₹ ${totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+              sub="Indicative Cost" valueColor={totalCost > 0 ? C.amber : C.text3}
               accent={totalCost > 0 ? C.amber : undefined} />
             <KPICard label="Days Open" value={daysOpen !== null ? daysOpen : '—'}
               sub={daysOpen === null ? 'Not yet saved' : daysOpen === 0 ? 'Created today' : `${daysOpen} days since creation`}
               valueColor={daysColor}
               accent={daysOpen !== null && daysOpen > 14 ? C.red : daysOpen !== null && daysOpen >= 5 ? C.amber : undefined} />
-            <KPICard label="Approval Status"
-              value={statusInfo
-                ? <span style={{ fontWeight: 700, color: statusColor }}>{prStatus}</span>
-                : <span style={{ color: C.text3, fontWeight: 400 }}>Draft</span>}
-              sub={!savedPrNo ? 'Not yet saved' : prStatus === 'PR. CANCELLED' ? 'No further action' : 'Awaiting approval'}
-              accent={statusColor !== C.text3 ? statusColor : undefined} />
+            {showExtended && (
+              <KPICard label="Approval Status"
+                value={statusInfo
+                  ? <span style={{ fontWeight: 700, color: statusColor }}>{toSentenceCase(prStatus!)}</span>
+                  : <span style={{ color: C.text3, fontWeight: 400 }}>Draft</span>}
+                sub={!savedPrNo ? 'Not yet saved' : prStatus === 'PR. CANCELLED' ? 'No further action' : 'Awaiting Approval'}
+                accent={statusColor !== C.text3 ? statusColor : undefined} />
+            )}
           </>
         )}
       </div>
