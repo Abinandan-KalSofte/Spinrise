@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Spinrise.API.Areas.PurchaseOrder.Print;
 using Spinrise.API.Controllers;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.DTOs;
@@ -14,11 +15,13 @@ namespace Spinrise.API.Areas.PurchaseOrder.Controllers;
 [Route("api/v1/pr")]
 public class PurchaseRequisitionController : BaseApiController
 {
-    private readonly IPrService _service;
+    private readonly IPrService    _service;
+    private readonly string        _itemImagesPath;
 
-    public PurchaseRequisitionController(IPrService service)
+    public PurchaseRequisitionController(IPrService service, IConfiguration config)
     {
-        _service = service;
+        _service        = service;
+        _itemImagesPath = config["ItemImagesPath"] ?? string.Empty;
     }
 
     // ── Permissions ───────────────────────────────────────────────────────────
@@ -101,6 +104,25 @@ public class PurchaseRequisitionController : BaseApiController
         return OkResponse(result);
     }
 
+    [HttpGet("machine-lookup")]
+    public async Task<IActionResult> GetMachineLookup(
+        [FromQuery] string divCode,
+        [FromQuery] string depCode,
+        [FromQuery] string? search = null)
+    {
+        var result = await _service.GetMachineLookupAsync(divCode, depCode, search);
+        return OkResponse(result);
+    }
+
+    [HttpGet("cost-centre-lookup")]
+    public async Task<IActionResult> GetCostCentreLookup(
+        [FromQuery] string divCode,
+        [FromQuery] string? search = null)
+    {
+        var result = await _service.GetCostCentreLookupAsync(divCode, search);
+        return OkResponse(result);
+    }
+
     [HttpGet("items/{itemCode}/pending-order")]
     public async Task<IActionResult> CheckPendingOrder(
         string itemCode,
@@ -179,9 +201,41 @@ public class PurchaseRequisitionController : BaseApiController
     [HttpDelete]
     public async Task<IActionResult> Delete([FromQuery] string divCode, [FromBody] DeletePrRequest request)
     {
-        var userId = User.FindFirstValue(SpinriseClaims.UserId) ?? string.Empty;
-        await _service.DeleteAsync(divCode, request, userId);
+        var userId    = User.FindFirstValue(SpinriseClaims.UserId) ?? string.Empty;
+        var hostName  = HttpContext.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        await _service.DeleteAsync(divCode, request, userId, hostName, ipAddress);
         return OkResponse("PR deleted successfully.");
+    }
+
+    // ── Item image ────────────────────────────────────────────────────────────
+
+    [AllowAnonymous]
+    [HttpGet("items/{itemCode}/image")]
+    public async Task<IActionResult> GetItemImage(string itemCode)
+    {
+        var imagePath = await _service.GetItemImagePathAsync(itemCode);
+        if (string.IsNullOrWhiteSpace(imagePath) || string.IsNullOrWhiteSpace(_itemImagesPath))
+            return NotFound();
+
+        var fileName = Path.GetFileName(imagePath);
+        if (string.IsNullOrWhiteSpace(fileName)) return NotFound();
+
+        var fullPath = Path.Combine(_itemImagesPath, fileName);
+        if (!System.IO.File.Exists(fullPath)) return NotFound();
+
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        var contentType = ext switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png"            => "image/png",
+            ".gif"            => "image/gif",
+            ".webp"           => "image/webp",
+            _                 => "application/octet-stream",
+        };
+
+        Response.Headers.CacheControl = "public, max-age=86400";
+        return PhysicalFile(fullPath, contentType);
     }
 
     // ── Print ──────────────────────────────────────────────────────────────────
@@ -189,8 +243,8 @@ public class PurchaseRequisitionController : BaseApiController
     [HttpGet("{prNo}/print")]
     public async Task<IActionResult> Print(decimal prNo, [FromQuery] string divCode, [FromQuery] DateOnly prDate)
     {
-        var pr = await _service.GetByIdAsync(divCode, prNo, prDate);
-        if (pr is null) return NotFoundResponse("PR not found.");
+        var pr = await _service.GetPrintDataAsync(divCode, prNo, prDate);
+        if (pr is null) return NotFoundResponse("No records to print.");
         var pdfBytes = PrPrintDocument.Generate(pr);
         return File(pdfBytes, "application/pdf", $"PR-{(long)prNo:D5}.pdf");
     }

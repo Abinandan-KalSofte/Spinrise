@@ -8,11 +8,13 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { usePRFormCore } from '../hooks/usePRFormCore'
 import { PRDocBand, TbBtn, TbSep } from '../components/pr-form/PRToolbar'
+import type { PRLineItemsTableHandle } from '../components/pr-form/PRLineItemsTable'
 import { PRPickerModal } from '../components/pr-form/PRPickerModal'
 import { PRHeaderV1 } from '../components/pr-form/PRHeaderV1'
 import { PRKPIStrip } from '../components/pr-form/PRKPIStrip'
 import { PRLineItemsTable } from '../components/pr-form/PRLineItemsTable'
 import PrListModal from '../components/PrListModal'
+import { PrPrintPreviewModal } from '../components/PrPrintPreviewModal'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import * as prApi from '../api/prApi'
 import type { PrSummary } from '../types'
@@ -22,11 +24,11 @@ export default function PurchaseRequisitionPage() {
   const [searchParams] = useSearchParams()
 
   const {
-    headerForm, depCode, authUser, divCode,
+    headerForm, depCode, reqName, iType, authUser, divCode,
     items, setItems,
     savedPrNo, savedPr, prStatus,
     deleting, pageBusy, navLoading,
-    preCheckMsg, preCheckLoading, runPreChecks,
+    preCheckMsg, preCheckLoading, preCheckResult, runPreChecks,
     deleteModalOpen, setDeleteModalOpen,
     departments, employees, prTypes,
     lookupsLoaded, lookupsLoading, lookupsError, loadAll,
@@ -44,6 +46,15 @@ export default function PurchaseRequisitionPage() {
   const [pickerMode,       setPickerMode]        = useState<'modify' | 'delete' | null>(null)
   const [findOpen,         setFindOpen]          = useState(false)
   const [isDeleteMode,     setIsDeleteMode]      = useState(false)
+
+  // ── Print preview modal state ─────────────────────────────────────────────
+  const lineItemsTableRef = useRef<PRLineItemsTableHandle>(null)
+
+  const [printOpen,        setPrintOpen]         = useState(false)
+  const [printLoading,     setPrintLoading]      = useState(false)
+  const [printBlobUrl,     setPrintBlobUrl]      = useState<string | null>(null)
+  const [printFilename,    setPrintFilename]     = useState('')
+  const prevBlobUrlRef     = useRef<string | null>(null)
 
   // ── Load on mount ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -81,6 +92,7 @@ export default function PurchaseRequisitionPage() {
   // ── Line delete (G12) ─────────────────────────────────────────────────────
   const handleLineDelete = useCallback(async (prSno: number, itemCode: string) => {
     if (!savedPrNo || !savedPr) return
+    const wasEditing = mode === 'edit'
     try {
       await prApi.deletePr(divCode, {
         prNo:         savedPrNo,
@@ -90,21 +102,40 @@ export default function PurchaseRequisitionPage() {
         deleteReason: null,
       })
       await loadRecord(savedPrNo, savedPr.prDate)
+      if (wasEditing) setMode('edit')
       void message.success(`Line ${itemCode} deleted.`)
     } catch (err) {
       void message.error(err instanceof Error ? err.message : 'Failed to delete line.')
     }
-  }, [divCode, savedPrNo, savedPr, loadRecord, message])
+  }, [divCode, mode, savedPrNo, savedPr, loadRecord, setMode, message])
 
   // ── Print (G14) ───────────────────────────────────────────────────────────
   const handlePrint = useCallback(async () => {
     if (!savedPrNo || !savedPr) return
+    // Revoke previous blob URL to free memory
+    if (prevBlobUrlRef.current) {
+      URL.revokeObjectURL(prevBlobUrlRef.current)
+      prevBlobUrlRef.current = null
+    }
+    setPrintBlobUrl(null)
+    setPrintLoading(true)
+    setPrintOpen(true)
     try {
-      await prApi.printPr(divCode, savedPrNo, savedPr.prDate)
+      const { blobUrl, filename } = await prApi.getPrintBlobUrl(divCode, savedPrNo, savedPr.prDate)
+      prevBlobUrlRef.current = blobUrl
+      setPrintBlobUrl(blobUrl)
+      setPrintFilename(filename)
     } catch (err) {
+      setPrintOpen(false)
       void message.error(err instanceof Error ? err.message : 'Failed to generate print.')
+    } finally {
+      setPrintLoading(false)
     }
   }, [divCode, savedPrNo, savedPr, message])
+
+  const handlePrintClose = useCallback(() => {
+    setPrintOpen(false)
+  }, [])
 
   // ── Add ───────────────────────────────────────────────────────────────────
   const handleAdd = useCallback(async () => {
@@ -128,7 +159,8 @@ export default function PurchaseRequisitionPage() {
       })()
     } else {
       void (async () => {
-        await loadRecord(prNo, prDate)
+        const status = await loadRecord(prNo, prDate)
+        if (!status) return
         setIsDeleteMode(true)
       })()
     }
@@ -205,8 +237,11 @@ export default function PurchaseRequisitionPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const isEditing    = mode === 'new' || mode === 'edit'
-  const formDisabled = mode === 'view' || pageBusy
+  const isEditing      = mode === 'new' || mode === 'edit'
+  const formDisabled   = mode === 'view' || pageBusy
+  const headerComplete = !!depCode && !!reqName && !!iType
+  const gridDisabled   = formDisabled || (isEditing && !headerComplete)
+  const depName        = departments.find((d) => d.depCode === depCode)?.depName
 
   if (lookupsLoading) {
     return (
@@ -219,10 +254,10 @@ export default function PurchaseRequisitionPage() {
   }
 
   return (
-    <div className="pr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f3' }}>
+    <div className="pr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f3', padding: '0 12px' }}>
 
       {/* ── Header band ── */}
-      <PRDocBand savedPrNo={savedPrNo} prStatus={prStatus} />
+      <PRDocBand savedPrNo={savedPrNo} prStatus={prStatus} divName={authUser?.divName} divCode={divCode} />
 
       {/* ── Toolbar ── */}
       <div style={{
@@ -234,7 +269,7 @@ export default function PurchaseRequisitionPage() {
           variant="primary"
           icon={<PlusOutlined style={{ fontSize: 11 }} />}
           label="New" kbd="F3"
-          disabled={isEditing || pageBusy || !permissions.canAdd}
+          disabled={isEditing || isDeleteMode || pageBusy || pickerMode !== null || !permissions.canAdd}
           onClick={() => void handleAdd()}
         />
         <TbBtn
@@ -345,30 +380,32 @@ export default function PurchaseRequisitionPage() {
           prTypes={prTypes}
           savedPrNo={savedPrNo}
           disabled={formDisabled}
-          createdBy={savedPr?.createdBy ?? authUser?.userId ?? null}
+          createdBy={savedPr?.createdBy ?? authUser?.userName ?? null}
+          maxPrDate={preCheckResult?.maxPrDate ?? null}
           onValuesChange={markDirty}
+          onTabToGrid={!gridDisabled && depCode ? () => lineItemsTableRef.current?.openPicker() : undefined}
         />
       </Skeleton>
 
       {/* ── Item grid (flex-fill) ── */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <PRLineItemsTable
+          ref={lineItemsTableRef}
           items={items}
           divCode={divCode}
           depCode={depCode}
+          depName={depName}
           prDate={headerForm.getFieldValue('prDate')?.format('YYYY-MM-DD')}
-          disabled={formDisabled}
+          disabled={gridDisabled}
           savedPrNo={savedPrNo ?? undefined}
+          emptyText={
+            isEditing && !headerComplete
+              ? 'Fill in Department, Requested By, and Requisition Type to add items.'
+              : undefined
+          }
           onAdd={(item) => {
             markDirty()
-            setItems((prev) => {
-              const dupeKey = `${item.itemCode}|${item.macNo || ''}`
-              if (prev.some((l) => `${l.itemCode}|${l.macNo || ''}` === dupeKey)) {
-                void message.warning(`${item.itemCode} with the same machine is already in the list.`)
-                return prev
-              }
-              return [...prev, item]
-            })
+            setItems((prev) => [...prev, item])
           }}
           onUpdate={(updated) => {
             markDirty()
@@ -391,6 +428,7 @@ export default function PurchaseRequisitionPage() {
         prStatus={prStatus}
         savedPrNo={savedPrNo}
         isNewMode={mode === 'new'}
+        hideApprovalStatus={mode === 'edit' || isDeleteMode}
       />
 
       {/* ── Unsaved-changes confirmation ── */}
@@ -427,14 +465,24 @@ export default function PurchaseRequisitionPage() {
         onClose={() => setFindOpen(false)}
       />
 
+      {/* ── Print Preview ── */}
+      <PrPrintPreviewModal
+        open={printOpen}
+        blobUrl={printBlobUrl}
+        filename={printFilename}
+        loading={printLoading}
+        onClose={handlePrintClose}
+      />
+
       {/* ── Delete confirmation ── */}
       <Modal
         title={<span><DeleteOutlined style={{ color: '#dc2626', marginRight: 8 }} />Delete Purchase Requisition</span>}
         open={deleteModalOpen}
         onCancel={() => setDeleteModalOpen(false)}
         onOk={() => void (async () => {
+          setIsDeleteMode(false)
           const ok = await handleDeleteConfirm()
-          if (ok) setIsDeleteMode(false)
+          if (!ok) setIsDeleteMode(true)
         })()}
         okText="Confirm Delete"
         okButtonProps={{ danger: true }}

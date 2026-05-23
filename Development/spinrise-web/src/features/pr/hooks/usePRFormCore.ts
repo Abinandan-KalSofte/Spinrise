@@ -22,6 +22,8 @@ export function usePRFormCore() {
   const authUser = useAuthStore((s) => s.user)
   const divCode  = authUser?.divCode ?? ''
   const depCode  = (Form.useWatch('depCode', headerForm) as string | undefined) ?? ''
+  const reqName  = (Form.useWatch('reqName', headerForm) as string | undefined) ?? ''
+  const iType    = (Form.useWatch('iType',   headerForm) as string | undefined) ?? ''
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [items,          setItems]          = useState<PRLineItem[]>([])
@@ -169,7 +171,9 @@ export function usePRFormCore() {
     const { yfDate, ylDate } = getFYBounds()
     setNavLoading(true)
     try {
-      const all = await prApi.getList(divCode, yfDate, ylDate, 'VIEW', { pageSize: 1000 })
+      // getList returns DESC (newest first); reverse → ASC (oldest = index 0)
+      const all = (await prApi.getList(divCode, yfDate, ylDate, 'VIEW', { pageSize: 1000 }))
+        .reverse()
       if (all.length === 0) { setNavLoading(false); return }
 
       let targetIdx: number
@@ -178,7 +182,9 @@ export function usePRFormCore() {
       } else if (direction === 'LAST') {
         targetIdx = all.length - 1
       } else {
-        const currIdx = savedPrNo ? all.findIndex((r) => r.prNo === savedPrNo) : -1
+        const currIdx = savedPrNo
+        ? all.findIndex((r) => r.prNo === savedPrNo)
+        : -1
         if (direction === 'PREV') {
           if (currIdx <= 0) { void message.info('Already at the first record.'); setNavLoading(false); return }
           targetIdx = currIdx - 1
@@ -356,7 +362,7 @@ export function usePRFormCore() {
         deleteReason: null,
       })
       void message.success(`PR-${String(savedPrNo).padStart(5, '0')} deleted.`)
-      initNewMode()
+      await loadLastRecord()
       return true
     } catch (err) {
       void message.error(err instanceof Error ? err.message : 'Failed to delete the requisition.')
@@ -401,7 +407,7 @@ export function usePRFormCore() {
 
   return {
     // form
-    headerForm, depCode, authUser, divCode,
+    headerForm, depCode, reqName, iType, authUser, divCode,
     // state
     items, setItems,
     savedPrNo, savedPr, prStatus, lastPrDate,

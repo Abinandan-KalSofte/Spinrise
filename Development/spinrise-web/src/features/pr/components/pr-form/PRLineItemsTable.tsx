@@ -10,8 +10,12 @@ import {
   DeleteOutlined, EyeOutlined, FileImageOutlined, SearchOutlined,
 } from '@ant-design/icons'
 import { ItemPickerModal } from './ItemPickerModal'
+import { MachineLookupModal } from './MachineLookupModal'
+import { CostCentreLookupModal } from './CostCentreLookupModal'
+import type { MachineLookup, CostCentreOption } from '../../types'
 import dayjs from 'dayjs'
 import * as prApi from '../../api/prApi'
+import { getItemImageUrl } from '../../api/prApi'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import { generateUUID } from '@/shared/lib/uuid'
 import type { PrLine, ItemLookup } from '../../types'
@@ -21,16 +25,19 @@ import type { PrLine, ItemLookup } from '../../types'
 export type PRLineItem = PrLine & { key: string; minLevel?: number; itemImage?: string | null }
 
 export interface PRLineItemsTableHandle {
-  flushEdit: () => Promise<void>
+  flushEdit:   () => Promise<void>
+  openPicker:  () => void
 }
 
 interface PRLineItemsTableProps {
   items:         PRLineItem[]
   divCode:       string
   depCode:       string
+  depName?:      string
   prDate?:       string
   disabled:      boolean
   savedPrNo?:    number
+  emptyText?:    string
   onAdd:         (item: PRLineItem) => void
   onUpdate:      (item: PRLineItem) => void
   onDelete:      (key: string) => void
@@ -73,6 +80,30 @@ function calcAppCost(rate: number, qty: number): number {
   return parseFloat((rate * qty).toFixed(2))
 }
 
+// ── Drawer image (served via backend endpoint, not base64) ────────────────────
+
+function DrawerItemImage({ itemCode }: { itemCode: string }) {
+  const [errored, setErrored] = useState(false)
+  return errored ? (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      margin: '20px 8px', height: 160, border: '2px dashed #d9d9d9', borderRadius: 8, background: '#fafafa',
+    }}>
+      <FileImageOutlined style={{ fontSize: 36, color: '#bfbfbf' }} />
+      <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>No Image Available</Typography.Text>
+    </div>
+  ) : (
+    <div style={{ margin: '20px 8px', borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e2e2' }}>
+      <img
+        src={getItemImageUrl(itemCode)}
+        alt={itemCode}
+        style={{ width: '100%', maxHeight: 200, objectFit: 'contain', display: 'block', background: '#fafafa' }}
+        onError={() => setErrored(true)}
+      />
+    </div>
+  )
+}
+
 // ── Read-Only Cell ────────────────────────────────────────────────────────────
 
 function ROCell({ value, type = 'text', precision = 3 }: {
@@ -106,19 +137,29 @@ const RORow = memo(({ row, idx, onView }: RORowProps) => (
         : <span style={{ color: '#d1d5db' }}>—</span>}
     </td>
     <td style={{ ...TD_TEXT, width: 140 }}><ROCell value={row.reqdDate} type="date" /></td>
-    <td style={{ ...TD_TEXT, width: 90, fontSize: 10 }}><ROCell value={row.macNo} /></td>
-    <td style={{ ...TD_TEXT, width: 70, textAlign: 'right', fontSize: 10 }}>
-      {row.ccCode != null ? row.ccCode : <span style={{ color: '#d1d5db' }}>—</span>}
+    <td style={{ ...TD_TEXT, width: 90, fontSize: 10 }}>
+      {row.macNo
+        ? <Tooltip title={row.macDesc || undefined}>
+            <span style={{ fontFamily: 'monospace', cursor: row.macDesc ? 'help' : 'default' }}>{row.macNo}</span>
+          </Tooltip>
+        : <span style={{ color: '#d1d5db' }}>—</span>}
+    </td>
+    <td style={{ ...TD_TEXT, width: 130, fontSize: 10 }}>
+      {row.ccCode != null
+        ? <Tooltip title={`Code: ${row.ccCode}`}>
+            <span style={{ cursor: 'help' }}>{row.ccName || String(row.ccCode)}</span>
+          </Tooltip>
+        : <span style={{ color: '#d1d5db' }}>—</span>}
     </td>
     <td style={{ ...TD_TEXT, minWidth: 110, fontSize: 10, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
       <ROCell value={row.remarks} />
     </td>
-    <td style={{ ...TD_TEXT, width: 52, textAlign: 'center' }}>{row.sample === 'Y' ? '✓' : ''}</td>
-    <td style={{ ...TD_TEXT, width: 40, textAlign: 'center' }}>
-      <Tooltip title="View Details">
+    <td style={{ ...TD_TEXT, width: 52, textAlign: 'center', userSelect: 'none' }}>{row.sample === 'Y' ? '✓' : ''}</td>
+    <td style={{ ...TD_TEXT, width: 40, textAlign: 'center', userSelect: 'none' }}>
+      <Tooltip title="View Details" mouseEnterDelay={0.5}>
         <Button tabIndex={-1} type="text" size="small"
           icon={<EyeOutlined style={{ color: '#7c3aed', fontSize: 12 }} />}
-          onClick={() => onView(row)} />
+          onClick={(e) => { e.stopPropagation(); onView(row) }} />
       </Tooltip>
     </td>
   </>
@@ -128,22 +169,29 @@ RORow.displayName = 'RORow'
 // ── Editable Row ──────────────────────────────────────────────────────────────
 
 interface EditRowProps {
-  row:         PRLineItem
-  idx:         number
-  qtyError:    boolean
-  isLast:      boolean
-  isFirstRow:  boolean
-  isLastRow:   boolean
-  onUpdate:    (field: keyof PRLineItem, value: unknown) => void
-  onView:      (r: PRLineItem) => void
-  onDelete:    () => void
-  onTabToNext: () => void
-  onTabToPrev: () => void
+  row:              PRLineItem
+  idx:              number
+  divCode:          string
+  depCode:          string
+  qtyError:         boolean
+  isLast:           boolean
+  isFirstRow:       boolean
+  isLastRow:        boolean
+  onUpdate:         (field: keyof PRLineItem, value: unknown) => void
+  onView:           (r: PRLineItem) => void
+  onDelete:         () => void
+  onTabToNext:      () => void
+  onTabToPrev:      () => void
+  onTabToSearch:    () => void
+  onOpenMachine:     () => void
+  onOpenMachineAuto: () => void
+  onOpenCC:          () => void
 }
 
 const EditRow = memo(({
   row, idx, qtyError, isLast, isFirstRow, isLastRow,
-  onUpdate, onView, onDelete, onTabToNext, onTabToPrev,
+  onUpdate, onView, onDelete, onTabToNext, onTabToPrev, onTabToSearch,
+  onOpenMachine, onOpenMachineAuto, onOpenCC,
 }: EditRowProps) => {
   const deleteTip = isLast ? 'At least one line is required' : 'Delete line'
 
@@ -194,31 +242,43 @@ const EditRow = memo(({
           value={row.reqdDate ? dayjs(row.reqdDate) : null}
           format="DD-MMM-YYYY"
           style={{ width: '100%', height: '24px' }}
-          onChange={(d) => onUpdate('reqdDate', d ? d.format('YYYY-MM-DD') : null)}
+          onChange={(d) => {
+            onUpdate('reqdDate', d ? d.format('YYYY-MM-DD') : null)
+            if (d) onOpenMachineAuto()
+          }}
         />
       </td>
       <td style={{ ...TD, width: 90 }}>
-        <Input
+        <Button
           size="small"
           tabIndex={-1}
-          value={row.macNo}
-          maxLength={10}
-          placeholder="Machine…"
-          style={{ height: '24px', textTransform: 'uppercase' }}
-          onChange={(e) => onUpdate('macNo', e.target.value.toUpperCase())}
-        />
+          onClick={onOpenMachine}
+          style={{
+            width: '100%', height: '24px', fontSize: 11, padding: '0 6px',
+            textAlign: 'left', fontFamily: row.macNo ? 'monospace' : undefined,
+            color: row.macNo ? '#1e293b' : '#94a3b8',
+            borderColor: '#d9d9d9', background: '#fff',
+          }}
+          title={row.macDesc || undefined}
+        >
+          {row.macNo || 'Machine…'}
+        </Button>
       </td>
-      <td style={{ ...TD, width: 70 }}>
-        <InputNumber
+      <td style={{ ...TD, width: 130 }}>
+        <Button
           size="small"
           tabIndex={-1}
-          value={row.ccCode}
-          min={0}
-          precision={0}
-          style={{ width: '100%', height: '24px' }}
-          placeholder="CC…"
-          onChange={(v) => onUpdate('ccCode', v ?? null)}
-        />
+          onClick={onOpenCC}
+          style={{
+            width: '100%', height: '24px', fontSize: 11, padding: '0 6px',
+            textAlign: 'left',
+            color: row.ccCode != null ? '#1e293b' : '#94a3b8',
+            borderColor: '#d9d9d9', background: '#fff',
+          }}
+          title={row.ccCode != null ? `Code: ${row.ccCode}` : undefined}
+        >
+          {row.ccCode != null ? (row.ccName || String(row.ccCode)) : 'Sub Cost Centre…'}
+        </Button>
       </td>
       <td style={{ ...TD, minWidth: 110 }} data-remarks-for={row.key}>
         <Input
@@ -229,9 +289,10 @@ const EditRow = memo(({
           style={{ height: '24px' }}
           onChange={(e) => onUpdate('remarks', e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Tab' && !e.shiftKey && !isLastRow) {
+            if (e.key === 'Tab' && !e.shiftKey) {
               e.preventDefault()
-              onTabToNext()
+              if (!isLastRow) onTabToNext()
+              else onTabToSearch()
             }
           }}
         />
@@ -245,12 +306,12 @@ const EditRow = memo(({
       </td>
       <td style={{ ...TD, width: 40, textAlign: 'center' }}>
         <Space size={2}>
-          <Tooltip title="View Details">
+          <Tooltip title="View Details" mouseEnterDelay={0.5}>
             <Button tabIndex={-1} type="text" size="small"
               icon={<EyeOutlined style={{ color: '#7c3aed', fontSize: 12 }} />}
               onClick={() => onView(row)} />
           </Tooltip>
-          <Tooltip title={deleteTip}>
+          <Tooltip title={deleteTip} mouseEnterDelay={0.5}>
             <Button tabIndex={-1} type="text" size="small" danger
               icon={<DeleteOutlined style={{ fontSize: 12 }} />}
               disabled={isLast}
@@ -266,7 +327,7 @@ EditRow.displayName = 'EditRow'
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export const PRLineItemsTable = forwardRef<PRLineItemsTableHandle, PRLineItemsTableProps>(
-function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd, onUpdate, onDelete, onLineDelete }, ref) {
+function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrNo, emptyText, onAdd, onUpdate, onDelete, onLineDelete }, ref) {
   const itemsRef = useRef<PRLineItem[]>(items)
   useEffect(() => { itemsRef.current = items }, [items])
 
@@ -275,25 +336,40 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
   const [focusQtyKey,    setFocusQtyKey]    = useState<string | null>(null)
   const [focusRemarksKey,setFocusRemarksKey]= useState<string | null>(null)
   const [pickerOpen,     setPickerOpen]     = useState(false)
-  const [viewRowKey,     setViewRowKey]     = useState<string | null>(null)
-  const viewRow = viewRowKey ? (items.find((i) => i.key === viewRowKey) ?? null) : null
+
+  const [machinePickerKey,     setMachinePickerKey]     = useState<string | null>(null)
+  const [machineAutoNextKey,   setMachineAutoNextKey]   = useState<string | null>(null)
+  const [ccPickerKey,          setCcPickerKey]          = useState<string | null>(null)
+  const [ccAutoNextKey,        setCcAutoNextKey]         = useState<string | null>(null)
 
   const [lineDeleteRow,  setLineDeleteRow]  = useState<PRLineItem | null>(null)
   const [lineDeleting,   setLineDeleting]   = useState(false)
+  const [viewRow,        setViewRow]        = useState<PRLineItem | null>(null)
   const searchInputRef = useRef<InputRef>(null)
 
-  useImperativeHandle(ref, () => ({ flushEdit: async () => {} }), [])
+  useImperativeHandle(ref, () => ({
+    flushEdit:  async () => {},
+    openPicker: () => { if (!disabled) setPickerOpen(true) },
+  }), [disabled])
+
+  const handleOpenView = useCallback((row: PRLineItem) => {
+    setViewRow({ ...row })
+  }, [])
 
   // Focus helpers
   useEffect(() => {
     if (!focusQtyKey) return
-    const t = setTimeout(() => {
+    let cancelled = false
+    const attempt = (tries: number) => {
+      if (cancelled) return
       const td  = document.querySelector<HTMLElement>(`td[data-qty-for="${focusQtyKey}"]`)
       const inp = td?.querySelector<HTMLInputElement>('input')
-      inp?.focus(); inp?.select()
-      setFocusQtyKey(null)
-    }, 80)
-    return () => clearTimeout(t)
+      if (inp) { inp.focus(); inp.select(); setFocusQtyKey(null) }
+      else if (tries > 0) setTimeout(() => attempt(tries - 1), 40)
+      else setFocusQtyKey(null)
+    }
+    setTimeout(() => attempt(6), 30)
+    return () => { cancelled = true }
   }, [focusQtyKey])
 
   useEffect(() => {
@@ -334,7 +410,14 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
     if (savedPrNo && row.prSno > 0) {
       setLineDeleteRow(row)
     } else {
-      onDelete(rowKey)
+      Modal.confirm({
+        title:   'Remove Item',
+        content: `Do you want to remove ${row.itemCode} from the list?`,
+        okText:  'Remove',
+        okButtonProps: { danger: true },
+        cancelText: 'Cancel',
+        onOk: () => onDelete(rowKey),
+      })
     }
   }, [onDelete, savedPrNo])
 
@@ -354,14 +437,64 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
     setFocusRemarksKey(prev.key)
   }, [])
 
+  // Machine picker callback
+  const handleMachineSelect = useCallback((machine: MachineLookup) => {
+    const rowKey  = machinePickerKey
+    const autoKey = machineAutoNextKey
+    if (!rowKey) return
+    const row = itemsRef.current.find((r) => r.key === rowKey)
+    if (!row) return
+    // FSD CEO D-09: itemCode + machineCode must be unique per PR
+    const isDupe = itemsRef.current.some(
+      (l) => l.key !== rowKey && l.itemCode === row.itemCode && l.macNo === machine.macNo
+    )
+    if (isDupe) {
+      Modal.warning({
+        title:   'Duplicate Machine Assignment',
+        content: `${row.itemCode} is already assigned to machine ${machine.macNo}. Select a different machine.`,
+      })
+      setMachineAutoNextKey(null)
+      setMachinePickerKey(null)
+      return
+    }
+    onUpdate({ ...row, macNo: machine.macNo, macDesc: machine.macDesc })
+    setMachineAutoNextKey(null)
+    setMachinePickerKey(null)
+    if (autoKey) { setCcPickerKey(autoKey); setCcAutoNextKey(autoKey) }
+  }, [machinePickerKey, machineAutoNextKey, onUpdate])
+
+  // CC picker callback
+  const handleCcSelect = useCallback((cc: CostCentreOption) => {
+    const rowKey  = ccPickerKey
+    const autoKey = ccAutoNextKey
+    if (!rowKey) return
+    const row = itemsRef.current.find((r) => r.key === rowKey)
+    if (!row) return
+    onUpdate({ ...row, ccCode: cc.ccCode, ccName: cc.ccName })
+    setCcAutoNextKey(null)
+    setCcPickerKey(null)
+    if (autoKey) setFocusRemarksKey(autoKey)
+  }, [ccPickerKey, ccAutoNextKey, onUpdate])
+
   // Item picker callback
   const handleItemsFromModal = useCallback(async (picked: ItemLookup[]) => {
     const { yfDate, ylDate } = getFYBounds()
     const today = new Date().toISOString().split('T')[0]
     let firstKey: string | null = null
     const newLines: PRLineItem[] = []
+    const duplicates: string[] = []
+    const batchKeys = new Set<string>()
 
     picked.forEach((item) => {
+      // FSD CEO D-09: block add if same itemCode already exists WITHOUT a machine code
+      // (once a machine is assigned, adding another of the same item for a different machine is valid)
+      const inListNoMachine = itemsRef.current.some((l) => l.itemCode === item.itemCode && !l.macNo)
+      const inBatch = batchKeys.has(item.itemCode)
+      if (inListNoMachine || inBatch) {
+        duplicates.push(item.itemCode)
+        return
+      }
+      batchKeys.add(item.itemCode)
       const line: PRLineItem = {
         ...makeEmptyLine(),
         itemCode: item.itemCode,
@@ -377,6 +510,16 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
       if (firstKey === null) firstKey = line.key
       setQtyErrorKeys((prev) => new Set([...prev, line.key]))
     })
+
+    if (duplicates.length > 0) {
+      Modal.warning({
+        title:   'Duplicate Item',
+        content: duplicates.length === 1
+          ? `${duplicates[0]} is already in the list.`
+          : `Already in list: ${duplicates.join(', ')}.`,
+        okText:  'OK',
+      })
+    }
 
     if (firstKey) {
       setEditingRowKey(firstKey)
@@ -402,7 +545,7 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
         })
       } catch { /* non-critical */ }
     }
-  }, [onAdd, onUpdate])
+  }, [divCode, onAdd, onUpdate])
 
   const validCount = items.filter((l) => l.itemCode.trim() !== '').length
   const drawerFields = useMemo(() => viewRow ? [
@@ -443,20 +586,20 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
       </div>
 
       {/* Scrollable table */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarGutter: 'stable' } as React.CSSProperties}>
         <table className="pr-items-grid" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
             <tr>
               <th style={{ ...TH, width: 30 }}>#</th>
-              <th style={{ ...TH, width: 88 }}>Item Id</th>
-              <th style={{ ...TH, minWidth: 150 }}>Description</th>
+              <th style={{ ...TH, width: 88 }}>Item Code</th>
+              <th style={{ ...TH, minWidth: 150 }}>Item Description</th>
               <th style={{ ...TH, width: 46, textAlign: 'center' }}>Unit</th>
-              <th style={{ ...TH, width: 82, textAlign: 'right' }}>Required Qty <span style={{ color: '#E24B4A' }}>*</span></th>
+              <th style={{ ...TH, width: 82, textAlign: 'right' }}>Required Quantity <span style={{ color: '#E24B4A' }}>*</span></th>
               <th style={{ ...TH, width: 110, textAlign: 'right' }}>Rate</th>
-              <th style={{ ...TH, width: 120, textAlign: 'right' }}>₹ Approx. Cost</th>
+              <th style={{ ...TH, width: 120, textAlign: 'right' }}>₹ Approx. Value</th>
               <th style={{ ...TH, width: 140 }}>Required Date</th>
-              <th style={{ ...TH, width: 90 }}>Machine No</th>
-              <th style={{ ...TH, width: 70, textAlign: 'right' }}>CC Code</th>
+              <th style={{ ...TH, width: 90 }}>Machine</th>
+              <th style={{ ...TH, width: 130 }}>Sub Cost Centre</th>
               <th style={{ ...TH, minWidth: 110 }}>Remarks</th>
               <th style={{ ...TH, width: 52, textAlign: 'center' }}>Sample</th>
               <th style={{ ...TH, width: 40, textAlign: 'center' }} />
@@ -469,22 +612,33 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
                   style={{ background: '#f0f7ff', border: '1px solid #bfdbfe' }}>
                   <EditRow
                     row={row} idx={idx}
+                    divCode={divCode}
+                    depCode={depCode}
                     qtyError={qtyErrorKeys.has(row.key)}
                     isLast={items.length <= 1}
                     isFirstRow={idx === 0}
                     isLastRow={idx === items.length - 1}
                     onUpdate={(f, v) => handleRowUpdate(row.key, f, v)}
-                    onView={(r) => setViewRowKey(r.key)}
+                    onView={handleOpenView}
                     onDelete={() => handleRowDelete(row.key)}
                     onTabToNext={() => handleTabToNextRow(row.key)}
                     onTabToPrev={() => handleTabToPrevRow(row.key)}
+                    onTabToSearch={() => setPickerOpen(true)}
+                    onOpenMachine={() => setMachinePickerKey(row.key)}
+                    onOpenMachineAuto={() => { setMachinePickerKey(row.key); setMachineAutoNextKey(row.key) }}
+                    onOpenCC={() => setCcPickerKey(row.key)}
                   />
                 </tr>
               ) : (
                 <tr key={row.key}
                   style={{ background: idx % 2 === 0 ? '#ffffff' : '#F0F5FF', cursor: !disabled ? 'pointer' : 'default' }}
-                  onClick={() => !disabled && setEditingRowKey(row.key)}>
-                  <RORow row={row} idx={idx} onView={(r) => setViewRowKey(r.key)} />
+                  onClick={() => {
+                    if (!disabled) {
+                      setEditingRowKey(row.key)
+                      setFocusQtyKey(row.key)
+                    }
+                  }}>
+                  <RORow row={row} idx={idx} onView={handleOpenView} />
                 </tr>
               )
             )}
@@ -498,10 +652,14 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
                     <Input
                       size="small"
                       ref={searchInputRef}
-                      placeholder="Search item by code or name (Enter to open picker)"
+                      placeholder="Click or Tab here to add items…"
                       prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-                      onPressEnter={() => setPickerOpen(true)}
-                      style={{ width: '300px', height: '24px' }}
+                      onClick={() => setPickerOpen(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); setPickerOpen(true) }
+                      }}
+                      readOnly
+                      style={{ width: '300px', height: '24px', cursor: 'pointer' }}
                     />
                   )}
                 </td>
@@ -510,7 +668,7 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
             {items.length === 0 && disabled && (
               <tr>
                 <td colSpan={13} style={{ textAlign: 'center', padding: '32px', color: '#888', fontSize: 12 }}>
-                  No items added to this requisition.
+                  {emptyText ?? 'No items added to this requisition.'}
                 </td>
               </tr>
             )}
@@ -522,8 +680,36 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
       <ItemPickerModal
         open={pickerOpen}
         depCode={depCode}
+        depName={depName}
         onSelectMultiple={handleItemsFromModal}
         onCancel={() => setPickerOpen(false)}
+      />
+
+      {/* Machine Lookup Modal */}
+      <MachineLookupModal
+        open={machinePickerKey !== null}
+        divCode={divCode}
+        depCode={depCode}
+        onSelect={handleMachineSelect}
+        onCancel={() => {
+          const autoKey = machineAutoNextKey
+          setMachineAutoNextKey(null)
+          setMachinePickerKey(null)
+          if (autoKey) { setCcPickerKey(autoKey); setCcAutoNextKey(autoKey) }
+        }}
+      />
+
+      {/* CC Lookup Modal */}
+      <CostCentreLookupModal
+        open={ccPickerKey !== null}
+        divCode={divCode}
+        onSelect={handleCcSelect}
+        onCancel={() => {
+          const autoKey = ccAutoNextKey
+          setCcAutoNextKey(null)
+          setCcPickerKey(null)
+          if (autoKey) setFocusRemarksKey(autoKey)
+        }}
       />
 
       {/* Per-line Delete Modal */}
@@ -561,7 +747,7 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
         placement="left"
         width={340}
         open={!!viewRow}
-        onClose={() => setViewRowKey(null)}
+        onClose={() => setViewRow(null)}
         footer={null}
         destroyOnClose
       >
@@ -581,24 +767,7 @@ function PRLineItemsTable({ items, divCode, depCode, disabled, savedPrNo, onAdd,
                 </Typography.Text>
               </div>
             ))}
-            {viewRow.itemImage ? (
-              <div style={{ margin: '20px 8px', borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e2e2' }}>
-                <img
-                  src={`data:image/*;base64,${viewRow.itemImage}`}
-                  alt={viewRow.itemCode}
-                  style={{ width: '100%', maxHeight: 200, objectFit: 'contain', display: 'block', background: '#fafafa' }}
-                />
-              </div>
-            ) : (
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                margin: '20px 8px', height: 160, border: '2px dashed #d9d9d9',
-                borderRadius: 8, background: '#fafafa',
-              }}>
-                <FileImageOutlined style={{ fontSize: 36, color: '#bfbfbf' }} />
-                <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>No Image Available</Typography.Text>
-              </div>
-            )}
+            <DrawerItemImage itemCode={viewRow.itemCode} />
           </div>
         )}
       </Drawer>

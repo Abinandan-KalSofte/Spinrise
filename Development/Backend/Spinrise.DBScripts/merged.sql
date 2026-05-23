@@ -27,12 +27,14 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        p.divcode  AS DivCode,
-        p.user_id   AS UserId,
-        p.user_name AS UserName,
-        p.alevel    AS ALevel
+        p.divcode                            AS DivCode,
+        p.user_id                            AS UserId,
+        p.user_name                          AS UserName,
+        p.alevel                             AS ALevel,
+        RTRIM(ISNULL(d.DIVNAME, ''))         AS DivName
     FROM dbo.PP_PASSWD p
-    WHERE p.divcode  = @DivCode
+    LEFT JOIN dbo.PP_DIVMAS d ON d.DIVCODE = p.divcode
+    WHERE p.divcode   = @DivCode
       AND p.user_name = @UserName
       AND dbo.DecryptString(p.password) = @Password
       AND UPPER(ISNULL(p.activeflg, 'N')) = 'Y';
@@ -64,13 +66,15 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        p.divcode  AS DivCode,
-        p.user_id   AS UserId,
-        p.user_name AS UserName,
-        p.alevel    AS ALevel
+        p.divcode                        AS DivCode,
+        p.user_id                        AS UserId,
+        p.user_name                      AS UserName,
+        p.alevel                         AS ALevel,
+        RTRIM(ISNULL(d.DIVNAME, ''))     AS DivName
     FROM dbo.PP_PASSWD p
+    LEFT JOIN dbo.PP_DIVMAS d ON d.DIVCODE = p.divcode
     WHERE p.user_id  = @UserId
-      AND p.divcode = @DivCode
+      AND p.divcode  = @DivCode
       AND UPPER(ISNULL(p.activeflg, 'N')) = 'Y';
 END;
 GO
@@ -298,11 +302,12 @@ BEGIN
 
     -- Result set 1: Item master
     SELECT
-        RTRIM(i.itemcode)      AS ItemCode,
-        RTRIM(i.itemname)      AS ItemName,
-        RTRIM(i.uom)           AS Uom,
-        ISNULL(i.minlevel, 0)  AS MinLevel,
-        i.ITEMIMAGE            AS ItemImage
+        RTRIM(i.itemcode)             AS ItemCode,
+        RTRIM(i.itemname)             AS ItemName,
+        RTRIM(i.uom)                  AS Uom,
+        ISNULL(i.minlevel, 0)         AS MinLevel,
+        i.ITEMIMAGE                   AS ItemImage,
+        RTRIM(ISNULL(i.ImagePath,'')) AS ImagePath
     FROM dbo.IN_ITEM i
     WHERE i.itemcode = @ItemCode
       AND ISNULL(i.IsItemActive, 1) = 1;
@@ -391,7 +396,7 @@ BEGIN
         RTRIM(ISNULL(h.SECTION, ''))                            AS Section,
         RTRIM(ISNULL(h.ITYPE,   ''))                            AS IType,
         RTRIM(ISNULL(it.IDESC,  ''))                            AS IDesc,
-        RTRIM(ISNULL(h.refno,   ''))                            AS RefNo,
+        RTRIM(ISNULL(NULLIF(RTRIM(h.refno), '0'), ''))          AS RefNo,
         RTRIM(ISNULL(h.PO_GRP,  ''))                            AS PoGrp,
         ISNULL(h.APPFLG, 'N')                                   AS AppFlg,
         CASE
@@ -415,13 +420,16 @@ BEGIN
                 THEN 'FIRST LEVEL APPROVED'
             ELSE 'REQUESTED'
         END                                                     AS PrStatus,
-        RTRIM(ISNULL(h.createdby, ''))                          AS CreatedBy,
+        RTRIM(ISNULL(pwd.user_name, ISNULL(h.createdby, '')))   AS CreatedBy,
         RTRIM(ISNULL(h.createddt, ''))                          AS CreatedDt,
         RTRIM(ISNULL(h.userId,    ''))                          AS UserId
     FROM dbo.PO_PRH h
     LEFT JOIN dbo.IN_DEP d  ON d.divcode = h.divcode AND d.depcode = h.depcode
     LEFT JOIN dbo.PR_EMP e  ON CAST(e.empno AS VARCHAR(10)) = h.REQNAME
     LEFT JOIN dbo.PO_INDENTTYPE it ON it.ITYPE = h.ITYPE
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(h.createdby)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))       pwd
     WHERE h.divcode = @DivCode
       AND h.prno    = @PrNo
       AND CAST(h.prdate AS DATE) = @PrDate;
@@ -463,11 +471,12 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetById
 (
     @DivCode VARCHAR(2),
     @PrNo    NUMERIC(6,0),
-    @PrDate  DATE
+    @PrDate  DATE = NULL
 )
 AS
 BEGIN
     SET NOCOUNT ON;
+    IF @PrDate IS NULL RETURN;
 
     SELECT
         RTRIM(h.divcode)                                        AS DivCode,
@@ -480,7 +489,7 @@ BEGIN
         RTRIM(ISNULL(h.SECTION, ''))                            AS Section,
         RTRIM(ISNULL(h.ITYPE,   ''))                            AS IType,
         RTRIM(ISNULL(it.IDESC,  ''))                            AS IDesc,
-        RTRIM(ISNULL(h.refno,   ''))                            AS RefNo,
+        RTRIM(ISNULL(NULLIF(RTRIM(h.refno), '0'), ''))          AS RefNo,
         RTRIM(ISNULL(h.PO_GRP,  ''))                            AS PoGrp,
         ISNULL(h.APPFLG, 'N')                                   AS AppFlg,
         ISNULL(h.cancelflag, '')                                AS CancelFlag,
@@ -506,13 +515,16 @@ BEGIN
                 THEN 'FIRST LEVEL APPROVED'
             ELSE 'REQUESTED'
         END                                                     AS PrStatus,
-        RTRIM(ISNULL(h.createdby, ''))                          AS CreatedBy,
+        RTRIM(ISNULL(pwd.user_name, ISNULL(h.createdby, '')))   AS CreatedBy,
         RTRIM(ISNULL(h.createddt, ''))                          AS CreatedDt,
         RTRIM(ISNULL(h.userId,    ''))                          AS UserId
     FROM dbo.PO_PRH h
     LEFT JOIN dbo.IN_DEP d  ON d.divcode = h.divcode AND d.depcode = h.depcode
     LEFT JOIN dbo.PR_EMP e  ON CAST(e.empno AS VARCHAR(10)) = h.REQNAME
     LEFT JOIN dbo.PO_INDENTTYPE it ON it.ITYPE = h.ITYPE
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(h.createdby)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))       pwd
     WHERE h.divcode = @DivCode
       AND h.prno    = @PrNo
       AND CAST(h.prdate AS DATE) = @PrDate;
@@ -574,7 +586,10 @@ BEGIN
         RTRIM(ISNULL(h.depcode,''))     AS DepCode,
         RTRIM(ISNULL(d.depname,''))     AS DepName,
         RTRIM(ISNULL(h.REQNAME,''))     AS ReqName,
-        RTRIM(ISNULL(e.ename,  ''))     AS ReqEmpName,
+        RTRIM(ISNULL(
+            (SELECT TOP 1 e2.ename FROM dbo.PR_EMP e2
+             WHERE CAST(e2.empno AS VARCHAR(10)) = h.REQNAME),
+        ''))                            AS ReqEmpName,
         RTRIM(ISNULL(h.ITYPE,  ''))     AS IType,
         RTRIM(ISNULL(it.IDESC, ''))     AS IDesc,
         RTRIM(ISNULL(h.PO_GRP,''))      AS PoGrp,
@@ -605,7 +620,6 @@ BEGIN
            AND ISNULL(lc.AmdFlg,'') <> 'Y') AS TotalLines
     FROM dbo.PO_PRH h
     LEFT JOIN dbo.IN_DEP d  ON d.divcode = h.divcode AND d.depcode = h.depcode
-    LEFT JOIN dbo.PR_EMP e  ON CAST(e.empno AS VARCHAR(10)) = h.REQNAME
     LEFT JOIN dbo.PO_INDENTTYPE it ON it.ITYPE = h.ITYPE
     WHERE h.divcode = @DivCode
       AND CAST(h.prdate AS DATE) BETWEEN @FDate AND @LDate
@@ -697,7 +711,7 @@ BEGIN
             VALUES
             (
                 @DivCode, @PrNo, @PrDate, @DepCode,
-                ISNULL(NULLIF(RTRIM(@RefNo),''), '0'),
+                NULLIF(RTRIM(@RefNo), ''),
                 @IType, @Section, @PoGrp, @ReqName,
                 'N', 0, 0,
                 'N', @UserId, @UserId, @CreatedDt,
@@ -709,7 +723,7 @@ BEGIN
             UPDATE dbo.PO_PRH
             SET
                 depcode  = @DepCode,
-                refno    = ISNULL(NULLIF(RTRIM(@RefNo),''), '0'),
+                refno    = NULLIF(RTRIM(@RefNo), ''),
                 ITYPE    = @IType,
                 SECTION  = @Section,
                 PO_GRP   = @PoGrp,
@@ -839,7 +853,9 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PR_Delete
     @DeleteMode   VARCHAR(10),
     @PrSno        NUMERIC(5,0)  = NULL,
     @UserId       VARCHAR(50),
-    @DeleteReason VARCHAR(100)  = NULL
+    @DeleteReason VARCHAR(100)  = NULL,
+    @HostName     VARCHAR(100)  = NULL,
+    @IpAddress    VARCHAR(50)   = NULL
 )
 AS
 BEGIN
@@ -861,8 +877,30 @@ BEGIN
             RETURN;
         END
 
+        DECLARE @ReqName VARCHAR(10);
+        SELECT @ReqName = REQNAME
+        FROM dbo.PO_PRH
+        WHERE divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate;
+
         IF @DeleteMode = 'FULL'
         BEGIN
+            INSERT INTO dbo.LogDet_po
+            (
+                divcode, prno, prdate, prsno,
+                itemcode, macno, quantity, RATE,
+                Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
+                Trans_UserId, Trans_date, moduleNo,
+                reqname, createdby
+            )
+            SELECT
+                @DivCode, @PrNo, @PrDate, prsno,
+                itemcode, macno, CAST(qtyind AS NUMERIC(15,0)), RATE,
+                'Purchase Requisition', 'DELETE', @HostName, @IpAddress,
+                @UserId, GETDATE(), 4,
+                @ReqName, @UserId
+            FROM dbo.PO_PRL
+            WHERE divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate;
+
             DELETE FROM dbo.PO_PRL
             WHERE divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate;
 
@@ -877,6 +915,23 @@ BEGIN
                 RETURN;
             END
 
+            INSERT INTO dbo.LogDet_po
+            (
+                divcode, prno, prdate, prsno,
+                itemcode, macno, quantity, RATE,
+                Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
+                Trans_UserId, Trans_date, moduleNo,
+                reqname, createdby
+            )
+            SELECT
+                @DivCode, @PrNo, @PrDate, prsno,
+                itemcode, macno, CAST(qtyind AS NUMERIC(15,0)), RATE,
+                'Purchase Requisition', 'DELETE', @HostName, @IpAddress,
+                @UserId, GETDATE(), 4,
+                @ReqName, @UserId
+            FROM dbo.PO_PRL
+            WHERE divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate AND prsno = @PrSno;
+
             UPDATE dbo.PO_PRL
             SET deletereason = @DeleteReason
             WHERE divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate AND prsno = @PrSno;
@@ -884,8 +939,7 @@ BEGIN
             DELETE FROM dbo.PO_PRL
             WHERE divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate AND prsno = @PrSno;
 
-            -- ksp_PR_Delete uses a CTE to reassign prsno — must end prior statement with semicolon
-            ;WITH ranked AS (
+            WITH ranked AS (
                 SELECT prsno,
                        ROW_NUMBER() OVER (ORDER BY prsno) AS NewSno
                 FROM dbo.PO_PRL
@@ -982,5 +1036,191 @@ BEGIN
     BEGIN CATCH
         SELECT 1 AS CanAdd, 1 AS CanModify, 1 AS CanDelete;
     END CATCH
+END;
+GO
+
+
+-- ============================================================
+-- ksp_PR_GetMachineLookup
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetMachineLookup
+(
+    @DivCode   VARCHAR(2),
+    @DepCode   VARCHAR(10),
+    @Search    VARCHAR(50) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        RTRIM(m.MAC_NO)      AS MacNo,
+        RTRIM(m.DESCRIPTION) AS MacDesc,
+        RTRIM(m.MODEL)       AS MacModel
+    FROM dbo.MM_MACMAS m
+    WHERE m.DIVCODE = @DivCode
+      AND m.DEPCODE = @DepCode
+      AND m.MACFLAG = 'M'
+      AND ISNULL(m.IsActive, 'Y') = 'Y'
+      AND (
+            @Search IS NULL
+            OR m.MAC_NO      LIKE '%' + @Search + '%'
+            OR m.DESCRIPTION LIKE '%' + @Search + '%'
+          )
+    ORDER BY m.MAC_NO;
+END;
+GO
+
+
+-- ============================================================
+-- ksp_PR_GetCostCentreLookup
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetCostCentreLookup
+(
+    @DivCode   VARCHAR(2),
+    @Search    VARCHAR(50) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        c.cccode          AS CcCode,
+        RTRIM(c.ccname)   AS CcName
+    FROM dbo.IN_CC c
+    WHERE c.divcode = @DivCode
+      AND (
+            @Search IS NULL
+            OR CAST(c.cccode AS VARCHAR(10)) LIKE '%' + @Search + '%'
+            OR c.ccname LIKE '%' + @Search + '%'
+          )
+    ORDER BY c.cccode;
+END;
+GO
+
+
+-- ================================================================
+-- ksp_PR_GetPrint  (CR v1.4: PP_PASSWD full name, CreatedDt, RATE for Rate/Unit column)
+-- ================================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetPrint
+(
+    @DivCode VARCHAR(2),
+    @PrNo    NUMERIC(6,0),
+    @PrDate  DATE = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF @PrDate IS NULL RETURN;
+
+    SELECT
+        -- Division letterhead (PP_DIVMAS actual column names — matching V1)
+        dv.DIV_LOGO                                         AS DivLogo,
+        RTRIM(ISNULL(dv.DIVNAME,         ''))               AS DivName,
+        RTRIM(ISNULL(dv.div_printname,   ''))               AS DivPrintName,
+        RTRIM(ISNULL(dv.div_unitname,    ''))               AS DivUnitName,
+        RTRIM(ISNULL(dv.DIVISION_ADDR1,  ''))               AS DivAddress1,
+        RTRIM(ISNULL(dv.DIVISION_ADDR2,  ''))               AS DivAddress2,
+        RTRIM(ISNULL(dv.DIVISION_ADDR3,  ''))               AS DivAddress3,
+        RTRIM(ISNULL(dv.PINCODE,         ''))               AS DivPinCode,
+        RTRIM(ISNULL(dv.STATENAME,       ''))               AS DivState,
+        RTRIM(ISNULL(dv.PHONE1,          ''))               AS DivPhone,
+        RTRIM(ISNULL(dv.EMAIL,           ''))               AS DivEmail,
+
+        -- PR Header
+        RTRIM(h.divcode)                                    AS DivCode,
+        h.prno                                              AS PrNo,
+        CAST(h.prdate AS DATE)                              AS PrDate,
+        RTRIM(ISNULL(h.depcode,  ''))                       AS DepCode,
+        RTRIM(ISNULL(dep.depname,''))                       AS DepName,
+        RTRIM(ISNULL(h.REQNAME,  ''))                       AS ReqName,
+        RTRIM(ISNULL(emp.ename,  ''))                       AS ReqEmpName,
+        RTRIM(ISNULL(h.SECTION,  ''))                       AS Section,
+        RTRIM(ISNULL(NULLIF(RTRIM(h.refno), '0'), ''))      AS RefNo,
+        RTRIM(ISNULL(h.PO_GRP,   ''))                       AS PoGrp,
+        RTRIM(ISNULL(it.IDESC,   ''))                       AS IDesc,
+        RTRIM(ISNULL(h.APPFLG,   'N'))                      AS AppFlg,
+        RTRIM(ISNULL(pwd.user_name, ISNULL(h.createdby,''))) AS CreatedBy,
+        RTRIM(ISNULL(h.createddt, ''))                      AS CreatedDt,
+
+        -- PR Line
+        l.prsno                                             AS PrSno,
+        RTRIM(ISNULL(l.itemcode, ''))                       AS ItemCode,
+        RTRIM(ISNULL(i.itemname, ''))                       AS ItemName,
+        RTRIM(ISNULL(i.uom,      ''))                       AS Uom,
+        RTRIM(ISNULL(i.CATLNO,   ''))                       AS CatNo,
+        RTRIM(ISNULL(i.DRAWNO,   ''))                       AS DrawNo,
+        RTRIM(ISNULL(l.macno,    ''))                       AS MacNo,
+        RTRIM(ISNULL(m.MODEL,    ''))                       AS MacModel,
+        RTRIM(ISNULL(m.MacMake,  ''))                       AS MacMake,
+        ISNULL(l.qtyind,          0)                        AS QtyInd,
+        CAST(l.reqddate AS DATE)                            AS ReqdDate,
+        ISNULL(l.LPO_RATE,        0)                        AS LastPoRate,
+        CAST(l.LPO_DATE AS DATE)                            AS LastPoDate,
+        ISNULL(l.curstock,        0)                        AS CurrentStock,
+        ISNULL(l.APPCOST,         0)                        AS AppCost,
+        RTRIM(ISNULL(l.remarks,  ''))                       AS Remarks,
+
+        -- Approval flags
+        ISNULL(l.FirstApp,  'N')                            AS FirstApp,
+        ISNULL(l.SecondApp, 'N')                            AS SecondApp,
+        ISNULL(l.ThirdApp,  'N')                            AS ThirdApp,
+        ISNULL(l.DirectApp, 'N')                            AS DirectApp,
+
+        -- Approver names (FirstappUser has lowercase 'a' in the actual DB column)
+        RTRIM(ISNULL(l.FirstappUser,  ''))                  AS FirstAppUser,
+        RTRIM(ISNULL(l.SecondAppUser, ''))                  AS SecondAppUser,
+        RTRIM(ISNULL(l.ThirdAppUser,  ''))                  AS ThirdAppUser,
+        RTRIM(ISNULL(l.FinalAppUser,  ''))                  AS FinalAppUser,
+
+        -- Only DirectAppDate exists; APP1/2/3DATE do not exist in this schema
+        CASE WHEN l.DirectAppDate IS NOT NULL
+             THEN CONVERT(VARCHAR(12), CAST(l.DirectAppDate AS DATE), 103)
+             ELSE '' END                                     AS PresidentAppDate,
+
+        -- CR-PR-12: user-selected rate (LPO/Average/Manual)
+        ISNULL(l.RATE, 0)                                   AS Rate
+
+    FROM  dbo.PO_PRH h
+    INNER JOIN dbo.PO_PRL l
+           ON  l.divcode              = h.divcode
+           AND l.prno                 = h.prno
+           AND CAST(l.prdate AS DATE) = CAST(h.prdate AS DATE)
+    LEFT  JOIN dbo.PP_DIVMAS     dv  ON dv.DIVCODE = h.divcode
+    LEFT  JOIN dbo.IN_DEP       dep  ON dep.divcode = h.divcode AND dep.depcode = h.depcode
+    OUTER APPLY (SELECT TOP 1 ename FROM dbo.PR_EMP
+                 WHERE CAST(empno AS VARCHAR(10)) = h.REQNAME)            emp
+    OUTER APPLY (SELECT TOP 1 IDESC FROM dbo.PO_INDENTTYPE
+                 WHERE ITYPE = h.ITYPE)                                   it
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(h.createdby)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))                 pwd
+    LEFT  JOIN dbo.IN_ITEM        i  ON i.itemcode = l.itemcode
+    LEFT  JOIN dbo.MM_MACMAS      m  ON m.DIVCODE  = l.divcode
+                                    AND m.MAC_NO   = l.macno
+                                    AND m.DEPCODE  = h.depcode
+                                    AND m.MACFLAG  = 'M'
+    WHERE h.divcode              = @DivCode
+      AND h.prno                 = @PrNo
+      AND CAST(h.prdate AS DATE) = @PrDate
+      AND ISNULL(l.AmdFlg, '')  <> 'Y'
+    ORDER BY l.prsno;
+END;
+GO
+
+
+-- ============================================================
+-- ksp_PR_GetItemImagePath
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetItemImagePath
+(
+    @ItemCode VARCHAR(10)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT RTRIM(ISNULL(ImagePath, '')) AS ImagePath
+    FROM   dbo.IN_ITEM
+    WHERE  itemcode = @ItemCode;
 END;
 GO

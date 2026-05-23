@@ -54,7 +54,7 @@ public class PrServiceTests
     [Fact]
     public async Task GetParametersAsync_DelegatesToRepo()
     {
-        var dto = new PrParametersDto("N","N","N","N","N",0,"N","N","N","N","1","1",null,"N");
+        var dto = new PrParametersDto { ManualIndNo = "N", BudgetQty = "N", PendingOrderPara = "N" };
         _repo.Setup(r => r.GetParametersAsync(DivCode)).ReturnsAsync(dto);
 
         var result = await _sut.GetParametersAsync(DivCode);
@@ -125,11 +125,11 @@ public class PrServiceTests
     public async Task DeleteAsync_DelegatesToRepo()
     {
         var req = new DeletePrRequest { PrNo = 1, PrDate = PDate, DeleteMode = "FULL" };
-        _repo.Setup(r => r.DeleteAsync(DivCode, req, UserId)).Returns(Task.CompletedTask);
+        _repo.Setup(r => r.DeleteAsync(DivCode, req, UserId, null, null)).Returns(Task.CompletedTask);
 
-        await _sut.DeleteAsync(DivCode, req, UserId);
+        await _sut.DeleteAsync(DivCode, req, UserId, null, null);
 
-        _repo.Verify(r => r.DeleteAsync(DivCode, req, UserId), Times.Once);
+        _repo.Verify(r => r.DeleteAsync(DivCode, req, UserId, null, null), Times.Once);
     }
 
     // ── AddAsync — success ────────────────────────────────────────────────────

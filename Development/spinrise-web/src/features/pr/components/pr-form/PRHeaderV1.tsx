@@ -4,6 +4,7 @@ import type { FormInstance } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { prefixFilterOption, priorityFilterSort } from '@/shared/utils/selectUtils'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
+import { getFYBounds } from '@/shared/lib/dateUtils'
 import type { DepartmentOption, EmployeeOption, PrTypeOption } from '../../types'
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
@@ -41,23 +42,26 @@ function ViewField({ label, value, required }: { label: string; value?: string |
 }
 
 interface PRHeaderV1Props {
-  form:          FormInstance<PRHeaderFormValues>
-  departments:   DepartmentOption[]
-  employees:     EmployeeOption[]
-  prTypes:       PrTypeOption[]
-  savedPrNo?:    number | null
-  disabled?:     boolean
-  createdBy?:    string | null
+  form:            FormInstance<PRHeaderFormValues>
+  departments:     DepartmentOption[]
+  employees:       EmployeeOption[]
+  prTypes:         PrTypeOption[]
+  savedPrNo?:      number | null
+  disabled?:       boolean
+  createdBy?:      string | null
+  maxPrDate?:      string | null
   onValuesChange?: () => void
+  onTabToGrid?:    () => void
 }
 
 export function PRHeaderV1({
   form, departments, employees, prTypes,
   savedPrNo = null, disabled = false,
-  createdBy = null, onValuesChange,
+  createdBy = null, maxPrDate = null, onValuesChange, onTabToGrid,
 }: PRHeaderV1Props) {
   const processingDate = useAuthStore((s) => s.processingDate)
   const procDay        = processingDate ? dayjs(processingDate) : dayjs()
+  const { yfDate, ylDate } = getFYBounds()
 
   const prDate  = form.getFieldValue('prDate')
   const depCode = form.getFieldValue('depCode')
@@ -121,7 +125,7 @@ export function PRHeaderV1({
               <ViewField label="Section" value={section} />
             </Col>
             <Col xs={24} sm={12} md={5}>
-              <ViewField label="Requested By" value={reqName ? `${reqName} – ${empName ?? ''}` : undefined} />
+              <ViewField label="Requested By" value={reqName ? `${reqName} – ${empName ?? ''}` : undefined} required />
             </Col>
             <Col xs={24} sm={12} md={4}>
               <div style={{ marginBottom: 6 }}>
@@ -155,14 +159,31 @@ export function PRHeaderV1({
           <Row gutter={[10, 4]}>
             <Col xs={24} sm={12} md={3}>
               <Form.Item name="prDate" label={<Lbl text="PR Date" required />}
-                rules={[{ required: true, message: 'Required' }]} style={ITEM}>
+                validateTrigger={['onChange', 'onBlur']}
+                rules={[{
+                  validator: (_, val: Dayjs | null) => {
+                    if (!val) return Promise.reject('PR Date is required.')
+                    const fyStart = dayjs(yfDate)
+                    const fyEnd   = dayjs(ylDate)
+                    if (val.isBefore(fyStart, 'day') || val.isAfter(fyEnd, 'day'))
+                      return Promise.reject(`Date must be within the current financial year (${fyStart.format('DD-MMM-YYYY')} – ${fyEnd.format('DD-MMM-YYYY')}).`)
+                    if (maxPrDate && val.isBefore(dayjs(maxPrDate), 'day'))
+                      return Promise.reject(`PR Date cannot be earlier than last PR date (${dayjs(maxPrDate).format('DD-MMM-YYYY')}) for this division.`)
+                    return Promise.resolve()
+                  },
+                }]} style={ITEM}>
                 <DatePicker format="DD-MMM-YYYY" style={{ width: '100%' }} allowClear={false}
-                  disabledDate={(d) => d.isAfter(dayjs(), 'day')} />
+                  disabledDate={(d) => {
+                    const fyStart = dayjs(yfDate)
+                    const fyEnd   = dayjs(ylDate)
+                    return d.isBefore(fyStart, 'day') || d.isAfter(fyEnd, 'day')
+                  }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={5}>
               <Form.Item name="depCode" label={<Lbl text="Department" required />}
-                rules={[{ required: true, message: 'Required' }]} style={ITEM}>
+                validateTrigger={['onChange', 'onBlur']}
+                rules={[{ required: true, message: 'Department is required.' }]} style={ITEM}>
                 <Select showSearch placeholder="Select department…" options={deptOpts}
                   filterOption={prefixFilterOption} filterSort={priorityFilterSort} allowClear />
               </Form.Item>
@@ -173,14 +194,17 @@ export function PRHeaderV1({
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={5}>
-              <Form.Item name="reqName" label={<Lbl text="Requested By" />} style={ITEM}>
+              <Form.Item name="reqName" label={<Lbl text="Requested By" required />}
+                validateTrigger={['onChange', 'onBlur']}
+                rules={[{ required: true, message: 'Requested By is required.' }]} style={ITEM}>
                 <Select showSearch placeholder="Select employee…" options={empOpts}
                   filterOption={prefixFilterOption} filterSort={priorityFilterSort} allowClear />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={4}>
               <Form.Item name="iType" label={<Lbl text="Requisition Type" required />}
-                rules={[{ required: true, message: 'Required' }]} style={ITEM}>
+                validateTrigger={['onChange', 'onBlur']}
+                rules={[{ required: true, message: 'Requisition Type is required.' }]} style={ITEM}>
                 <Select placeholder="Select type…" options={typeOpts} allowClear />
               </Form.Item>
             </Col>
@@ -188,7 +212,14 @@ export function PRHeaderV1({
               <Form.Item name="refNo" label={<Lbl text="Reference No." />} style={ITEM}>
                 <Input placeholder="REF-…" maxLength={20}
                   onChange={(e) => form.setFieldValue('refNo', e.target.value.toUpperCase())}
-                  style={{ textTransform: 'uppercase' }} />
+                  style={{ textTransform: 'uppercase' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Tab' && !e.shiftKey && onTabToGrid) {
+                      e.preventDefault()
+                      onTabToGrid()
+                    }
+                  }}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -197,7 +228,7 @@ export function PRHeaderV1({
 
       {!disabled && (
         <div style={{ marginTop: 5, display: 'flex', gap: 12 }}>
-          {['Tab — move between fields', 'Ctrl+S — save', 'Enter — open item picker'].map((hint) => (
+          {['Tab — move between fields', 'Ctrl+S — save'].map((hint) => (
             <span key={hint} style={{ fontSize: 10, color: '#94a3b8' }}>{hint}</span>
           ))}
         </div>

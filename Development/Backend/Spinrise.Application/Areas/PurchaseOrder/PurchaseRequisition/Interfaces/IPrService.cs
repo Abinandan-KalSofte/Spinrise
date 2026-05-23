@@ -16,7 +16,11 @@ public interface IPrService
     Task<IEnumerable<PrSummaryDto>>  GetListAsync(string divCode, DateOnly fDate, DateOnly lDate, string mode, string? depCode, string? reqName, string? poGrp, int page, int pageSize);
     Task<decimal>                    AddAsync(string divCode, SavePrRequest request, string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate);
     Task<decimal>                    ModifyAsync(string divCode, SavePrRequest request, string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate);
-    Task                             DeleteAsync(string divCode, DeletePrRequest request, string userId);
-    Task<PendingOrderDto?>           CheckPendingOrderAsync(string divCode, DateOnly fDate, DateOnly lDate, string depCode, string itemCode);
-    Task<UserPermissionsDto>         GetUserPermissionsAsync(string userId, string divCode);
+    Task                             DeleteAsync(string divCode, DeletePrRequest request, string userId, string? hostName, string? ipAddress);
+    Task<PendingOrderDto?>               CheckPendingOrderAsync(string divCode, DateOnly fDate, DateOnly lDate, string depCode, string itemCode);
+    Task<UserPermissionsDto>             GetUserPermissionsAsync(string userId, string divCode);
+    Task<IEnumerable<MachineLookupDto>>  GetMachineLookupAsync(string divCode, string depCode, string? search);
+    Task<IEnumerable<CostCentreDto>>     GetCostCentreLookupAsync(string divCode, string? search);
+    Task<PrPrintDto?>                    GetPrintDataAsync(string divCode, decimal prNo, DateOnly prDate);
+    Task<string?>                        GetItemImagePathAsync(string itemCode);
 }

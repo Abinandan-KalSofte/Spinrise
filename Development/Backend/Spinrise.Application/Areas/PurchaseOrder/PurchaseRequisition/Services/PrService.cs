@@ -60,8 +60,8 @@ public class PrService : IPrService
         return await _repo.SaveAsync("MODIFY", divCode, request, userId, hostName, ipAddress, fDate, lDate);
     }
 
-    public Task DeleteAsync(string divCode, DeletePrRequest request, string userId) =>
-        _repo.DeleteAsync(divCode, request, userId);
+    public Task DeleteAsync(string divCode, DeletePrRequest request, string userId, string? hostName, string? ipAddress) =>
+        _repo.DeleteAsync(divCode, request, userId, hostName, ipAddress);
 
     public Task<PendingOrderDto?> CheckPendingOrderAsync(string divCode, DateOnly fDate, DateOnly lDate,
         string depCode, string itemCode) =>
@@ -69,6 +69,18 @@ public class PrService : IPrService
 
     public Task<UserPermissionsDto> GetUserPermissionsAsync(string userId, string divCode) =>
         _repo.GetUserPermissionsAsync(userId, divCode);
+
+    public Task<IEnumerable<MachineLookupDto>> GetMachineLookupAsync(string divCode, string depCode, string? search) =>
+        _repo.GetMachineLookupAsync(divCode, depCode, search);
+
+    public Task<IEnumerable<CostCentreDto>> GetCostCentreLookupAsync(string divCode, string? search) =>
+        _repo.GetCostCentreLookupAsync(divCode, search);
+
+    public Task<PrPrintDto?> GetPrintDataAsync(string divCode, decimal prNo, DateOnly prDate) =>
+        _repo.GetPrintDataAsync(divCode, prNo, prDate);
+
+    public Task<string?> GetItemImagePathAsync(string itemCode) =>
+        _repo.GetItemImagePathAsync(itemCode);
 
     private static void ValidateForSave(SavePrRequest request, string mode)
     {

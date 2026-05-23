@@ -83,11 +83,21 @@ public class PrRepository : IPrRepository
             Uom:          master.Uom,
             MinLevel:     master.MinLevel,
             ItemImage:    master.ItemImage,
+            ImagePath:    string.IsNullOrWhiteSpace((string?)master.ImagePath) ? null : (string)master.ImagePath,
             CurrentStock: rates?.CurrentStock ?? 0m,
             LpoRate:      rates?.LpoRate,
             LpoDate:      rates?.LpoDate is DateTime ld ? (DateOnly?)DateOnly.FromDateTime(ld) : null,
             AvgRate:      rates?.AvgRate
         );
+    }
+
+    public async Task<string?> GetItemImagePathAsync(string itemCode)
+    {
+        var result = await _uow.Connection.QueryFirstOrDefaultAsync<string>(
+            StoredProcedures.Pr.GetItemImagePath,
+            new { ItemCode = itemCode },
+            commandType: CommandType.StoredProcedure);
+        return string.IsNullOrWhiteSpace(result) ? null : result;
     }
 
     public async Task<PrHeaderDto?> GetLastRecordAsync(string divCode, DateOnly fDate, DateOnly lDate)
@@ -182,7 +192,7 @@ public class PrRepository : IPrRepository
         return (decimal)result.PrNo;
     }
 
-    public async Task DeleteAsync(string divCode, DeletePrRequest request, string userId)
+    public async Task DeleteAsync(string divCode, DeletePrRequest request, string userId, string? hostName, string? ipAddress)
     {
         await _uow.Connection.ExecuteAsync(
             StoredProcedures.Pr.Delete,
@@ -194,7 +204,9 @@ public class PrRepository : IPrRepository
                 DeleteMode   = request.DeleteMode,
                 PrSno        = request.PrSno,
                 UserId       = userId,
-                DeleteReason = request.DeleteReason
+                DeleteReason = request.DeleteReason,
+                HostName     = hostName,
+                IpAddress    = ipAddress
             },
             commandType: CommandType.StoredProcedure);
     }
@@ -220,5 +232,93 @@ public class PrRepository : IPrRepository
             CanAdd:    row.CanAdd    == 1,
             CanModify: row.CanModify == 1,
             CanDelete: row.CanDelete == 1);
+    }
+
+    public async Task<IEnumerable<MachineLookupDto>> GetMachineLookupAsync(string divCode, string depCode, string? search)
+    {
+        return await _uow.Connection.QueryAsync<MachineLookupDto>(
+            StoredProcedures.Pr.GetMachineLookup,
+            new { DivCode = divCode, DepCode = depCode, Search = search },
+            commandType: CommandType.StoredProcedure);
+    }
+
+    public async Task<IEnumerable<CostCentreDto>> GetCostCentreLookupAsync(string divCode, string? search)
+    {
+        return await _uow.Connection.QueryAsync<CostCentreDto>(
+            StoredProcedures.Pr.GetCostCentreLookup,
+            new { DivCode = divCode, Search = search },
+            commandType: CommandType.StoredProcedure);
+    }
+
+    public async Task<PrPrintDto?> GetPrintDataAsync(string divCode, decimal prNo, DateOnly prDate)
+    {
+        var rows = (await _uow.Connection.QueryAsync<PrPrintRowDto>(
+            StoredProcedures.Pr.GetPrint,
+            new { DivCode = divCode, PrNo = prNo, PrDate = prDate },
+            commandType: CommandType.StoredProcedure)).ToList();
+
+        if (rows.Count == 0) return null;
+
+        var h = rows[0];
+
+        var firstApp     = rows.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.FirstAppUser));
+        var secondApp    = rows.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.SecondAppUser));
+        var thirdApp     = rows.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.ThirdAppUser));
+        var finalApp     = rows.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.FinalAppUser));
+        var presidentRow = rows.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.PresidentAppDate));
+
+        var lines = rows.Select(r => new PrPrintLineDto(
+            PrSno:        r.PrSno,
+            ItemCode:     r.ItemCode,
+            ItemName:     r.ItemName,
+            Uom:          r.Uom,
+            CatNo:        r.CatNo,
+            DrawNo:       r.DrawNo,
+            MacNo:        r.MacNo,
+            MacModel:     r.MacModel,
+            MacMake:      r.MacMake,
+            QtyInd:       r.QtyInd,
+            ReqdDate:     r.ReqdDate,
+            Rate:         r.Rate,
+            LastPoRate:   r.LastPoRate,
+            LastPoDate:   r.LastPoDate,
+            CurrentStock: r.CurrentStock,
+            AppCost:      r.AppCost,
+            Remarks:      r.Remarks
+        )).ToList();
+
+        return new PrPrintDto(
+            DivLogo:          h.DivLogo,
+            DivName:          h.DivName,
+            DivPrintName:     h.DivPrintName,
+            DivUnitName:      h.DivUnitName,
+            DivAddress1:      h.DivAddress1,
+            DivAddress2:      h.DivAddress2,
+            DivAddress3:      h.DivAddress3,
+            DivPinCode:       h.DivPinCode,
+            DivState:         h.DivState,
+            DivPhone:         h.DivPhone,
+            DivEmail:         h.DivEmail,
+            DivCode:          h.DivCode,
+            PrNo:             h.PrNo,
+            PrDate:           h.PrDate,
+            DepCode:          h.DepCode,
+            DepName:          h.DepName,
+            ReqName:          h.ReqName,
+            ReqEmpName:       h.ReqEmpName,
+            Section:          h.Section,
+            RefNo:            h.RefNo,
+            PoGrp:            h.PoGrp,
+            IDesc:            h.IDesc,
+            AppFlg:           h.AppFlg,
+            CreatedBy:        h.CreatedBy,
+            CreatedDt:        h.CreatedDt,
+            FirstAppUser:     firstApp?.FirstAppUser      ?? "",
+            SecondAppUser:    secondApp?.SecondAppUser    ?? "",
+            ThirdAppUser:     thirdApp?.ThirdAppUser      ?? "",
+            FinalAppUser:     finalApp?.FinalAppUser      ?? "",
+            PresidentAppDate: presidentRow?.PresidentAppDate ?? "",
+            Lines: lines
+        );
     }
 }
