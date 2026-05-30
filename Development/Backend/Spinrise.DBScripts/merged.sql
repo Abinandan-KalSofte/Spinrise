@@ -2373,7 +2373,8 @@ BEGIN
             c.Depname                             AS Department,
             ISNULL(a.reqname, '')                 AS RequestedBy,
             CONVERT(varchar(12), a.canceldt, 106) AS CancelledOn,
-            ISNULL(a.pre_cancel_status, '')        AS PrevStatus
+            ISNULL(a.pre_cancel_status, '')        AS PrevStatus,
+            a.row_version                          AS RowVersion
         FROM  PO_PRH a
         INNER JOIN In_dep c ON c.depcode  = a.depcode
                             AND c.divcode  = a.divcode
@@ -2541,20 +2542,22 @@ GO
 -- ksp_PR_UndoCancellation
 -- Reverses a PR cancellation:
 --   1. Reads pre_cancel_status from PO_PRH header
---      (BR-UNDO-01 â€” read BEFORE the transaction begins)
+--      (BR-UNDO-01 -- read BEFORE the transaction begins)
 --   2. Clears all cancel columns on the header
+--      (SP-I1: row_version guard -- RAISERROR on conflict)
 --   3. Restores PO_PRL PRSTATUS to the pre-cancel value
 --   4. Writes audit log entry (Trans_Mod='DELETE')
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PR_UndoCancellation
 (
-    @DivCode   VARCHAR(2),
-    @PrNo      NUMERIC(6,0),
-    @PrDate    DATE,
-    @DepCode   VARCHAR(3),
-    @UserId    VARCHAR(50),
-    @HostName  VARCHAR(100) = NULL,
-    @IpAddress VARCHAR(50)  = NULL
+    @DivCode    VARCHAR(2),
+    @PrNo       NUMERIC(6,0),
+    @PrDate     DATE,
+    @DepCode    VARCHAR(3),
+    @RowVersion BINARY(8),
+    @UserId     VARCHAR(50),
+    @HostName   VARCHAR(100) = NULL,
+    @IpAddress  VARCHAR(50)  = NULL
 )
 AS
 BEGIN
@@ -2576,10 +2579,14 @@ BEGIN
                canceldt          = NULL,
                canreason         = NULL,
                pre_cancel_status = NULL
-        WHERE  divcode = @DivCode
-          AND  prno    = @PrNo
-          AND  prdate  = @PrDate
-          AND  depcode = @DepCode;
+        WHERE  divcode     = @DivCode
+          AND  prno        = @PrNo
+          AND  prdate      = @PrDate
+          AND  depcode     = @DepCode
+          AND  row_version = @RowVersion;   -- SP-I1: concurrency guard
+
+        IF @@ROWCOUNT = 0
+            RAISERROR('Concurrent update conflict — record has changed. Please refresh and retry.', 16, 1);
 
         -- Step 2: Restore PR lines to pre-cancel status (BR-UNDO-01)
         UPDATE PO_PRL
@@ -2588,7 +2595,7 @@ BEGIN
           AND  prno    = @PrNo
           AND  prdate  = @PrDate;
 
-        -- Step 3: Audit log â€” Trans_Mod='DELETE' for undo
+        -- Step 3: Audit log -- Trans_Mod='DELETE' for undo
         INSERT INTO LogDet_PO
             (divcode, prno, prdate, depcode,
              username, Trans_date, Trans_UserId,
@@ -2597,7 +2604,7 @@ BEGIN
         VALUES
             (@DivCode, @PrNo, @PrDate, @DepCode,
              @UserId, GETDATE(), @UserId,
-             'Purchase Requisition Cancellation', 'DELETE',
+             'Purchase Requisition Undo Cancellation', 'DELETE',
              @IpAddress, @HostName);
 
         COMMIT TRANSACTION;
