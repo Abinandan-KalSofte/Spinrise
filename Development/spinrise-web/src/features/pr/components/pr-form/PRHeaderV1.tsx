@@ -50,6 +50,8 @@ interface PRHeaderV1Props {
   disabled?:       boolean
   createdBy?:      string | null
   maxPrDate?:      string | null
+  isNewMode?:      boolean
+  prDateDisabled?: boolean
   onValuesChange?: () => void
   onTabToGrid?:    () => void
 }
@@ -57,10 +59,11 @@ interface PRHeaderV1Props {
 export function PRHeaderV1({
   form, departments, employees, prTypes,
   savedPrNo = null, disabled = false,
-  createdBy = null, maxPrDate = null, onValuesChange, onTabToGrid,
+  createdBy = null, maxPrDate = null, isNewMode = false, prDateDisabled = false, onValuesChange, onTabToGrid,
 }: PRHeaderV1Props) {
   const processingDate = useAuthStore((s) => s.processingDate)
   const procDay        = processingDate ? dayjs(processingDate) : dayjs()
+  const today          = dayjs().startOf('day')
   const { yfDate, ylDate } = getFYBounds()
 
   const prDate  = form.getFieldValue('prDate')
@@ -167,16 +170,19 @@ export function PRHeaderV1({
                     const fyEnd   = dayjs(ylDate)
                     if (val.isBefore(fyStart, 'day') || val.isAfter(fyEnd, 'day'))
                       return Promise.reject(`Date must be within the current financial year (${fyStart.format('DD-MMM-YYYY')} – ${fyEnd.format('DD-MMM-YYYY')}).`)
-                    if (maxPrDate && val.isBefore(dayjs(maxPrDate), 'day'))
+                    if (val.isAfter(today, 'day'))
+                      return Promise.reject('PR Date cannot be a future date.')
+                    if (isNewMode && maxPrDate && val.isBefore(dayjs(maxPrDate), 'day'))
                       return Promise.reject(`PR Date cannot be earlier than last PR date (${dayjs(maxPrDate).format('DD-MMM-YYYY')}) for this division.`)
                     return Promise.resolve()
                   },
                 }]} style={ITEM}>
                 <DatePicker format="DD-MMM-YYYY" style={{ width: '100%' }} allowClear={false}
+                  disabled={prDateDisabled}
                   disabledDate={(d) => {
                     const fyStart = dayjs(yfDate)
                     const fyEnd   = dayjs(ylDate)
-                    return d.isBefore(fyStart, 'day') || d.isAfter(fyEnd, 'day')
+                    return d.isBefore(fyStart, 'day') || d.isAfter(fyEnd, 'day') || d.isAfter(today, 'day')
                   }} />
               </Form.Item>
             </Col>

@@ -19,8 +19,9 @@ export function usePRFormCore() {
   const { message } = App.useApp()
   const [headerForm] = Form.useForm<PRHeaderFormValues>()
 
-  const authUser = useAuthStore((s) => s.user)
-  const divCode  = authUser?.divCode ?? ''
+  const authUser        = useAuthStore((s) => s.user)
+  const processingDate  = useAuthStore((s) => s.processingDate)
+  const divCode         = authUser?.divCode ?? ''
   const depCode  = (Form.useWatch('depCode', headerForm) as string | undefined) ?? ''
   const reqName  = (Form.useWatch('reqName', headerForm) as string | undefined) ?? ''
   const iType    = (Form.useWatch('iType',   headerForm) as string | undefined) ?? ''
@@ -135,7 +136,24 @@ export function usePRFormCore() {
     try {
       const pr = await prApi.getById(divCode, prNo, prDate)
       fillFormFromPr(pr)
-      setItems(pr.lines.map(mapSavedLine))
+
+      // Back-fill minLevel/maxLevel from item master so save validation fires for existing lines
+      const mappedLines = pr.lines.map(mapSavedLine)
+      const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
+      const pDate = processingDate ?? new Date().toISOString().split('T')[0]
+      const uniqueCodes = [...new Set(mappedLines.map((l) => l.itemCode))]
+      const details = await Promise.all(
+        uniqueCodes.map((code) =>
+          prApi.getItemDetail(divCode, code, yfDate, ylDate, pDate).catch(() => null)
+        )
+      )
+      const detailMap = new Map(details.filter(Boolean).map((d) => [d!.itemCode, d!]))
+      const linesWithLevels = mappedLines.map((l) => {
+        const d = detailMap.get(l.itemCode)
+        return d ? { ...l, minLevel: d.minLevel, maxLevel: d.maxLevel } : l
+      })
+
+      setItems(linesWithLevels)
       setSavedPrNo(pr.prNo)
       setSavedPr(pr)
       setPrStatus(pr.prStatus)
@@ -153,7 +171,7 @@ export function usePRFormCore() {
   // ── Load last record (on mount) ───────────────────────────────────────────
   const loadLastRecord = async () => {
     if (!divCode) return
-    const { yfDate, ylDate } = getFYBounds()
+    const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
     setNavLoading(true)
     try {
       const pr = await prApi.getLastRecord(divCode, yfDate, ylDate)
@@ -168,11 +186,11 @@ export function usePRFormCore() {
   // ── Navigate FIRST / PREV / NEXT / LAST (client-side) ────────────────────
   const navigateRecord = async (direction: 'FIRST' | 'PREV' | 'NEXT' | 'LAST') => {
     if (!divCode) return
-    const { yfDate, ylDate } = getFYBounds()
+    const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
     setNavLoading(true)
     try {
       // getList returns DESC (newest first); reverse → ASC (oldest = index 0)
-      const all = (await prApi.getList(divCode, yfDate, ylDate, 'VIEW', { pageSize: 1000 }))
+      const all = (await prApi.getList(divCode, yfDate, ylDate, 'FIND', { pageSize: 1000 }))
         .reverse()
       if (all.length === 0) { setNavLoading(false); return }
 
@@ -183,7 +201,7 @@ export function usePRFormCore() {
         targetIdx = all.length - 1
       } else {
         const currIdx = savedPrNo
-        ? all.findIndex((r) => r.prNo === savedPrNo)
+        ? all.findIndex((r) => r.prNo === savedPrNo && r.prDate === savedPr?.prDate)
         : -1
         if (direction === 'PREV') {
           if (currIdx <= 0) { void message.info('Already at the first record.'); setNavLoading(false); return }
@@ -198,6 +216,7 @@ export function usePRFormCore() {
       await loadRecord(target.prNo, target.prDate)
     } catch {
       setNavLoading(false)
+      void message.error('Navigation failed. Please try again.')
     }
   }
 
@@ -274,19 +293,51 @@ export function usePRFormCore() {
       }
     }
 
-    // G6: Qty below MINLEVEL — warning only, does not block save
+    // G6: Qty below MINLEVEL — blocks save
     const belowMinLevel = validLines.filter(
       (l) => (l.minLevel ?? 0) > 0 && (l.qtyInd ?? 0) < (l.minLevel ?? 0)
     )
     if (belowMinLevel.length > 0) {
-      void message.warning(
-        `Quantity is below minimum order level for: ${belowMinLevel.map((l) => l.itemCode).join(', ')}. Saving anyway.`
+      void message.error(
+        `Quantity is below minimum order level for: ${belowMinLevel.map((l) => l.itemCode).join(', ')}. Increase quantity before saving.`
       )
+      return
+    }
+
+    // G6b: Qty above MAXLEVEL — blocks save
+    const aboveMaxLevel = validLines.filter(
+      (l) => (l.maxLevel ?? 0) > 0 && (l.qtyInd ?? 0) > (l.maxLevel ?? 0)
+    )
+    if (aboveMaxLevel.length > 0) {
+      void message.error(
+        `Quantity exceeds maximum order level for: ${aboveMaxLevel.map((l) => l.itemCode).join(', ')}. Reduce quantity before saving.`
+      )
+      return
+    }
+
+    // G6c: Rate exceeds DB column limit — numeric(13,4) allows max 9 integer digits
+    const MAX_RATE_DB    = 999_999_999
+    const MAX_APPCOST_DB = 99_999_999_999
+    const rateOverflow = validLines.filter((l) => (l.rate ?? 0) > MAX_RATE_DB)
+    if (rateOverflow.length > 0) {
+      void message.error(
+        `Rate exceeds the maximum allowed value (₹9,99,99,999) for: ${rateOverflow.map((l) => l.itemCode).join(', ')}. Please correct the rate before saving.`
+      )
+      return
+    }
+
+    // G6d: Approx. Value exceeds DB column limit
+    const appCostOverflow = validLines.filter((l) => (l.appCost ?? 0) > MAX_APPCOST_DB)
+    if (appCostOverflow.length > 0) {
+      void message.error(
+        `Approx. Value exceeds the maximum allowed (₹99,99,99,99,999) for: ${appCostOverflow.map((l) => l.itemCode).join(', ')}. Reduce quantity or rate before saving.`
+      )
+      return
     }
 
     setSaving(true)
     try {
-      const { yfDate, ylDate } = getFYBounds()
+      const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
       const prDateStr = values.prDate.format('YYYY-MM-DD')
       const request = {
         prDate:         prDateStr,
@@ -329,7 +380,18 @@ export function usePRFormCore() {
 
       const savedFull = await prApi.getById(divCode, result.prNo, prDateStr)
       fillFormFromPr(savedFull)
-      setItems(savedFull.lines.map(mapSavedLine))
+      const mappedSaved = savedFull.lines.map(mapSavedLine)
+      const savedCodes = [...new Set(mappedSaved.map((l) => l.itemCode))]
+      const savedDetails = await Promise.all(
+        savedCodes.map((code) =>
+          prApi.getItemDetail(divCode, code, yfDate, ylDate, prDateStr).catch(() => null)
+        )
+      )
+      const savedDetailMap = new Map(savedDetails.filter(Boolean).map((d) => [d!.itemCode, d!]))
+      setItems(mappedSaved.map((l) => {
+        const d = savedDetailMap.get(l.itemCode)
+        return d ? { ...l, minLevel: d.minLevel, maxLevel: d.maxLevel } : l
+      }))
       setSavedPrNo(savedFull.prNo)
       setSavedPr(savedFull)
       setPrStatus(savedFull.prStatus)
@@ -407,7 +469,7 @@ export function usePRFormCore() {
 
   return {
     // form
-    headerForm, depCode, reqName, iType, authUser, divCode,
+    headerForm, depCode, reqName, iType, authUser, divCode, processingDate,
     // state
     items, setItems,
     savedPrNo, savedPr, prStatus, lastPrDate,

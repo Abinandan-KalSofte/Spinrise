@@ -17,7 +17,7 @@ interface TbBtnProps {
   kbd?:      string
   onClick?:  () => void
   disabled?: boolean
-  variant?:  'default' | 'primary' | 'success' | 'danger' | 'danger-filled' | 'icon'
+  variant?:  'default' | 'primary' | 'success' | 'danger' | 'danger-filled' | 'amber' | 'icon'
   title?:    string
 }
 
@@ -39,6 +39,7 @@ export function TbBtn({
     success:          { background: '#185FA5', color: '#fff', borderColor: '#185FA5' },
     danger:           { color: C.red, borderColor: '#E24B4A', background: '#fff'     },
     'danger-filled':  { background: '#dc2626', color: '#fff', borderColor: '#dc2626' },
+    amber:            { background: '#BA7517', color: '#fff', borderColor: '#BA7517' },
   }
   return (
     <button
@@ -74,11 +75,19 @@ export function TbSep() {
 // ── Document header band ───────────────────────────────────────────────────────
 
 interface PRDocBandProps {
-  savedPrNo: number | null
-  prStatus:  string | null
+  // PR form usage
+  savedPrNo?: number | null
+  prStatus?:  string | null
+  // Generic page usage (Foreclosure, Cancellation, etc.)
+  title?:      string
+  breadcrumb?: string[]
+  subLabel?:   string
+  subValue?:   string
 }
 
-export function PRDocBand({ savedPrNo }: PRDocBandProps) {
+export function PRDocBand({ savedPrNo, title, breadcrumb, subLabel, subValue }: PRDocBandProps) {
+  const crumbs = breadcrumb ?? ['Purchase Order', title ?? 'Purchase Requisition']
+
   return (
     <div style={{
       background: 'linear-gradient(135deg, #0C447C 0%, #185FA5 100%)',
@@ -88,15 +97,26 @@ export function PRDocBand({ savedPrNo }: PRDocBandProps) {
     }}>
       {/* Breadcrumb path */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-        <span style={{ color: 'rgba(255,255,255,.55)', fontWeight: 400 }}>Purchase Order</span>
-        <span style={{ color: 'rgba(255,255,255,.35)' }}>/</span>
-        <span style={{ color: '#fff', fontWeight: 600, letterSpacing: '.2px' }}>Purchase Requisition</span>
+        {crumbs.map((segment, i) => (
+          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {i > 0 && <span style={{ color: 'rgba(255,255,255,.35)' }}>{'>'}</span>}
+            <span style={{
+              color: i === crumbs.length - 1 ? '#fff' : 'rgba(255,255,255,.55)',
+              fontWeight: i === crumbs.length - 1 ? 600 : 400,
+              letterSpacing: '.2px',
+            }}>
+              {segment}
+            </span>
+          </span>
+        ))}
       </div>
-      {/* PR Number */}
+      {/* Right side: PR number (form) or sub-label/value (other pages) */}
       <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginBottom: 1 }}>PR Number</div>
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginBottom: 1 }}>
+          {subLabel ?? 'PR Number'}
+        </div>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
-          {savedPrNo ? `PR-${String(savedPrNo).padStart(5, '0')}` : 'Auto-generated on save'}
+          {subValue ?? (savedPrNo ? `PR-${String(savedPrNo).padStart(5, '0')}` : 'Auto-generated on save')}
         </div>
       </div>
     </div>

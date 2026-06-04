@@ -35,7 +35,7 @@ export default function ItemDetailDrawer({ open, item, loading, onClose }: Props
             )}
 
             <Descriptions column={1} size="small" bordered>
-              <Descriptions.Item label="Item Code">
+              <Descriptions.Item label="Item Id">
                 <code style={{ fontSize: 12, color: '#185FA5' }}>{item.itemCode}</code>
               </Descriptions.Item>
               <Descriptions.Item label="Item Name">{item.itemName}</Descriptions.Item>

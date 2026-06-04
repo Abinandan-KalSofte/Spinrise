@@ -4,13 +4,8 @@ import { FileTextOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import * as prApi from '../../api/prApi'
 import { getFYBounds } from '@/shared/lib/dateUtils'
-import { PR_STATUS_BADGE, type PrSummary } from '../../types'
+import { type PrSummary } from '../../types'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
-
-function toSentenceCase(s: string): string {
-  if (!s) return s
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
-}
 
 interface PRPickerModalProps {
   open:     boolean
@@ -35,7 +30,8 @@ function fmtDate(d: string): string {
 }
 
 export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalProps) {
-  const divCode = useAuthStore((s) => s.user?.divCode ?? '')
+  const divCode        = useAuthStore((s) => s.user?.divCode ?? '')
+  const processingDate = useAuthStore((s) => s.processingDate)
   const [allRows,  setAllRows]  = useState<PrSummary[]>([])
   const [loading,  setLoading]  = useState(false)
   const [search,   setSearch]   = useState('')
@@ -46,7 +42,7 @@ export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalP
 
   const load = useCallback(async () => {
     if (!divCode) return
-    const { yfDate, ylDate } = getFYBounds()
+    const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
     setLoading(true)
     try {
       const data = await prApi.getList(divCode, yfDate, ylDate, apiMode, { pageSize: 500 })
@@ -141,26 +137,24 @@ export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalP
               <th style={{ ...TH }}>Department</th>
               <th style={{ ...TH }}>Requester</th>
               <th style={{ ...TH, width: 72, textAlign: 'right' }}>Items</th>
-              <th style={{ ...TH, width: 180 }}>Status</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '40px' }}>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '40px' }}>
                   <Spin size="small" />
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: 13 }}>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: 13 }}>
                   {search ? `No records match "${search}"` : 'No purchase requisitions found.'}
                 </td>
               </tr>
             ) : (
               rows.map((row, idx) => {
                 const isSel      = selected?.prNo === row.prNo && selected?.prDate === row.prDate
-                const statusInfo = PR_STATUS_BADGE[row.prStatus]
                 return (
                   <tr
                     key={`${row.prNo}-${row.prDate}`}
@@ -187,20 +181,6 @@ export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalP
                     </td>
                     <td style={{ ...TD, fontSize: 12, color: '#475569' }}>{row.reqEmpName ?? '—'}</td>
                     <td style={{ ...TD, textAlign: 'right', fontSize: 12, color: '#64748b' }}>{row.totalLines}</td>
-                    <td style={TD}>
-                      {statusInfo ? (
-                        <span style={{
-                          display: 'inline-block', padding: '1px 8px', borderRadius: 12,
-                          background: statusInfo.bg, color: statusInfo.color,
-                          border: `1px solid ${statusInfo.color}40`,
-                          fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-                        }}>
-                          {toSentenceCase(row.prStatus)}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 11, color: '#888' }}>{toSentenceCase(row.prStatus)}</span>
-                      )}
-                    </td>
                   </tr>
                 )
               })

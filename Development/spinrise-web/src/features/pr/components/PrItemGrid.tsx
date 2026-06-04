@@ -161,7 +161,7 @@ export default function PrItemGrid({
       cellStyle:  { color: '#888', fontSize: 11, textAlign: 'center' },
     },
     {
-      headerName: 'Item Code',
+      headerName: 'Item Id',
       field:      'itemCode',
       width:      110,
       pinned:     'left',
@@ -174,7 +174,7 @@ export default function PrItemGrid({
       }),
     },
     {
-      headerName: 'Item Description',
+      headerName: 'Item Name',
       field:      'itemName',
       flex:       1,
       minWidth:   180,

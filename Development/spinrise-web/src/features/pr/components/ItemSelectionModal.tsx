@@ -53,7 +53,7 @@ export default function ItemSelectionModal({ open, onSelect, onClose }: Props) {
 
   const columns = [
     {
-      title:     'Item Code',
+      title:     'Item Id',
       dataIndex: 'itemCode',
       width:     110,
       render:    (v: string) => <code style={{ fontSize: 12, color: '#185FA5' }}>{v}</code>,
@@ -99,7 +99,7 @@ export default function ItemSelectionModal({ open, onSelect, onClose }: Props) {
     >
       <Input
         prefix={<SearchOutlined style={{ color: '#888' }} />}
-        placeholder="Search by code or name…"
+        placeholder="Search by Id or name…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         allowClear

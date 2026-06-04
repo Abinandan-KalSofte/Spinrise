@@ -9,21 +9,22 @@ interface Props {
   draftTotalQty:  { uom: string; qty: number }[]
 }
 
-const Card = ({ label, children }: { label: string; children: React.ReactNode }) => (
+const Card = ({ label, accent = '#185FA5', children }: { label: string; accent?: string; children: React.ReactNode }) => (
   <div
     style={{
       flex:         1,
       minWidth:     120,
       background:   '#ffffff',
       border:       '1px solid #E2E2E2',
+      borderLeft:   `3px solid ${accent}`,
       borderRadius: 8,
-      padding:      '8px 14px',
+      padding:      '7px 12px',
     }}
   >
     <div style={{ fontSize: 10, color: '#888888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
       {label}
     </div>
-    <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>
+    <div style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A' }}>
       {children}
     </div>
   </div>
@@ -59,25 +60,25 @@ export default function PrKpiStrip({ pr, mode, draftLineCount, draftTotalQty }: 
 
   return (
     <div style={{ display: 'flex', gap: 8 }}>
-      <Card label="Total Lines">{totalLines}</Card>
+      <Card label="Total Lines" accent="#185FA5">{totalLines}</Card>
 
-      <Card label="Total Quantity">
+      <Card label="Total Quantity" accent="#475569">
         <span style={{ fontSize: 11, fontWeight: 500 }}>{qtyDisplay}</span>
       </Card>
 
       {showPostSave && (
         <>
-          <Card label="Approx Budget">
+          <Card label="Approx Budget" accent="#BA7517">
             <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
               ₹ {Number(approxBudget).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </span>
           </Card>
 
-          <Card label="Created By">
+          <Card label="Created By" accent="#475569">
             {pr!.reqEmpName || pr!.reqName || '—'}
           </Card>
 
-          <Card label="Approval Status">
+          <Card label="Approval Status" accent="#185FA5">
             <PrStatusBadge status={pr!.prStatus} />
           </Card>
         </>

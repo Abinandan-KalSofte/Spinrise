@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Modal, Table, Input, Tag } from 'antd'
+import { Modal, Table, Input, Tag, type TableColumnsType } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { PrSummary, ScreenMode } from '../types'
@@ -48,7 +48,9 @@ export default function PrListModal({ open, mode, fDate, lDate, onSelect, onClos
         (i) =>
           String(i.prNo).includes(search) ||
           i.depName.toLowerCase().includes(search.toLowerCase()) ||
-          i.reqEmpName.toLowerCase().includes(search.toLowerCase())
+          i.reqEmpName.toLowerCase().includes(search.toLowerCase()) ||
+          (i.iType ?? '').toLowerCase().includes(search.toLowerCase()) ||
+          (i.iDesc ?? '').toLowerCase().includes(search.toLowerCase())
       )
     : items
 
@@ -56,7 +58,9 @@ export default function PrListModal({ open, mode, fDate, lDate, onSelect, onClos
               : mode === 'EDIT' ? 'Select PR to Modify'
               : 'Select PR to Delete'
 
-  const columns = [
+  const showStatus = mode === 'VIEW'
+
+  const columns: TableColumnsType<PrSummary> = [
     {
       title:     'PR No.',
       dataIndex: 'prNo',
@@ -91,13 +95,16 @@ export default function PrListModal({ open, mode, fDate, lDate, onSelect, onClos
       width:     60,
       align:     'center' as const,
     },
-    {
+  ]
+
+  if (showStatus) {
+    columns.push({
       title:     'Status',
       dataIndex: 'prStatus',
       width:     160,
       render:    (v: string) => <PrStatusBadge status={v} />,
-    },
-  ]
+    })
+  }
 
   return (
     <Modal
@@ -114,8 +121,14 @@ export default function PrListModal({ open, mode, fDate, lDate, onSelect, onClos
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         allowClear
-        style={{ marginBottom: 12 }}
+        style={{ marginBottom: 8 }}
       />
+
+      <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>
+        {search
+          ? `Showing ${filtered.length} of ${items.length} PRs`
+          : `Total PRs: ${items.length}`}
+      </div>
 
       <Table<PrSummary>
         dataSource={filtered}

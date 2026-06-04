@@ -7,6 +7,11 @@ import AppShell from './shared/components/AppShell'
 const LoginPage               = lazy(() => import('./features/auth/pages/LoginPage'))
 const DashboardPage           = lazy(() => import('./pages/DashboardPage'))
 const PurchaseRequisitionPage = lazy(() => import('./features/pr/pages/PurchaseRequisitionPage'))
+const PrAmendmentPage         = lazy(() => import('./features/pr/pages/PrAmendmentPage'))
+const PrForeclosurePage       = lazy(() => import('./features/pr/pages/PrForeclosurePage'))
+const PrCancellationPage      = lazy(() => import('./features/pr/pages/PrCancellationPage'))
+const PrFirstApprovalPage     = lazy(() => import('./features/pr/pages/PrFirstApprovalPage'))
+const FinalLevelApprovalPage  = lazy(() => import('./features/pr/pages/FinalLevelApprovalPage'))
 
 export default function App() {
   return (
@@ -22,7 +27,12 @@ export default function App() {
             }
           >
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/purchase-requisition" element={<PurchaseRequisitionPage />} />
+            <Route path="/purchase-requisition"             element={<PurchaseRequisitionPage />} />
+            <Route path="/pr-amendment"                   element={<PrAmendmentPage />} />
+            <Route path="/pr-foreclosure"                 element={<PrForeclosurePage />} />
+            <Route path="/pr-cancellation"                element={<PrCancellationPage />} />
+            <Route path="/pr-first-approval"              element={<PrFirstApprovalPage />} />
+            <Route path="/pr-final-approval"              element={<FinalLevelApprovalPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
