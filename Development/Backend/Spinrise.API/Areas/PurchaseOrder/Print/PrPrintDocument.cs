@@ -1,3 +1,4 @@
+using System.Globalization;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -37,7 +38,7 @@ internal sealed class PrPrintDocument : IDocument
     //  0=S.No  1=ItemCode  2=ItemName  3=Unit  4=ReqQty  5=ReqDate  6=CurrStk
     //  7=Rate  8=Value     9=Date      10=AppCost         11=Remarks
     private static readonly float[] Cols =
-        { 8.9f, 17.8f, 58.0f, 11.1f, 21.2f, 19f, 23.0f, 22.0f, 27.7f, 21.8f, 22.7f, 24.77f };
+        { 8.9f, 16.0f, 58.0f, 11.1f, 21.2f, 19f, 23.0f, 27.0f, 25.0f, 18.0f, 27.0f, 22.07f };
 
     // ── Info section widths (mm) ──────────────────────────────────────────────────
     private const float LeftPanelW  = 141.5f;
@@ -51,6 +52,14 @@ internal sealed class PrPrintDocument : IDocument
     private const float DataRowH = 8.4f;
     private const float MachRowH = 5.0f;
     private const float SigH     = 22.9f;
+
+    // ── PR-20: Indian lakh/crore number grouping (matches UI toLocaleString('en-IN')) ──────────
+    private static readonly NumberFormatInfo _inFmt = new()
+    {
+        NumberGroupSizes      = new[] { 3, 2 },
+        NumberGroupSeparator  = ",",
+        NumberDecimalSeparator = "."
+    };
 
     public PrPrintDocument(PrPrintDto pr) => _pr = pr;
 
@@ -144,18 +153,21 @@ internal sealed class PrPrintDocument : IDocument
                 WidthMm: LeftPanelW, IndentMm: LeftIndent, PadVMm: 3f, RowSpacingMm: 3f,
                 Rows: new InfoRowConfig[]
                 {
-                    new("Requester Name", requester,       LeftLabelW, SepW),
-                    new("Created By",     _pr.CreatedBy,   LeftLabelW, SepW),
-                    new("Department",     depLabel,        LeftLabelW, SepW),
-                    new("Reference",      _pr.RefNo,       LeftLabelW, SepW),
+                    new("PR.No.",        ((long)_pr.PrNo).ToString(),               RightLabelW, SepW),
+                    new("PR.Date/Time",  FormatCreatedDt(),                              RightLabelW, SepW),
+                    new("Approved Date", _pr.PresidentAppDate,                      RightLabelW, SepW),
+
+
+                    
                 }),
             RightPanel: new InfoPanelConfig(
                 WidthMm: 0, IndentMm: RightIndent, PadVMm: 3f, RowSpacingMm: 3f,
                 Rows: new InfoRowConfig[]
                 {
-                    new("PR.No.",        ((long)_pr.PrNo).ToString(),               RightLabelW, SepW),
-                    new("PR.Date/Time",  FormatCreatedDt(),                              RightLabelW, SepW),
-                    new("Approved Date", _pr.PresidentAppDate,                      RightLabelW, SepW),
+                    new("Requester Name", requester,       LeftLabelW, SepW),
+                    new("Created By",     _pr.CreatedBy,   LeftLabelW, SepW),
+                    new("Department",     depLabel,        LeftLabelW, SepW),
+                    new("Reference",      _pr.RefNo,       LeftLabelW, SepW),
                 }));
     }
 
@@ -181,13 +193,13 @@ internal sealed class PrPrintDocument : IDocument
                 DcMono(line.ItemCode,                                                                     DA.Left),
                 Dc(line.ItemName,                                                                         DA.Left),
                 Dc(line.Uom,                                                                              DA.Center),
-                Dc(line.QtyInd == 0m ? "" : line.QtyInd.ToString("N3"),                                  DA.Right),
+                Dc(line.QtyInd == 0m ? "" : line.QtyInd.ToString("N3", _inFmt),                             DA.Right),
                 Dc(line.ReqdDate.HasValue ? line.ReqdDate.Value.ToString("dd/MM/yyyy") : "",              DA.Center),
-                Dc(stock < 1m ? "" : stock.ToString("N3"),                                               DA.Right),
-                Dc(rate == 0m ? "" : rate.ToString("N4"),                                                DA.Right),
-                Dc(rateValue == 0m ? "" : rateValue.ToString("N2"),                                      DA.Right),
+                Dc(stock < 1m ? "" : stock.ToString("N3", _inFmt),                                       DA.Right),
+                Dc(rate == 0m ? "" : rate.ToString("N4", _inFmt),                                        DA.Right),
+                Dc(rateValue == 0m ? "" : rateValue.ToString("N2", _inFmt),                              DA.Right),
                 Dc(line.LastPoDate.HasValue ? line.LastPoDate.Value.ToString("dd/MM/yyyy") : "",          DA.Center),
-                Dc(approxCost == 0m ? "" : approxCost.ToString("N2"),                                    DA.Right),
+                Dc(approxCost == 0m ? "" : approxCost.ToString("N2", _inFmt),                            DA.Right),
                 Dc(line.Remarks,                                                                          DA.Left),
             };
 
@@ -206,9 +218,9 @@ internal sealed class PrPrintDocument : IDocument
             Cells: new TotalsCellConfig[]
             {
                 new("Grand Total", DA.Right, ColumnSpan: 8u, Bold: true, Color: Navy),
-                new(totalValue   == 0m ? "" : totalValue.ToString("N2"), DA.Right, Bold: true, Color: Navy),
+                new(totalValue   == 0m ? "" : totalValue.ToString("N2", _inFmt), DA.Right, Bold: true, Color: Navy),
                 new("", DA.Center),
-                new(totalAppCost == 0m ? "" : totalAppCost.ToString("N2"), DA.Right, Bold: true, Color: Navy),
+                new(totalAppCost == 0m ? "" : totalAppCost.ToString("N2", _inFmt), DA.Right, Bold: true, Color: Navy),
                 new("", DA.Left),
             },
             MinHeightMm: DataRowH,
@@ -240,7 +252,7 @@ internal sealed class PrPrintDocument : IDocument
         ThCellConfig[] cells =
         {
             Th("S.No",                    rowSpan: 2, topBd: true),
-            Th("Item ID",                 rowSpan: 2, topBd: true),
+            Th("Item ID",                  rowSpan: 2, topBd: true),
             Th("Item Name",               rowSpan: 2, topBd: true),
             Th("Unit",                    rowSpan: 2, topBd: true),
             Th("Required\nQuantity",      rowSpan: 2, topBd: true),
@@ -257,7 +269,7 @@ internal sealed class PrPrintDocument : IDocument
                 BdLeft:   BdCell,
                 BdColor:  Black),
 
-            Th("App. Cost\nValue", rowSpan: 2, topBd: true),
+            Th("App. Value",       rowSpan: 2, topBd: true),
             Th("Remarks",          rowSpan: 2, topBd: true),
 
             Th("Rate/Unit", rowSpan: 1, topBd: false),
@@ -271,16 +283,19 @@ internal sealed class PrPrintDocument : IDocument
     private string FormatCreatedDt()
     {
         if (string.IsNullOrWhiteSpace(_pr.CreatedDt))
-            return _pr.PrDate.ToString("dd-MM-yyyy");
+            return _pr.PrDate.ToString("dd/MM/yyyy");
 
         // CreatedDt format: "DD/MM/YYYY HH:MM:SS AM/PM" — 24-hour clock with trailing AM/PM marker
+        // PR-12: dates must use dd/MM/yyyy (slashes); suppress time if midnight (per CEO #15c)
         var parts = _pr.CreatedDt.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length >= 2 &&
             DateTime.TryParseExact(parts[0] + " " + parts[1], "dd/MM/yyyy HH:mm:ss",
-                null, System.Globalization.DateTimeStyles.None, out var dt))
-            return dt.ToString("dd-MM-yyyy  hh:mm tt");
+                null, DateTimeStyles.None, out var dt))
+            return dt.TimeOfDay == TimeSpan.Zero
+                ? dt.ToString("dd/MM/yyyy")
+                : dt.ToString("dd/MM/yyyy  hh:mm tt");
 
-        return _pr.PrDate.ToString("dd-MM-yyyy");
+        return _pr.PrDate.ToString("dd/MM/yyyy");
     }
 
     private SignatureConfig BuildSignature()

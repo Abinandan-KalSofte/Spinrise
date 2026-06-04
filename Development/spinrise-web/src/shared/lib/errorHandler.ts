@@ -45,7 +45,7 @@ export function getErrorMessage(error: unknown): string {
       case 401: return 'Your session has expired. Please sign in again.'
       case 403: return 'You do not have permission to perform this action.'
       case 404: return 'The requested record was not found.'
-      case 409: return 'A conflict occurred. The record may have been modified by another user.'
+      case 409: return 'This record was recently modified by another user. Please reload the page and try again.'
       case 422: return 'The submitted data is invalid. Please review the form and try again.'
     }
     if (error.response.status >= 500) return 'The server encountered an error. Please try again later.'

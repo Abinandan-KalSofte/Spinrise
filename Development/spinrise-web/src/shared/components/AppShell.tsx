@@ -29,16 +29,32 @@ function mk(
   return { key, label, icon, children, disabled } as MenuItem
 }
 
+function wrapLabel(text: string) {
+  return <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'inline-block' }}>{text}</span>
+}
+
 const NAV_ITEMS: MenuItem[] = [
   mk('/dashboard', 'Dashboard', <DashboardOutlined />),
   mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined />, [
-    mk('/purchase-requisition', 'Purchase Requisition', <FileTextOutlined />),
-   
+    mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)'), <FileTextOutlined />),
+    //mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment '),        <FileTextOutlined />),
+    mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure '),      <FileTextOutlined />),
+    mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'),           <FileTextOutlined />),
+    mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval'),   <FileTextOutlined />),
+    mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval'),   <FileTextOutlined />),
   ]),
 ]
 
 function getOpenKeys(path: string): string[] {
-  if (path.startsWith('/purchase-requisition') || path.startsWith('/rmi-purchase-order')) {
+  if (
+    path.startsWith('/purchase-requisition') ||
+    path.startsWith('/pr-amendment') ||
+    path.startsWith('/pr-foreclosure') ||
+    path.startsWith('/pr-cancellation') ||
+    path.startsWith('/pr-first-approval') ||
+    path.startsWith('/pr-final-approval') ||
+    path.startsWith('/rmi-purchase-order')
+  ) {
     return ['grp-purchase']
   }
   return []
@@ -77,7 +93,7 @@ export default function AppShell() {
       {/* ── Sidebar ── */}
       <Sider
         collapsed={collapsed}
-        width={240}
+        width={260}
         collapsedWidth={52}
         style={{
           background: '#1a2236',
@@ -155,8 +171,8 @@ export default function AppShell() {
           />
           {/* Company name */}
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', minWidth: 0 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em' }}>
-              {user?.divName ?? ''}
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', minWidth: 0, display: 'block', maxWidth: '100%' }}>
+              {user?.compName ?? user?.divName ?? ''}
             </span>
           </div>
 
