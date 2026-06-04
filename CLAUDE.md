@@ -69,6 +69,8 @@ UI/UX Blueprint     : [ ] Provided  [ ] Not yet provided
 Active CR Documents : [list or "none"]
 Open IST findings   : [list or "none"]
 Work log file       : worklog_[YYYYMMDD].md — [ ] Created  [ ] Appended
+Prior session WIP   : [ ] Read worklog_[yesterday].md — pending tasks noted
+Git status          : [ ] Confirmed — no stray uncommitted changes
 ────────────────────────────────────────────
 Ready. Awaiting instruction.
 ```
@@ -87,6 +89,16 @@ Ready. Awaiting instruction.
 **Blocker rule:** Any ambiguity in FSD, DB schema, or requirements → STOP and ask. Never assume business logic.
 
 **Module tracker:** `Docs/MODULE_TRACKER.md`
+
+---
+
+## File Verification Rule
+
+**Never assume a file on disk is the same as an email attachment.**
+
+- Do not read any file unless the user explicitly points to it by path or confirms it is the correct file.
+- If a filename looks relevant to an email or task, always ask: *"Is this the file you want me to read, or is it saved elsewhere?"* — do not read it on assumption.
+- A file placed in a folder before the email arrived is NOT the email attachment.
 
 ---
 
@@ -190,6 +202,27 @@ src/features/<featureName>/
 - All SPs: `SET NOCOUNT ON` at top; TRY/CATCH with ROLLBACK in transactional SPs
 - No `SELECT *` — always list columns explicitly
 
+### MANDATORY: Read Schema Before Writing Any SP
+
+**Before writing any stored procedure, read `Docs/DB_Schema/SpinRiseSaranya_Schema.md`.**
+
+This is non-negotiable. Every SP written without reading the schema will have wrong column names and fail in SSMS.
+
+Critical facts from the live schema (memorise these):
+
+| Rule | Detail |
+|------|--------|
+| `PP_PASSWD` user column | `user_id` (underscore) — NOT `USERID` |
+| `PP_PASSWD` level column | `alevel` — NOT `ULEVEL` |
+| `PR_EMP` name column | `ename` — NOT `empname` |
+| `PO_PRL` machine column | `macno` (no underscore) — NOT `mac_no` |
+| `mm_MACmas` machine column | `MAC_NO` (uppercase with underscore) |
+| `IN_SCC` columns | `SCCCODE`, `SCCNAME`, `Divcode`, `DEPCODE` |
+| `PO_PRH` has NO PRSTATUS | Never write `PO_PRH.PRSTATUS = ...` — column does not exist |
+| `PO_PRH.APP1TIME` | Is `datetime` type — set with `GETDATE()`, not a string |
+| `REQNAME → PR_EMP` join | `TRY_CAST(h.REQNAME AS decimal(5,0)) = e.empno` |
+| Dept-by-user lookup | Join `PO_IndentAppUser` directly — no `PP_PASSWD` join needed |
+
 ---
 
 ## IST Finding Handling
@@ -228,6 +261,62 @@ Functional CRs require revised FSD → CEO countersign → Claude regenerates fr
 
 ---
 
+## UI/UX Design Correction Handling
+
+### Trigger phrase
+
+When the user says any of the following, activate this workflow immediately:
+
+> *"UI/UX correction received"* | *"design correction"* | *"first-level approval correction"* | *"UI feedback from [name]"*
+
+### Input format — any of these are accepted
+
+| User provides | Claude action |
+|---|---|
+| Pasted email body | Extract correction items from email text |
+| Pasted Word / Excel table | Parse rows as correction items |
+| File path to PDF / Word / Excel | Read the file, extract correction items |
+| Screenshot or image | Read visually, extract correction items |
+
+The user does NOT need to fill any template. Just paste or point to the source and say "process this."
+
+### Processing steps (run for every correction)
+
+1. **Extract** — pull every correction item from the input (screen, element, current vs required)
+2. **Classify each item:**
+   - **Cosmetic** — label text, colour, spacing, alignment, font, placeholder, icon → fix inline
+   - **Functional** — logic, validation, field add/remove, API behaviour, workflow, calculation → CR only
+   - When in doubt → classify as Functional → raise CR
+3. **Cosmetic fixes** — apply immediately; commit format:
+   ```
+   Fix [UI-C##]: [what changed] in [filename] at [line ref]
+   Example: Fix UI-C01: 'dept' → 'Department' in PRHeaderV1.tsx L42
+   ```
+4. **Functional items** — do NOT touch code; raise a CR Document per item:
+   ```
+   CR Document
+   ──────────────────────────────────────
+   UI Correction Ref : UI-F[nn]
+   Screen / Component: [screen and component name]
+   FSD Section       : Section [x.x] (if known)
+   Current Behaviour : [one sentence]
+   Required Behaviour: [one sentence]
+   ──────────────────────────────────────
+   ```
+5. **Report back** — after processing all items:
+   - Table: `# | Item | Classification | Action Taken / CR Raised`
+   - Files changed with line references (cosmetic fixes)
+   - CR Documents (functional items — no code written)
+   - Open questions (if any ambiguity found)
+
+### Hard rules
+
+- Do NOT assume any business rule from a design correction
+- If a correction contradicts the FSD → STOP, flag the conflict, ask before proceeding
+- Approval level (first / second) does not change the Cosmetic vs Functional classification rule
+
+---
+
 ## Testing
 
 - Framework: xUnit + Moq + FluentAssertions (backend), Vitest (frontend)
@@ -245,6 +334,46 @@ Functional CRs require revised FSD → CEO countersign → Claude regenerates fr
 - Security: OWASP Top 10 compliance; secrets in config, never in code
 - Labels: Title Case throughout UI
 - Decimal format: Qty = 3dp, Rate = 4dp, Value = 2dp
+
+---
+
+## Prompt Library
+
+Reusable master prompts live in `D:\SpinriseV2\Prompts\`. Always load a saved prompt before starting a large feature — they encode project context, rules, and lessons from past sessions.
+
+| File | Use Case |
+|---|---|
+| `PROMPT_01_FULLSTACK_FEATURE.md` | Before building any new screen or API endpoint |
+| `PROMPT_02_UIUX_HTML.md` | Before generating any ERP screen HTML |
+| `PROMPT_03_EMAIL_TASK_EXTRACTION.md` | Morning email parsing → daily task list |
+| `PROMPT_04_SESSION_STARTUP.md` | First message every Claude Code session |
+| `PROMPT_05_ARCHITECTURE_AUDIT.md` | End of sprint / weekly clean architecture review |
+
+**Usage:** `Read D:\SpinriseV2\Prompts\PROMPT_01_FULLSTACK_FEATURE.md, then execute for [MODULE NAME]`
+
+---
+
+## Developer Habits
+
+These habits prevent the most common quality failures in this project.
+
+### Prompting
+
+- **One concern per prompt.** Never mix API + SP + React component in a single message — Claude loses focus mid-generation. Break into three sequential prompts.
+- **@file references, not paste.** Use `@ServiceName.cs` instead of pasting file content. Pasting wastes 2,000–4,000 tokens and makes context degrade faster.
+- **Write a prompt file first** for any feature spanning more than two files. Save to `D:\SpinriseV2\Prompts\prompt_[module]_[YYYYMMDD].md`, then reference it with `Read @...` in the first message.
+- **Ask "why" after every fix.** After any bug fix: *"Explain why this caused the bug and what to check next time this pattern is written."* Builds skill, not dependency.
+
+### Session management
+
+- **Start with the checklist.** Especially: read yesterday's worklog and check `git status` for stray uncommitted changes.
+- **15-turn rule.** After 15 turns on one module, start a new conversation. Reference prior work with `Read @worklog_[YYYYMMDD].md`.
+
+### Code quality
+
+- **Tests alongside features.** Every new service method → add *"Write 3 xUnit tests: happy path, null/invalid input, exception case."*
+- **Review every generated file.** Run `/review` before accepting any generated file. For SQL: execute on test DB before touching production `merged.sql`.
+- **Architecture self-check.** After any multi-file feature: run `PROMPT_05_ARCHITECTURE_AUDIT.md` and verify all layers get PASS.
 
 ---
 
@@ -384,7 +513,32 @@ Filter with: `Where-Object { $_ -match "error CS|Build succeeded" }`
 
 | | M01 — Purchase Requisition | M02 — RMI Purchase Order |
 |---|---|---|
-| **Database** | `SpinRiseSaranya` | `JAT` |
+| **Database** |  `JAT` |
 | **UnitOfWork** | `IUnitOfWork` | `IJATUnitOfWork` |
 | **Merged deploy file** | `merged.sql` | `merged_jat.sql` |
 | **SP prefix** | `ksp_PR_*` | `ksp_RMI_PO_*` |
+
+---
+
+## Persistent Tools
+
+### Email Agent
+
+Never rediscover these paths — they are confirmed and stable.
+
+| Item | Path |
+|---|---|
+| Script | `D:\SpinriseV2\Tools\email_agent\email_agent.py` |
+| Config | `D:\SpinriseV2\Tools\email_agent\config.json` |
+| Thunderbird INBOX | `C:\Users\Admin\AppData\Roaming\Thunderbird\Profiles\fjzej4xv.default-release\ImapMail\mail.kalsofte.com\INBOX` |
+| Sent folder | `C:\Users\Admin\AppData\Roaming\Thunderbird\Profiles\fjzej4xv.default-release\ImapMail\mail.kalsofte.com\INBOX.sbd\Sent` |
+| Email summary (MD) | `D:\SpinriseV2\Docs\Email\EmailSummary.md` |
+| Task log (Excel) | `D:\SpinriseV2\Docs\Email\EmailTasks.xlsx` |
+| Claude prompts | `D:\SpinriseV2\Docs\Email\prompt_YYYYMMDD.md` |
+| Attachments extracted | `D:\SpinriseV2\Docs\Extracted\` |
+
+**Provider:** Anthropic Claude Haiku (`claude-haiku-4-5-20251001`) — API key set in config.json.
+
+**Run:** `python D:\SpinriseV2\Tools\email_agent\email_agent.py`
+
+**Sender weights** (in config.json): `ceo@kalsofte.com` / `md@kalsofte.com` → Highest; `qa@kalsofte.com` / `muthuvel` → High.
