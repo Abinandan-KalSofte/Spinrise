@@ -3,6 +3,7 @@ import { Button, Input, Modal, type InputRef } from 'antd'
 import { SearchOutlined, ToolOutlined } from '@ant-design/icons'
 import * as prApi from '../../api/prApi'
 import type { MachineLookup } from '../../types'
+import { LOOKUP_TH as TH, LOOKUP_TD as TD } from '@/shared/styles/erpTable'
 
 interface MachineLookupModalProps {
   open:      boolean
@@ -12,16 +13,6 @@ interface MachineLookupModalProps {
   onCancel:  () => void
 }
 
-const TH: React.CSSProperties = {
-  padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#64748b',
-  background: '#f8fafc', borderBottom: '2px solid #e2e8f0',
-  textTransform: 'uppercase', letterSpacing: '0.05em',
-  whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 1,
-}
-
-const TD: React.CSSProperties = {
-  padding: '7px 10px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle',
-}
 
 export function MachineLookupModal({ open, divCode, depCode, onSelect, onCancel }: MachineLookupModalProps) {
   const [machines,  setMachines]  = useState<MachineLookup[]>([])

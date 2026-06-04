@@ -4,7 +4,7 @@ import {
 } from 'react'
 import {
   Button, Checkbox, DatePicker, Drawer, Input, InputNumber,
-  type InputRef, Modal, Space, Tooltip, Typography,
+  type InputRef, message, Modal, Space, Tooltip, Typography,
 } from 'antd'
 import {
   DeleteOutlined, EyeOutlined, FileImageOutlined, SearchOutlined,
@@ -19,10 +19,11 @@ import { getItemImageUrl } from '../../api/prApi'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import { generateUUID } from '@/shared/lib/uuid'
 import type { PrLine, ItemLookup } from '../../types'
+import { erpTh, ERP_TD as TD } from '@/shared/styles/erpTable'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type PRLineItem = PrLine & { key: string; minLevel?: number; itemImage?: string | null }
+export type PRLineItem = PrLine & { key: string; minLevel?: number; maxLevel?: number; itemImage?: string | null }
 
 export interface PRLineItemsTableHandle {
   flushEdit:   () => Promise<void>
@@ -47,20 +48,12 @@ interface PRLineItemsTableProps {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const CELL_PAD = '4px 6px'
-const ROW_H    = '28px'
+// DB column limits: Rate numeric(13,4) → 9 integer digits; AppCost numeric(13,2) → 11 integer digits
+export const MAX_RATE     = 999_999_999
+export const MAX_APPCOST  = 99_999_999_999
 
-const TH: React.CSSProperties = {
-  padding: '6px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-  color: '#f1f5f9', background: '#1e293b', borderBottom: '2px solid #0f172a',
-  whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 10,
-}
-
-const TD: React.CSSProperties = {
-  padding: CELL_PAD, verticalAlign: 'middle', borderBottom: '1px solid #f0f0f0', height: ROW_H,
-}
-
-const TD_TEXT: React.CSSProperties = { ...TD, fontSize: 11, color: '#1e293b' }
+const TH = erpTh({ zIndex: 10 })
+const TD_TEXT = { ...TD, fontSize: 11, color: '#1e293b' }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -127,7 +120,7 @@ interface RORowProps { row: PRLineItem; idx: number; onView: (r: PRLineItem) => 
 
 const RORow = memo(({ row, idx, onView }: RORowProps) => (
   <>
-    <td style={{ ...TD_TEXT, width: 30, textAlign: 'center', color: '#94a3b8' }}>{idx + 1}</td>
+    <td style={{ ...TD_TEXT, width: 30, textAlign: 'center', color: '#94a3b8' }}>{row.prSno > 0 ? row.prSno : idx + 1}</td>
     <td style={{ ...TD_TEXT, width: 88, fontFamily: 'monospace', fontWeight: 700 }}>{row.itemCode}</td>
     <td style={{ ...TD_TEXT, minWidth: 150 }}>{row.itemName}</td>
     <td style={{ ...TD_TEXT, width: 46, textAlign: 'center' }}><ROCell value={row.uom} /></td>
@@ -136,7 +129,7 @@ const RORow = memo(({ row, idx, onView }: RORowProps) => (
     <td style={{ ...TD_TEXT, width: 120, textAlign: 'right' }}>
       {row.appCost > 0
         ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-            ₹ {row.appCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {row.appCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         : <span style={{ color: '#d1d5db' }}>—</span>}
     </td>
@@ -150,7 +143,7 @@ const RORow = memo(({ row, idx, onView }: RORowProps) => (
     </td>
     <td style={{ ...TD_TEXT, width: 130, fontSize: 10 }}>
       {row.ccCode != null
-        ? <Tooltip title={`Code: ${row.ccCode}`}>
+        ? <Tooltip title={`ID: ${row.ccCode}`}>
             <span style={{ cursor: 'help' }}>{row.ccName || String(row.ccCode)}</span>
           </Tooltip>
         : <span style={{ color: '#d1d5db' }}>—</span>}
@@ -178,6 +171,7 @@ interface EditRowProps {
   divCode:          string
   depCode:          string
   qtyError:         boolean
+  rateError:        boolean
   isLast:           boolean
   isFirstRow:       boolean
   isLastRow:        boolean
@@ -193,7 +187,7 @@ interface EditRowProps {
 }
 
 const EditRow = memo(({
-  row, idx, qtyError, isLast, isFirstRow, isLastRow,
+  row, idx, qtyError, rateError, isLast, isFirstRow, isLastRow,
   onUpdate, onView, onDelete, onTabToNext, onTabToPrev, onTabToSearch,
   onOpenMachine, onOpenMachineAuto, onOpenCC,
 }: EditRowProps) => {
@@ -201,12 +195,22 @@ const EditRow = memo(({
 
   return (
     <>
-      <td style={{ ...TD, width: 30, textAlign: 'center', color: '#94a3b8' }}>{idx + 1}</td>
+      <td style={{ ...TD, width: 30, textAlign: 'center', color: '#94a3b8' }}>{row.prSno > 0 ? row.prSno : idx + 1}</td>
       <td style={{ ...TD, width: 88, fontFamily: 'monospace', fontWeight: 700, color: '#1e293b' }}>{row.itemCode}</td>
       <td style={{ ...TD, minWidth: 150, fontSize: 11, color: '#1e293b' }}>{row.itemName}</td>
       <td style={{ ...TD, width: 46, textAlign: 'center', fontSize: 11 }}>{row.uom || <span style={{ color: '#d1d5db' }}>—</span>}</td>
       <td style={{ ...TD, width: 82 }} data-qty-for={row.key}>
-        <Tooltip title={qtyError ? 'Qty must be greater than 0' : ''} open={qtyError} color="#ff4d4f">
+        <Tooltip
+          title={qtyError
+            ? ((row.qtyInd ?? 0) === 0
+                ? 'Qty must be greater than 0'
+                : (row.maxLevel ?? 0) > 0 && (row.qtyInd ?? 0) > (row.maxLevel ?? 0)
+                  ? `Exceeds maximum order level (max: ${row.maxLevel})`
+                  : `Below minimum order level (min: ${row.minLevel ?? 0})`)
+            : ''}
+          open={qtyError}
+          color="#ff4d4f"
+        >
           <InputNumber
             size="small"
             value={row.qtyInd}
@@ -225,19 +229,30 @@ const EditRow = memo(({
         </Tooltip>
       </td>
       <td style={{ ...TD, width: 110 }}>
-        <InputNumber
-          size="small"
-          tabIndex={-1}
-          value={row.rate}
-          min={0}
-          precision={4}
-          style={{ width: '100%', height: '24px' }}
-          onChange={(v) => onUpdate('rate', v ?? 0)}
-        />
+        <Tooltip
+          title={rateError ? `Rate cannot exceed ${MAX_RATE.toLocaleString('en-IN')}` : ''}
+          open={rateError}
+          color="#ff4d4f"
+        >
+          <InputNumber
+            size="small"
+            tabIndex={-1}
+            value={row.rate}
+            min={0}
+            max={MAX_RATE}
+            precision={4}
+            style={{ width: '100%', height: '24px' }}
+            status={rateError ? 'error' : undefined}
+            onChange={(v) => onUpdate('rate', v ?? 0)}
+          />
+        </Tooltip>
       </td>
-      <td style={{ ...TD, width: 120, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: 11 }}>
+      <td style={{
+        ...TD, width: 120, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: 11,
+        ...(row.appCost > MAX_APPCOST ? { color: '#ff4d4f', background: '#fff1f0' } : {}),
+      }}>
         {row.appCost > 0
-          ? `₹ ${row.appCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          ? row.appCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           : <span style={{ color: '#d1d5db' }}>—</span>}
       </td>
       <td style={{ ...TD, width: 140 }}>
@@ -255,7 +270,6 @@ const EditRow = memo(({
       <td style={{ ...TD, width: 90 }}>
         <Button
           size="small"
-          tabIndex={-1}
           onClick={onOpenMachine}
           style={{
             width: '100%', height: '24px', fontSize: 11, padding: '0 6px',
@@ -271,7 +285,6 @@ const EditRow = memo(({
       <td style={{ ...TD, width: 130 }}>
         <Button
           size="small"
-          tabIndex={-1}
           onClick={onOpenCC}
           style={{
             width: '100%', height: '24px', fontSize: 11, padding: '0 6px',
@@ -279,7 +292,7 @@ const EditRow = memo(({
             color: row.ccCode != null ? '#1e293b' : '#94a3b8',
             borderColor: '#d9d9d9', background: '#fff',
           }}
-          title={row.ccCode != null ? `Code: ${row.ccCode}` : undefined}
+          title={row.ccCode != null ? `ID: ${row.ccCode}` : undefined}
         >
           {row.ccCode != null ? (row.ccName || String(row.ccCode)) : 'Sub Cost Centre…'}
         </Button>
@@ -349,7 +362,8 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
   const [lineDeleteRow,  setLineDeleteRow]  = useState<PRLineItem | null>(null)
   const [lineDeleting,   setLineDeleting]   = useState(false)
   const [viewRow,        setViewRow]        = useState<PRLineItem | null>(null)
-  const searchInputRef = useRef<InputRef>(null)
+  const searchInputRef      = useRef<InputRef>(null)
+  const pendingFocusKeyRef  = useRef<string | null>(null)
 
   useImperativeHandle(ref, () => ({
     flushEdit:  async () => {},
@@ -386,6 +400,20 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
     }, 80)
     return () => clearTimeout(t)
   }, [focusRemarksKey])
+
+  // After item picker closes, re-assert editing row and focus its qty field.
+  // 320ms wait lets Ant Design's modal close animation (300ms) complete before focusing.
+  useEffect(() => {
+    if (!pickerOpen && pendingFocusKeyRef.current) {
+      const key = pendingFocusKeyRef.current
+      pendingFocusKeyRef.current = null
+      const timer = setTimeout(() => {
+        setEditingRowKey(key)
+        setFocusQtyKey(key)
+      }, 320)
+      return () => clearTimeout(timer)
+    }
+  }, [pickerOpen])
 
   // Row callbacks
   const handleRowUpdate = useCallback((rowKey: string, field: keyof PRLineItem, value: unknown) => {
@@ -453,10 +481,7 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
       (l) => l.key !== rowKey && l.itemCode === row.itemCode && l.macNo === machine.macNo
     )
     if (isDupe) {
-      Modal.warning({
-        title:   'Duplicate Machine Assignment',
-        content: `${row.itemCode} is already assigned to machine ${machine.macNo}. Select a different machine.`,
-      })
+      message.warning(`${row.itemCode} with the same machine is already in the list.`)
       setMachineAutoNextKey(null)
       setMachinePickerKey(null)
       return
@@ -508,6 +533,8 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
         lpoDate:  item.lpoDate ?? null,
         rate:     item.lpoRate ?? 0,
         appCost:  0,
+        minLevel: item.minLevel,
+        maxLevel: item.maxLevel,
       }
       onAdd(line)
       newLines.push(line)
@@ -527,7 +554,7 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
 
     if (firstKey) {
       setEditingRowKey(firstKey)
-      setFocusQtyKey(firstKey)
+      pendingFocusKeyRef.current = firstKey
     }
     setPickerOpen(false)
 
@@ -544,6 +571,7 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
           lpoDate:   detail.lpoDate       ?? current.lpoDate,
           curStock:  detail.currentStock,
           minLevel:  detail.minLevel,
+          maxLevel:  detail.maxLevel,
           itemImage: detail.itemImage,
           appCost:   calcAppCost(rate, current.qtyInd),
         })
@@ -595,8 +623,8 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
           <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
             <tr>
               <th style={{ ...TH, width: 30 }}>#</th>
-              <th style={{ ...TH, width: 88 }}>Item Code</th>
-              <th style={{ ...TH, minWidth: 150 }}>Item Description</th>
+              <th style={{ ...TH, width: 88 }}>Item Id</th>
+              <th style={{ ...TH, minWidth: 150 }}>Item Name</th>
               <th style={{ ...TH, width: 46, textAlign: 'center' }}>Unit</th>
               <th style={{ ...TH, width: 82, textAlign: 'right' }}>Required Quantity <span style={{ color: '#E24B4A' }}>*</span></th>
               <th style={{ ...TH, width: 110, textAlign: 'right' }}>Rate</th>
@@ -618,7 +646,12 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
                     row={row} idx={idx}
                     divCode={divCode}
                     depCode={depCode}
-                    qtyError={qtyErrorKeys.has(row.key)}
+                    qtyError={
+                      qtyErrorKeys.has(row.key) ||
+                      ((row.minLevel ?? 0) > 0 && (row.qtyInd ?? 0) > 0 && (row.qtyInd ?? 0) < (row.minLevel ?? 0)) ||
+                      ((row.maxLevel ?? 0) > 0 && (row.qtyInd ?? 0) > 0 && (row.qtyInd ?? 0) > (row.maxLevel ?? 0))
+                    }
+                    rateError={(row.rate ?? 0) > MAX_RATE}
                     isLast={items.length <= 1}
                     isFirstRow={idx === 0}
                     isLastRow={idx === items.length - 1}

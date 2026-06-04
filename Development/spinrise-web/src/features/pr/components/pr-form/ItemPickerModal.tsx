@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import * as prApi from '../../api/prApi'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import type { ItemLookup } from '../../types'
+import { LOOKUP_TH as TH, LOOKUP_TD as TD } from '@/shared/styles/erpTable'
 
 const PAGE_SIZE = 50
 
@@ -17,16 +18,15 @@ interface ItemPickerModalProps {
   onCancel:         () => void
 }
 
-const TH: React.CSSProperties = {
-  padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#64748b',
-  background: '#f8fafc', borderBottom: '2px solid #e2e8f0',
-  textTransform: 'uppercase', letterSpacing: '0.05em',
-  whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 1,
-}
-
-const TD: React.CSSProperties = {
-  padding: '7px 10px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle',
-}
+const Kbd = ({ children }: { children: React.ReactNode }) => (
+  <kbd style={{
+    fontSize: 10, padding: '1px 5px', border: '1px solid #d1d5db',
+    borderRadius: 3, background: '#f1f5f9', color: '#475569',
+    fontFamily: 'monospace', lineHeight: 1.6, display: 'inline-block',
+  }}>
+    {children}
+  </kbd>
+)
 
 export function ItemPickerModal({
   open, depCode, depName, initialSearch = '', onSelectMultiple, onCancel,
@@ -40,10 +40,14 @@ export function ItemPickerModal({
   const [loadingMore,   setLoadingMore]   = useState(false)
   const [search,        setSearch]        = useState('')
   const [selectedItems, setSelectedItems] = useState<Map<string, ItemLookup>>(new Map())
+  const [focusedIdx,    setFocusedIdx]    = useState(-1)
 
   const searchInputRef = useRef<InputRef>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const sentinelRef    = useRef<HTMLTableRowElement>(null)
+  const scrollDivRef   = useRef<HTMLDivElement>(null)
+
+  // ── Data loading ──────────────────────────────────────────────────────────
 
   const loadPage = useCallback(async (pageNum: number, searchTerm: string, replace: boolean) => {
     if (!divCode) return
@@ -65,20 +69,12 @@ export function ItemPickerModal({
     setHasMore(true)
     setSelectedItems(new Map())
     setSearch(initialSearch)
+    setFocusedIdx(-1)
     void loadPage(1, initialSearch, true)
     setTimeout(() => searchInputRef.current?.focus(), 120)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearchChange = (q: string) => {
-    setSearch(q)
-    clearTimeout(searchTimerRef.current)
-    searchTimerRef.current = setTimeout(() => {
-      setItems([])
-      setHasMore(true)
-      void loadPage(1, q, true)
-    }, 300)
-  }
-
+  // Infinite scroll sentinel
   useEffect(() => {
     const sentinel = sentinelRef.current
     if (!sentinel) return
@@ -93,6 +89,29 @@ export function ItemPickerModal({
     observer.observe(sentinel)
     return () => observer.disconnect()
   }, [hasMore, loading, loadingMore, page, search, loadPage])
+
+  // Auto-scroll the focused row into view
+  useEffect(() => {
+    if (focusedIdx < 0) return
+    scrollDivRef.current
+      ?.querySelector<HTMLElement>(`tr[data-idx="${focusedIdx}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [focusedIdx])
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  const handleSearchChange = (q: string) => {
+    setSearch(q)
+    setFocusedIdx(-1)
+    clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      setItems([])
+      setHasMore(true)
+      void loadPage(1, q, true)
+    }, 300)
+  }
+
+  // ── Row actions ───────────────────────────────────────────────────────────
 
   const handleRowClick = useCallback((item: ItemLookup) => {
     setSelectedItems((prev) => {
@@ -113,6 +132,48 @@ export function ItemPickerModal({
     onSelectMultiple([item])
     setSelectedItems(new Map())
   }, [onSelectMultiple])
+
+  // ── Keyboard handler (search input stays focused throughout) ──────────────
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        if (items.length > 0) setFocusedIdx((p) => Math.min(p + 1, items.length - 1))
+        return
+
+      case 'ArrowUp':
+        e.preventDefault()
+        setFocusedIdx((p) => Math.max(p - 1, -1))
+        return
+
+      case ' ':
+        if (focusedIdx >= 0) {
+          e.preventDefault()
+          const item = items[focusedIdx]
+          if (item) handleRowClick(item)
+        }
+        return
+
+      case 'Enter':
+        e.preventDefault()
+        if (selectedItems.size > 0) {
+          handleConfirm()
+        } else if (focusedIdx >= 0 && items[focusedIdx]) {
+          handleRowDblClick(items[focusedIdx])
+        }
+        return
+
+      default:
+        // Any printable character or Backspace while cursor is in list → drop cursor,
+        // let the Input handle the character naturally (keeps typing feel snappy)
+        if (focusedIdx >= 0 && (e.key.length === 1 || e.key === 'Backspace')) {
+          setFocusedIdx(-1)
+        }
+    }
+  }, [items, focusedIdx, selectedItems, handleRowClick, handleConfirm, handleRowDblClick])
+
+  // ── Derived ───────────────────────────────────────────────────────────────
 
   const selCount  = selectedItems.size
   const selValues = selCount > 0 ? Array.from(selectedItems.values()) : []
@@ -139,9 +200,16 @@ export function ItemPickerModal({
             <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', lineHeight: 1.3 }}>
               Item Selection — Purchase Requisition
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-              Dept: <strong style={{ color: '#1677ff' }}>{depName || depCode || 'All'}</strong>
-              {' · '}Click to select · Double-click to add instantly
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+              <span>Dept: <strong style={{ color: '#1677ff' }}>{depName || depCode || 'All'}</strong></span>
+              <span style={{ color: '#cbd5e1' }}>·</span>
+              <Kbd>↑↓</Kbd><span>navigate</span>
+              <span style={{ color: '#cbd5e1' }}>·</span>
+              <Kbd>Space</Kbd><span>select</span>
+              <span style={{ color: '#cbd5e1' }}>·</span>
+              <Kbd>Enter</Kbd><span>add</span>
+              <span style={{ color: '#cbd5e1' }}>·</span>
+              <span>Double-click to add instantly</span>
             </div>
           </div>
         </div>
@@ -152,13 +220,19 @@ export function ItemPickerModal({
         <Input
           ref={searchInputRef}
           prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-          placeholder="Search by item code or name…"
+          placeholder="Search by item Id or name…"
           value={search}
           onChange={(e) => handleSearchChange(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
           allowClear
           style={{ borderRadius: 8, background: '#f8fafc', fontSize: 13 }}
         />
-        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+            {focusedIdx >= 0
+              ? <span>Row <strong>{focusedIdx + 1}</strong> of {items.length} — <Kbd>Space</Kbd> to {selectedItems.has(items[focusedIdx]?.itemCode ?? '') ? 'deselect' : 'select'}</span>
+              : 'Press ↓ to navigate rows with keyboard'}
+          </Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 11 }}>
             {loading ? 'Loading…' : `${items.length.toLocaleString()} items loaded`}
           </Typography.Text>
@@ -166,12 +240,12 @@ export function ItemPickerModal({
       </div>
 
       {/* ── Item table ── */}
-      <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+      <div ref={scrollDivRef} style={{ maxHeight: 380, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
               <th style={{ ...TH, width: 36, textAlign: 'center' }}>Img</th>
-              <th style={{ ...TH, width: 90 }}>Item Code</th>
+              <th style={{ ...TH, width: 90 }}>Item Id</th>
               <th style={{ ...TH, minWidth: 180 }}>Description</th>
               <th style={{ ...TH, width: 60, textAlign: 'center' }}>UOM</th>
               <th style={{ ...TH, width: 80, textAlign: 'right' }}>Min Level</th>
@@ -196,18 +270,21 @@ export function ItemPickerModal({
             ) : (
               <>
                 {items.map((item, idx) => {
-                  const isSel = selectedItems.has(item.itemCode)
+                  const isSel     = selectedItems.has(item.itemCode)
+                  const isFocused = focusedIdx === idx
                   return (
                     <tr
                       key={item.itemCode}
+                      data-idx={idx}
                       style={{
-                        background:    isSel ? '#eff6ff' : idx % 2 === 0 ? '#ffffff' : '#fafafa',
+                        background:    isSel ? '#eff6ff' : isFocused ? '#fefce8' : idx % 2 === 0 ? '#ffffff' : '#fafafa',
                         cursor:        'pointer',
                         outline:       isSel ? '2px solid #1677ff' : 'none',
                         outlineOffset: -1,
+                        borderLeft:    isFocused ? '3px solid #f59e0b' : '3px solid transparent',
                         transition:    'background 0.1s',
                       }}
-                      onClick={() => handleRowClick(item)}
+                      onClick={() => { handleRowClick(item); setFocusedIdx(idx) }}
                       onDoubleClick={() => handleRowDblClick(item)}
                     >
                       <td style={{ ...TD, width: 36, textAlign: 'center', padding: '4px' }}>
@@ -280,7 +357,7 @@ export function ItemPickerModal({
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {selCount === 0 ? (
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              Click a row to select · Double-click to add instantly
+              Click or use <Kbd>↑↓</Kbd> + <Kbd>Space</Kbd> to select · Double-click to add instantly
             </Typography.Text>
           ) : selCount === 1 ? (
             <span style={{ fontSize: 12, color: '#1677ff', fontWeight: 600 }}>
