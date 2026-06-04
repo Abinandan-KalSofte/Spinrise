@@ -16,30 +16,30 @@ public class FinalLevelApprovalRepository : IFinalLevelApprovalRepository
 
     public async Task<IEnumerable<FinalApprovalLineDto>> GetPendingAsync(int imode, string divCode, int bypass)
     {
-        var rows = await _uow.Connection.QueryAsync<dynamic>(
+        var rows = await _uow.Connection.QueryAsync<FinalApprovalLineRow>(
             StoredProcedures.PrFinalLevelApproval.Approve,
             new { imode, divcode = divCode, Bypass = bypass, Result = 0 },
             commandType: CommandType.StoredProcedure);
 
         return rows.Select(r => new FinalApprovalLineDto(
-            DivCode:        r.divcode        ?? string.Empty,
-            PrNo:           Convert.ToDecimal(r.prno),
-            PrDate:         r.prdate         ?? string.Empty,
-            PrSno:          Convert.ToDecimal(r.prsno),
+            DivCode:        r.DivCode        ?? string.Empty,
+            PrNo:           r.PrNo,
+            PrDate:         r.PrDate         ?? string.Empty,
+            PrSno:          r.PrSno,
             DbName:         string.Empty,
-            Department:     r.department     ?? string.Empty,
-            ItemCode:       r.itemCode       ?? string.Empty,
-            ItemName:       r.itemName       ?? string.Empty,
-            Uom:            r.uom            ?? string.Empty,
-            CurrentStock:   Convert.ToDecimal(r.currentStock),
-            QtyRequired:    Convert.ToDecimal(r.qtyRequired),
-            QtyApproved:    Convert.ToDecimal(r.qtyApproved),
-            Disposition:    Convert.ToInt32(r.disposition),
-            LpoRate:        Convert.ToDecimal(r.lpoRate),
-            LpoDate:        r.lpoDate        as string,
-            ApproxCost:     r.approxCost == null ? (decimal?)null : Convert.ToDecimal(r.approxCost),
-            ApprovalStatus: r.approvalStatus ?? "first",
-            RowVersion:     r.rowVersion is byte[] rv ? Convert.ToHexString(rv) : (r.rowVersion?.ToString() ?? string.Empty)
+            Department:     r.Department     ?? string.Empty,
+            ItemCode:       r.ItemCode       ?? string.Empty,
+            ItemName:       r.ItemName       ?? string.Empty,
+            Uom:            r.Uom            ?? string.Empty,
+            CurrentStock:   r.CurrentStock,
+            QtyRequired:    r.QtyRequired,
+            QtyApproved:    r.QtyApproved,
+            Disposition:    r.Disposition,
+            LpoRate:        r.LpoRate,
+            LpoDate:        r.LpoDate,
+            ApproxCost:     r.ApproxCost,
+            ApprovalStatus: r.ApprovalStatus ?? "first",
+            RowVersion:     r.RowVersion is not null ? Convert.ToHexString(r.RowVersion) : string.Empty
         ));
     }
 
@@ -99,4 +99,24 @@ public class FinalLevelApprovalRepository : IFinalLevelApprovalRepository
         await Task.CompletedTask;
         return [];
     }
+
+    // Raw row type — matches SP imode=2/3 column aliases exactly
+    private sealed record FinalApprovalLineRow(
+        string?  DivCode,
+        decimal  PrNo,
+        string?  PrDate,
+        decimal  PrSno,
+        string?  Department,
+        string?  ItemCode,
+        string?  ItemName,
+        string?  Uom,
+        decimal  CurrentStock,
+        decimal  QtyRequired,
+        decimal  QtyApproved,
+        int      Disposition,
+        decimal  LpoRate,
+        string?  LpoDate,
+        decimal? ApproxCost,
+        string?  ApprovalStatus,
+        byte[]?  RowVersion);
 }

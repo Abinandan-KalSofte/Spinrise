@@ -41,7 +41,7 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             new { DivCode = divCode, PrNo = prNo, PrDate = prDate, AmendNo = amendNo },
             commandType: CommandType.StoredProcedure);
 
-        var hdr = await multi.ReadFirstOrDefaultAsync<dynamic>();
+        var hdr = await multi.ReadFirstOrDefaultAsync<AmendHeaderRow>();
         if (hdr is null) return null;
 
         var lines = (await multi.ReadAsync<PrAmendmentLineDto>()).ToList();
@@ -57,7 +57,7 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             new { DivCode = divCode, PrNo = prNo, PrDate = prDate },
             commandType: CommandType.StoredProcedure);
 
-        var hdr = await multi.ReadFirstOrDefaultAsync<dynamic>();
+        var hdr = await multi.ReadFirstOrDefaultAsync<AmendHeaderRow>();
         if (hdr is null) return null;
 
         var lines = (await multi.ReadAsync<PrAmendmentLineDto>()).ToList();
@@ -103,7 +103,7 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             ? parsedPDate
             : DateOnly.FromDateTime(DateTime.Today);
 
-        var result = await _uow.Connection.QueryFirstAsync<dynamic>(
+        var result = await _uow.Connection.QueryFirstAsync<SaveResultRow>(
             StoredProcedures.PrAmendment.Save,
             new
             {
@@ -126,14 +126,14 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             },
             commandType: CommandType.StoredProcedure);
 
-        return Convert.ToInt32(result.AmendNo);
+        return result.AmendNo;
     }
 
     public async Task<int> DeleteLineAsync(
         string divCode, decimal prNo, DateOnly prDate, int amendNo, int prSno,
         byte[] rowVersionBytes, DateOnly pDate, string userId, string? hostName, string? ipAddress)
     {
-        var result = await _uow.Connection.QueryFirstAsync<dynamic>(
+        var result = await _uow.Connection.QueryFirstAsync<SaveResultRow>(
             StoredProcedures.PrAmendment.Save,
             new
             {
@@ -155,7 +155,7 @@ public class PrAmendmentRepository : IPrAmendmentRepository
                 PrSno       = prSno,
             },
             commandType: CommandType.StoredProcedure);
-        return Convert.ToInt32(result.AmendNo);
+        return result.AmendNo;
     }
 
     public async Task<PrAmendmentPrintDto?> GetPrintDataAsync(
@@ -166,67 +166,115 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             new { DivCode = divCode, PrNo = prNo, PrDate = prDate, AmendNo = amendNo },
             commandType: CommandType.StoredProcedure);
 
-        var hdr = await multi.ReadFirstOrDefaultAsync<dynamic>();
+        var hdr = await multi.ReadFirstOrDefaultAsync<AmendPrintHeaderRow>();
         if (hdr is null) return null;
 
         var lines = (await multi.ReadAsync<PrAmendmentPrintLineDto>()).ToList();
 
         return new PrAmendmentPrintDto(
-            DivCode:          (string)hdr.divcode,
-            PrNo:             Convert.ToDecimal(hdr.prno),
-            PrDate:           (string)hdr.prDate,
-            AmendNo:          Convert.ToInt32(hdr.amendno),
-            AmendDate:        (string)hdr.amendDate,
-            AmendmentReason:  (string)hdr.amendmentReason,
-            RefNo:            (string)hdr.refNo,
-            CreatedBy:        (string)hdr.createdby,
-            DepCode:          (string)hdr.depcode,
-            DepName:          (string)hdr.depName,
-            ReqName:          (string)hdr.reqName,
-            DivName:          (string)hdr.divName,
-            DivPrintName:     (string)hdr.divPrintName,
-            DivUnitName:      (string)hdr.divUnitName,
-            DivAddress1:      (string)hdr.divAddress1,
-            DivAddress2:      (string)hdr.divAddress2,
-            DivAddress3:      (string)hdr.divAddress3,
-            DivPinCode:       (string)hdr.divPinCode,
-            DivState:         (string)hdr.divState,
-            DivPhone:         (string)hdr.divPhone,
-            DivEmail:         (string)hdr.divEmail,
-            DivLogo:          hdr.divLogo as byte[],
+            DivCode:          hdr.DivCode          ?? string.Empty,
+            PrNo:             hdr.PrNo,
+            PrDate:           hdr.PrDate           ?? string.Empty,
+            AmendNo:          hdr.AmendNo,
+            AmendDate:        hdr.AmendDate         ?? string.Empty,
+            AmendmentReason:  hdr.AmendmentReason   ?? string.Empty,
+            RefNo:            hdr.RefNo             ?? string.Empty,
+            CreatedBy:        hdr.CreatedBy         ?? string.Empty,
+            DepCode:          hdr.DepCode           ?? string.Empty,
+            DepName:          hdr.DepName           ?? string.Empty,
+            ReqName:          hdr.ReqName           ?? string.Empty,
+            DivName:          hdr.DivName           ?? string.Empty,
+            DivPrintName:     hdr.DivPrintName      ?? string.Empty,
+            DivUnitName:      hdr.DivUnitName       ?? string.Empty,
+            DivAddress1:      hdr.DivAddress1       ?? string.Empty,
+            DivAddress2:      hdr.DivAddress2       ?? string.Empty,
+            DivAddress3:      hdr.DivAddress3       ?? string.Empty,
+            DivPinCode:       hdr.DivPinCode        ?? string.Empty,
+            DivState:         hdr.DivState          ?? string.Empty,
+            DivPhone:         hdr.DivPhone          ?? string.Empty,
+            DivEmail:         hdr.DivEmail          ?? string.Empty,
+            DivLogo:          hdr.DivLogo,
             Lines:            lines
         );
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private static PrAmendmentHeaderDto BuildHeaderDto(dynamic hdr, List<PrAmendmentLineDto> lines)
+    private static PrAmendmentHeaderDto BuildHeaderDto(AmendHeaderRow hdr, List<PrAmendmentLineDto> lines)
     {
-        string rowVer = hdr.rowVersion is byte[] rv
-            ? Convert.ToBase64String(rv)
+        string rowVer = hdr.RowVersion is not null
+            ? Convert.ToBase64String(hdr.RowVersion)
             : string.Empty;
 
         return new PrAmendmentHeaderDto(
-            DivCode:          (string)hdr.divcode,
-            PrNo:             Convert.ToDecimal(hdr.prno),
-            PrDate:           (string)hdr.prDate,
-            AmendNo:          Convert.ToInt32(hdr.amendno),
-            AmendDate:        (string)hdr.amendDate,
-            AmendmentReason:  (string)hdr.amendmentReason,
-            RefNo:            (string)hdr.refNo,
-            CreatedBy:        (string)hdr.createdby,
-            CreatedDt:        (string)hdr.createdDt,
+            DivCode:          hdr.DivCode          ?? string.Empty,
+            PrNo:             hdr.PrNo,
+            PrDate:           hdr.PrDate           ?? string.Empty,
+            AmendNo:          hdr.AmendNo,
+            AmendDate:        hdr.AmendDate         ?? string.Empty,
+            AmendmentReason:  hdr.AmendmentReason   ?? string.Empty,
+            RefNo:            hdr.RefNo             ?? string.Empty,
+            CreatedBy:        hdr.CreatedBy         ?? string.Empty,
+            CreatedDt:        hdr.CreatedDt         ?? string.Empty,
             RowVersion:       rowVer,
-            DepCode:          (string)hdr.depcode,
-            DepName:          (string)hdr.depName,
-            ReqName:          (string)hdr.reqName,
-            ReqEmpName:       (string)hdr.reqEmpName,
-            Section:          (string)hdr.section,
-            IType:            (string)hdr.iType,
-            IDesc:            (string)hdr.iDesc,
-            AppFlg:           (string)hdr.appFlg,
-            CancelFlag:       (string)hdr.cancelFlag,
+            DepCode:          hdr.DepCode           ?? string.Empty,
+            DepName:          hdr.DepName           ?? string.Empty,
+            ReqName:          hdr.ReqName           ?? string.Empty,
+            ReqEmpName:       hdr.ReqEmpName        ?? string.Empty,
+            Section:          hdr.Section           ?? string.Empty,
+            IType:            hdr.IType             ?? string.Empty,
+            IDesc:            hdr.IDesc             ?? string.Empty,
+            AppFlg:           hdr.AppFlg            ?? string.Empty,
+            CancelFlag:       hdr.CancelFlag        ?? string.Empty,
             Lines:            lines
         );
     }
+
+    // Raw row types — match SP column names exactly
+    private sealed record SaveResultRow(int AmendNo);
+
+    private sealed record AmendHeaderRow(
+        string?  DivCode,
+        decimal  PrNo,
+        string?  PrDate,
+        int      AmendNo,
+        string?  AmendDate,
+        string?  AmendmentReason,
+        string?  RefNo,
+        string?  CreatedBy,
+        string?  CreatedDt,
+        byte[]?  RowVersion,
+        string?  DepCode,
+        string?  DepName,
+        string?  ReqName,
+        string?  ReqEmpName,
+        string?  Section,
+        string?  IType,
+        string?  IDesc,
+        string?  AppFlg,
+        string?  CancelFlag);
+
+    private sealed record AmendPrintHeaderRow(
+        string?  DivCode,
+        decimal  PrNo,
+        string?  PrDate,
+        int      AmendNo,
+        string?  AmendDate,
+        string?  AmendmentReason,
+        string?  RefNo,
+        string?  CreatedBy,
+        string?  DepCode,
+        string?  DepName,
+        string?  ReqName,
+        byte[]?  DivLogo,
+        string?  DivName,
+        string?  DivPrintName,
+        string?  DivUnitName,
+        string?  DivAddress1,
+        string?  DivAddress2,
+        string?  DivAddress3,
+        string?  DivPinCode,
+        string?  DivState,
+        string?  DivPhone,
+        string?  DivEmail);
 }

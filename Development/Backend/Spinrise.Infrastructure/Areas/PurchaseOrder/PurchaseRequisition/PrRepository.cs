@@ -72,23 +72,23 @@ public class PrRepository : IPrRepository
             new { DivCode = divCode, ItemCode = itemCode, FDate = fDate, LDate = lDate, PDate = pDate },
             commandType: CommandType.StoredProcedure);
 
-        var master = await multi.ReadFirstOrDefaultAsync<dynamic>();
+        var master = await multi.ReadFirstOrDefaultAsync<ItemMasterRow>();
         if (master is null) return null;
 
-        var rates = await multi.ReadFirstOrDefaultAsync<dynamic>();
+        var rates = await multi.ReadFirstOrDefaultAsync<ItemRatesRow>();
 
         return new ItemDetailDto(
-            ItemCode:     master.ItemCode,
-            ItemName:     master.ItemName,
-            Uom:          master.Uom,
-            MinLevel:     Convert.ToDecimal(master.MinLevel),
-            MaxLevel:     Convert.ToDecimal(master.MaxLevel),
+            ItemCode:     master.ItemCode     ?? string.Empty,
+            ItemName:     master.ItemName     ?? string.Empty,
+            Uom:          master.Uom          ?? string.Empty,
+            MinLevel:     master.MinLevel,
+            MaxLevel:     master.MaxLevel,
             ItemImage:    master.ItemImage,
-            ImagePath:    string.IsNullOrWhiteSpace((string?)master.ImagePath) ? null : (string)master.ImagePath,
-            CurrentStock: rates == null ? 0m : Convert.ToDecimal(rates.CurrentStock),
-            LpoRate:      rates?.LpoRate == null ? (decimal?)null : Convert.ToDecimal(rates.LpoRate),
-            LpoDate:      rates?.LpoDate is DateTime ld ? (DateOnly?)DateOnly.FromDateTime(ld) : null,
-            AvgRate:      rates?.AvgRate == null ? (decimal?)null : Convert.ToDecimal(rates.AvgRate)
+            ImagePath:    string.IsNullOrWhiteSpace(master.ImagePath) ? null : master.ImagePath,
+            CurrentStock: rates?.CurrentStock ?? 0m,
+            LpoRate:      rates?.LpoRate,
+            LpoDate:      rates?.LpoDate.HasValue == true ? DateOnly.FromDateTime(rates.LpoDate.Value) : null,
+            AvgRate:      rates?.AvgRate
         );
     }
 
@@ -118,33 +118,33 @@ public class PrRepository : IPrRepository
         using var multi = await _uow.Connection.QueryMultipleAsync(
             spName, param, commandType: CommandType.StoredProcedure);
 
-        var header = await multi.ReadFirstOrDefaultAsync<dynamic>();
+        var header = await multi.ReadFirstOrDefaultAsync<PrHeaderRow>();
         if (header is null) return null;
 
         var lines = (await multi.ReadAsync<PrLineDto>()).ToList();
 
         return new PrHeaderDto(
-            DivCode:    header.DivCode,
-            PrNo:       Convert.ToDecimal(header.PrNo),
-            PrDate:     header.PrDate is DateTime pd ? DateOnly.FromDateTime(pd) : default,
-            DepCode:    header.DepCode ?? string.Empty,
-            DepName:    header.DepName ?? string.Empty,
-            ReqName:    header.ReqName ?? string.Empty,
-            ReqEmpName: header.ReqEmpName ?? string.Empty,
-            Section:    header.Section ?? string.Empty,
-            IType:      header.IType ?? string.Empty,
-            IDesc:      header.IDesc ?? string.Empty,
-            RefNo:      header.RefNo ?? string.Empty,
-            PoGrp:      header.PoGrp ?? string.Empty,
-            AppFlg:     header.AppFlg ?? "N",
-            CancelFlag:   header.CancelFlag,
-            CancelReason: header.CancelReason,
-            AmendNo:      header.AmendNo == null ? 0m : Convert.ToDecimal(header.AmendNo),
-            PrStatus:   header.PrStatus ?? "REQUESTED",
-            CreatedBy:  header.CreatedBy ?? string.Empty,
-            CreatedDt:  header.CreatedDt ?? string.Empty,
-            UserId:     header.UserId ?? string.Empty,
-            Lines:      lines
+            DivCode:      header.DivCode     ?? string.Empty,
+            PrNo:         header.PrNo,
+            PrDate:       header.PrDate.HasValue ? DateOnly.FromDateTime(header.PrDate.Value) : default,
+            DepCode:      header.DepCode     ?? string.Empty,
+            DepName:      header.DepName     ?? string.Empty,
+            ReqName:      header.ReqName     ?? string.Empty,
+            ReqEmpName:   header.ReqEmpName  ?? string.Empty,
+            Section:      header.Section     ?? string.Empty,
+            IType:        header.IType       ?? string.Empty,
+            IDesc:        header.IDesc       ?? string.Empty,
+            RefNo:        header.RefNo       ?? string.Empty,
+            PoGrp:        header.PoGrp       ?? string.Empty,
+            AppFlg:       header.AppFlg      ?? "N",
+            CancelFlag:   null,
+            CancelReason: null,
+            AmendNo:      0m,
+            PrStatus:     header.PrStatus    ?? "REQUESTED",
+            CreatedBy:    header.CreatedBy   ?? string.Empty,
+            CreatedDt:    header.CreatedDt   ?? string.Empty,
+            UserId:       header.UserId      ?? string.Empty,
+            Lines:        lines
         );
     }
 
@@ -252,6 +252,41 @@ public class PrRepository : IPrRepository
 
     private record PrSaveResult(decimal PrNo);
     private record UserPermissionsRaw(int CanAdd, int CanModify, int CanDelete);
+
+    // Raw row types for SP result sets that have no matching DTO constructor
+    private sealed record ItemMasterRow(
+        string?  ItemCode,
+        string?  ItemName,
+        string?  Uom,
+        decimal  MinLevel,
+        decimal  MaxLevel,
+        byte[]?  ItemImage,
+        string?  ImagePath);
+
+    private sealed record ItemRatesRow(
+        decimal   CurrentStock,
+        decimal?  LpoRate,
+        DateTime? LpoDate,
+        decimal?  AvgRate);
+
+    private sealed record PrHeaderRow(
+        string?   DivCode,
+        decimal   PrNo,
+        DateTime? PrDate,
+        string?   DepCode,
+        string?   DepName,
+        string?   ReqName,
+        string?   ReqEmpName,
+        string?   Section,
+        string?   IType,
+        string?   IDesc,
+        string?   RefNo,
+        string?   PoGrp,
+        string?   AppFlg,
+        string?   PrStatus,
+        string?   CreatedBy,
+        string?   CreatedDt,
+        string?   UserId);
 
     public async Task<PrPrintDto?> GetPrintDataAsync(string divCode, decimal prNo, DateOnly prDate)
     {
