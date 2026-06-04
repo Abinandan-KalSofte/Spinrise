@@ -25,6 +25,7 @@ import hashlib
 import base64
 import shutil
 import subprocess
+import argparse
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -606,7 +607,8 @@ def summarise_email(ai: AIClient, msg: email.message.Message) -> Optional[str]:
 
 def process_email(ai: AIClient, msg: email.message.Message,
                   cfg: dict, state: dict,
-                  jira: Optional[JiraClient] = None) -> None:
+                  jira: Optional[JiraClient] = None,
+                  collected_tasks: Optional[list] = None) -> None:
     subject   = decode_header(msg.get("Subject", "(no subject)"))
     sender    = decode_header(msg.get("From", ""))
     date_str  = msg.get("Date", "")
@@ -622,60 +624,75 @@ def process_email(ai: AIClient, msg: email.message.Message,
         _append_summary(cfg["summary_file"], entry,
                         sender=sender, sender_weights=cfg.get("sender_weights", {}))
 
-    # 3. Extract Jira tasks and push if enabled
-    if jira and cfg.get("jira_enabled"):
-        jira_pushed = set(state.get("jira_pushed_ids", []))
-        msg_id = stable_id(msg)
-        jira_state_key = f"jira_{msg_id}"
+    # 3. Extract tasks — always, regardless of Jira setting
+    extracted_ids = set(state.get("jira_pushed_ids", []))
+    msg_id        = stable_id(msg)
+    state_key     = f"jira_{msg_id}"
 
-        if jira_state_key not in jira_pushed:
-            tasks = extract_jira_tasks(ai, msg, cfg)
-            created_keys = []
-            for task in tasks:
-                task_summary = task.get("summary", "")
-                if not task_summary:
-                    continue
+    if state_key not in extracted_ids:
+        tasks = extract_jira_tasks(ai, msg, cfg)
+
+        for task in tasks:
+            task_summary = task.get("summary", "")
+            if not task_summary:
+                continue
+
+            # 3a. Push to Jira if enabled
+            key: str | None = None
+            if jira and cfg.get("jira_enabled"):
                 if jira.issue_exists_by_summary(task_summary):
-                    logger.info(f"Jira: issue already exists — {task_summary}")
-                    continue
-                epic_key = jira.resolve_epic(task.get("epic_hint", ""))
-                key = jira.create_issue(
-                    summary    = task_summary,
-                    issue_type = task.get("issue_type", "Task"),
-                    priority   = task.get("priority", "Medium"),
-                    description= task.get("description", ""),
-                    epic_key   = epic_key,
-                    due_date   = task.get("due_date"),
-                    labels     = task.get("labels", []),
-                )
-                if key:
-                    logger.info(f"Jira: created {key} — {task_summary}")
-                    created_keys.append(key)
+                    logger.info(f"Jira: already exists — {task_summary}")
+                else:
+                    epic_key = jira.resolve_epic(task.get("epic_hint", ""))
+                    key = jira.create_issue(
+                        summary     = task_summary,
+                        issue_type  = task.get("issue_type", "Task"),
+                        priority    = task.get("priority", "Medium"),
+                        description = task.get("description", ""),
+                        epic_key    = epic_key,
+                        due_date    = task.get("due_date"),
+                        labels      = task.get("labels", []),
+                    )
+                    if key:
+                        logger.info(f"Jira: created {key} — {task_summary}")
 
-                # 4. Write Excel row
-                excel_path = cfg.get("excel_output", "")
-                if excel_path:
-                    write_excel_row(excel_path, {
-                        "date":        date_str,
-                        "sender":      sender,
-                        "subject":     subject,
-                        "priority":    task.get("priority", "Medium"),
-                        "summary":     task_summary,
-                        "description": task.get("description", ""),
-                        "jira_key":    key or "",
-                    })
+            # 3b. Write Excel row
+            excel_path = cfg.get("excel_output", "")
+            if excel_path:
+                write_excel_row(excel_path, {
+                    "date":        date_str,
+                    "sender":      sender,
+                    "subject":     subject,
+                    "priority":    task.get("priority", "Medium"),
+                    "summary":     task_summary,
+                    "description": task.get("description", ""),
+                    "jira_key":    key or "",
+                })
 
-                # 5. Append Claude prompt file
-                prompt_dir = cfg.get("prompt_output_dir", "")
-                if prompt_dir:
-                    append_claude_prompt(Path(prompt_dir), date_str, task, subject, sender)
+            # 3c. Append Claude prompt file
+            prompt_dir = cfg.get("prompt_output_dir", "")
+            if prompt_dir:
+                append_claude_prompt(Path(prompt_dir), date_str, task, subject, sender)
 
-            if tasks:
-                logger.info(f"Jira: {len(created_keys)}/{len(tasks)} tasks created for: {subject}")
+            # 3d. Collect for morning brief
+            if collected_tasks is not None:
+                collected_tasks.append({
+                    "summary":     task_summary,
+                    "description": task.get("description", ""),
+                    "priority":    task.get("priority", "Medium"),
+                    "epic_hint":   task.get("epic_hint", ""),
+                    "due_date":    task.get("due_date"),
+                    "subject":     subject,
+                    "sender":      sender,
+                    "jira_key":    key or "",
+                })
 
-            jira_pushed.add(jira_state_key)
-            state["jira_pushed_ids"] = list(jira_pushed)
-            save_state(state)
+        if tasks:
+            logger.info(f"Tasks: {len(tasks)} extracted from: {subject}")
+
+        extracted_ids.add(state_key)
+        state["jira_pushed_ids"] = list(extracted_ids)
+        save_state(state)
 
 
 def _append_summary(summary_file: str, entry: str,
@@ -807,14 +824,16 @@ def append_claude_prompt(prompt_dir: Path, date_str: str, task: dict,
 
 class MboxProcessor:
     def __init__(self, cfg: dict, state: dict, ai: AIClient,
-                 jira: Optional[JiraClient], offset_key: str = "mbox_offset") -> None:
-        self.cfg        = cfg
-        self.state      = state
-        self.ai         = ai
-        self.jira       = jira
-        self.offset_key = offset_key
-        self.path       = Path(cfg["thunderbird_path"] if offset_key == "mbox_offset"
-                               else cfg["sent_path"])
+                 jira: Optional[JiraClient], offset_key: str = "mbox_offset",
+                 collected_tasks: Optional[list] = None) -> None:
+        self.cfg             = cfg
+        self.state           = state
+        self.ai              = ai
+        self.jira            = jira
+        self.offset_key      = offset_key
+        self.collected_tasks = collected_tasks
+        self.path            = Path(cfg["thunderbird_path"] if offset_key == "mbox_offset"
+                                   else cfg["sent_path"])
 
     def run(self) -> None:
         if not self.path.exists():
@@ -848,7 +867,7 @@ class MboxProcessor:
                 processed.add(mid)
                 subject = decode_header(msg.get("Subject", "(no subject)"))
                 logger.info(f"Processing: {subject}")
-                process_email(self.ai, msg, self.cfg, self.state, self.jira)
+                process_email(self.ai, msg, self.cfg, self.state, self.jira, self.collected_tasks)
                 new_count += 1
             mbox.close()
         except Exception as e:
@@ -918,9 +937,108 @@ class EmlFolderHandler(FileSystemEventHandler):
         logger.info(f"New .eml: {subject}")
         process_email(self.ai, msg, self.cfg, self.state, self.jira)
 
+# ─── Morning Brief & One-Shot Mode ───────────────────────────────────────────
+
+_PRIORITY_ORDER = ["Highest", "High", "Medium", "Low"]
+_PRIORITY_EMOJI = {"Highest": "🔴", "High": "🟠", "Medium": "🟡", "Low": "🟢"}
+
+
+def generate_morning_brief(cfg: dict, tasks: list[dict]) -> Optional[Path]:
+    """Write a markdown morning brief from tasks collected in this run."""
+    if not tasks:
+        logger.info("Morning brief: no tasks collected — skipping.")
+        return None
+
+    output_dir = Path(cfg.get("prompt_output_dir", str(BASE_DIR)))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dest = output_dir / f"morning_brief_{datetime.now().strftime('%Y%m%d')}.md"
+
+    today   = datetime.now().strftime("%d %b %Y")
+    now_str = datetime.now().strftime("%H:%M")
+    sources = len(set(t.get("subject", "") for t in tasks))
+
+    grouped: dict[str, list] = {p: [] for p in _PRIORITY_ORDER}
+    for t in tasks:
+        grouped.setdefault(t.get("priority", "Medium"), []).append(t)
+
+    lines: list[str] = [
+        f"# Morning Brief — {today}",
+        f"**Generated:** {now_str} IST  |  **New Tasks:** {len(tasks)}  |  **Emails:** {sources}",
+        "",
+    ]
+    for pri in _PRIORITY_ORDER:
+        bucket = grouped.get(pri, [])
+        if not bucket:
+            continue
+        emoji = _PRIORITY_EMOJI.get(pri, "⚪")
+        lines += [f"## {emoji} {pri} ({len(bucket)})", ""]
+        for task in bucket:
+            epic = task.get("epic_hint", "")
+            mod  = EPIC_TO_MODULE.get(epic, (epic or "General", "", ""))[0]
+            lines += [
+                f"### {task.get('summary', 'Untitled')}",
+                f"**Module:** {mod}  |  **Due:** {task.get('due_date') or '—'}  |  **From:** {task.get('sender', '—')}",
+            ]
+            if task.get("description"):
+                lines.append(f"> {task['description']}")
+            if task.get("jira_key"):
+                lines.append(f"**Jira:** `{task['jira_key']}`")
+            if task.get("subject"):
+                lines.append(f"_Source: {task['subject']}_")
+            lines.append("")
+        lines.append("")
+
+    lines += ["---", ""]
+    prompt_file = output_dir / f"prompt_{datetime.now().strftime('%Y%m%d')}.md"
+    if prompt_file.exists():
+        lines += [
+            f"**Claude Code prompts:** `{prompt_file}`",
+            "Paste the relevant prompt into Claude Code to begin work.",
+        ]
+
+    dest.write_text("\n".join(lines), encoding="utf-8")
+    logger.info(f"Morning brief → {dest}")
+    print(f"\nMorning brief: {dest}")
+    return dest
+
+
+def run_once(cfg: dict, ai: AIClient, state: dict, jira: Optional[JiraClient],
+             morning_brief: bool = False) -> None:
+    """Process all new emails once and exit — no file watcher started."""
+    collected: Optional[list] = [] if morning_brief else None
+
+    # Process INBOX
+    inbox_proc = MboxProcessor(cfg, state, ai, jira,
+                               offset_key="mbox_offset",
+                               collected_tasks=collected)
+    inbox_proc.run()
+
+    # Process Sent (optional)
+    sent_path = cfg.get("sent_path", "")
+    if sent_path and Path(sent_path).exists():
+        sent_cfg  = {**cfg, "thunderbird_path": sent_path}
+        sent_proc = MboxProcessor(sent_cfg, state, ai, jira,
+                                  offset_key="sent_mbox_offset",
+                                  collected_tasks=collected)
+        sent_proc.path = Path(sent_path)
+        sent_proc.run()
+
+    if morning_brief and collected is not None:
+        generate_morning_brief(cfg, collected)
+
+    logger.info("Run-once complete.")
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Spinrise Email Agent")
+    parser.add_argument("--run-once", action="store_true",
+                        help="Process new emails once and exit (no file watcher)")
+    parser.add_argument("--morning-brief", action="store_true",
+                        help="Generate a markdown morning brief after processing (implies --run-once)")
+    args = parser.parse_args()
+
     cfg = load_config()
     setup_logging(cfg["log_file"])
     logger.info("=" * 60)
@@ -940,6 +1058,11 @@ def main() -> None:
     jira  = JiraClient(cfg) if cfg.get("jira_enabled") and cfg.get("jira_token") else None
     if jira:
         logger.info(f"Jira: {cfg['jira_url']} | project={cfg['jira_project_key']}")
+
+    # ── One-shot mode (no watcher) ────────────────────────────────────────────
+    if args.run_once or args.morning_brief:
+        run_once(cfg, ai, state, jira, morning_brief=args.morning_brief)
+        return
 
     observer = Observer()
 
