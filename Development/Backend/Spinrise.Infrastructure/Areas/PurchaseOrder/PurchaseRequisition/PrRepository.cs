@@ -85,10 +85,10 @@ public class PrRepository : IPrRepository
             MaxLevel:     Convert.ToDecimal(master.MaxLevel),
             ItemImage:    master.ItemImage,
             ImagePath:    string.IsNullOrWhiteSpace((string?)master.ImagePath) ? null : (string)master.ImagePath,
-            CurrentStock: rates?.CurrentStock ?? 0m,
-            LpoRate:      rates?.LpoRate,
+            CurrentStock: rates == null ? 0m : Convert.ToDecimal(rates.CurrentStock),
+            LpoRate:      rates?.LpoRate == null ? (decimal?)null : Convert.ToDecimal(rates.LpoRate),
             LpoDate:      rates?.LpoDate is DateTime ld ? (DateOnly?)DateOnly.FromDateTime(ld) : null,
-            AvgRate:      rates?.AvgRate
+            AvgRate:      rates?.AvgRate == null ? (decimal?)null : Convert.ToDecimal(rates.AvgRate)
         );
     }
 
@@ -125,7 +125,7 @@ public class PrRepository : IPrRepository
 
         return new PrHeaderDto(
             DivCode:    header.DivCode,
-            PrNo:       header.PrNo,
+            PrNo:       Convert.ToDecimal(header.PrNo),
             PrDate:     header.PrDate is DateTime pd ? DateOnly.FromDateTime(pd) : default,
             DepCode:    header.DepCode ?? string.Empty,
             DepName:    header.DepName ?? string.Empty,
@@ -139,7 +139,7 @@ public class PrRepository : IPrRepository
             AppFlg:     header.AppFlg ?? "N",
             CancelFlag:   header.CancelFlag,
             CancelReason: header.CancelReason,
-            AmendNo:      header.AmendNo ?? 0m,
+            AmendNo:      header.AmendNo == null ? 0m : Convert.ToDecimal(header.AmendNo),
             PrStatus:   header.PrStatus ?? "REQUESTED",
             CreatedBy:  header.CreatedBy ?? string.Empty,
             CreatedDt:  header.CreatedDt ?? string.Empty,
@@ -167,7 +167,7 @@ public class PrRepository : IPrRepository
     {
         var linesJson = JsonSerializer.Serialize(request.Lines);
 
-        var result = await _uow.Connection.QueryFirstAsync<dynamic>(
+        var result = await _uow.Connection.QueryFirstAsync<PrSaveResult>(
             StoredProcedures.Pr.Save,
             new
             {
@@ -191,7 +191,7 @@ public class PrRepository : IPrRepository
             },
             commandType: CommandType.StoredProcedure);
 
-        return (decimal)result.PrNo;
+        return result.PrNo;
     }
 
     public async Task DeleteAsync(string divCode, DeletePrRequest request, string userId, string? hostName, string? ipAddress)
@@ -224,16 +224,14 @@ public class PrRepository : IPrRepository
 
     public async Task<UserPermissionsDto> GetUserPermissionsAsync(string userId, string divCode)
     {
-        var row = await _uow.Connection.QueryFirstOrDefaultAsync<dynamic>(
+        var row = await _uow.Connection.QueryFirstOrDefaultAsync<UserPermissionsRaw>(
             StoredProcedures.Pr.GetUserPermissions,
             new { UserId = userId, DivCode = divCode },
             commandType: CommandType.StoredProcedure);
 
-        if (row is null) return new UserPermissionsDto(true, true, true);
-        return new UserPermissionsDto(
-            CanAdd:    row.CanAdd    == 1,
-            CanModify: row.CanModify == 1,
-            CanDelete: row.CanDelete == 1);
+        return row is null
+            ? new UserPermissionsDto(true, true, true)
+            : new UserPermissionsDto(row.CanAdd == 1, row.CanModify == 1, row.CanDelete == 1);
     }
 
     public async Task<IEnumerable<MachineLookupDto>> GetMachineLookupAsync(string divCode, string depCode, string? search)
@@ -251,6 +249,9 @@ public class PrRepository : IPrRepository
             new { DivCode = divCode, Search = search },
             commandType: CommandType.StoredProcedure);
     }
+
+    private record PrSaveResult(decimal PrNo);
+    private record UserPermissionsRaw(int CanAdd, int CanModify, int CanDelete);
 
     public async Task<PrPrintDto?> GetPrintDataAsync(string divCode, decimal prNo, DateOnly prDate)
     {
