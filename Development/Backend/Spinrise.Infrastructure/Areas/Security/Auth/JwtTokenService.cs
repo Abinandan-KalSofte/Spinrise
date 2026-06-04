@@ -54,11 +54,12 @@ public class JwtTokenService : IJwtTokenService
 
             var user = new AuthUserDto
             {
-                UserId = principal.FindFirstValue(JwtRegisteredClaimNames.Email) ?? string.Empty,
-                UserName = principal.FindFirstValue(SpinriseClaims.UserName) ?? string.Empty,
-                Email = principal.FindFirstValue(JwtRegisteredClaimNames.Email) ?? string.Empty,
-                Role = principal.FindFirstValue(ClaimTypes.Role) ?? string.Empty,
-                DivCode = principal.FindFirstValue(SpinriseClaims.DivCode) ?? string.Empty
+                UserId   = principal.FindFirstValue(JwtRegisteredClaimNames.Email) ?? string.Empty,
+                UserName = principal.FindFirstValue(SpinriseClaims.UserName)       ?? string.Empty,
+                Email    = principal.FindFirstValue(JwtRegisteredClaimNames.Email) ?? string.Empty,
+                Role     = principal.FindFirstValue(ClaimTypes.Role)               ?? string.Empty,
+                DivCode  = principal.FindFirstValue(SpinriseClaims.DivCode)        ?? string.Empty,
+                DbName   = principal.FindFirstValue(SpinriseClaims.DbName)         ?? string.Empty,
             };
 
             return new RefreshTokenValidationResult
@@ -82,6 +83,7 @@ public class JwtTokenService : IJwtTokenService
         new(SpinriseClaims.DivCode, user.DivCode),
         new(SpinriseClaims.UserId, user.UserId),
         new(SpinriseClaims.UserName, user.UserName),
+        new(SpinriseClaims.DbName, user.DbName),
         new(SpinriseClaims.TokenType, tokenType),
         new(JwtRegisteredClaimNames.Iat,
             DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),

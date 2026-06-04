@@ -18,9 +18,12 @@ public class DivisionController : BaseApiController
 
     [AllowAnonymous]
     [HttpGet("active")]
-    public async Task<IActionResult> GetActiveDivisions()
+    public async Task<IActionResult> GetActiveDivisions([FromQuery] string? db)
     {
-        var divisions = await _divisionRepo.GetActiveDivisionsAsync();
+        var divisions = string.IsNullOrWhiteSpace(db)
+            ? await _divisionRepo.GetActiveDivisionsAsync()
+            : await _divisionRepo.GetActiveDivisionsAsync(db);
+
         return OkResponse(divisions);
     }
 }

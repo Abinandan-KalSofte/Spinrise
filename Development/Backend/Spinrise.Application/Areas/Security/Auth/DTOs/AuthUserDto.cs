@@ -9,4 +9,5 @@ public class AuthUserDto
     public string Role { get; set; } = null!;
     public string DivCode { get; set; } = null!;
     public string DivName { get; set; } = "";
+    public string DbName  { get; set; } = null!;
 }

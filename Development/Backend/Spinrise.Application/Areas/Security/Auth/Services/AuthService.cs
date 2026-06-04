@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Spinrise.Application.Areas.Security.Auth.DTOs;
 using Spinrise.Application.Areas.Security.Auth.Interfaces;
 
@@ -8,23 +9,34 @@ public class AuthService : IAuthService
     private readonly IAuthUserStore _userStore;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IRefreshTokenStore _refreshTokenStore;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         IAuthUserStore userStore,
         IJwtTokenService jwtTokenService,
-        IRefreshTokenStore refreshTokenStore)
+        IRefreshTokenStore refreshTokenStore,
+        ILogger<AuthService> logger)
     {
         _userStore = userStore;
         _jwtTokenService = jwtTokenService;
         _refreshTokenStore = refreshTokenStore;
+        _logger = logger;
     }
 
     public async Task<AuthResponseDto?> LoginAsync(LoginRequestDto request)
     {
         var user = await _userStore.ValidateCredentialsAsync(
-            request.UserName, request.DivCode, request.Password);
+            request.UserName, request.DivCode, request.Password, request.DbName);
 
-        if (user is null) return null;
+        if (user is null)
+        {
+            _logger.LogWarning("Login failed | User: {UserId} | Div: {DivCode} | DB: {DbName}",
+                request.UserName, request.DivCode, request.DbName);
+            return null;
+        }
+
+        _logger.LogInformation("Login | User: {UserId} | Div: {DivCode} | DB: {DbName}",
+            user.UserId, user.DivCode, request.DbName);
 
         return await CreateSessionAsync(user);
     }
@@ -40,7 +52,7 @@ public class AuthService : IAuthService
         await _refreshTokenStore.RevokeAsync(validation.TokenId);
 
         var freshUser = await _userStore.GetByUserIdAsync(
-            validation.User.UserId, validation.User.DivCode);
+            validation.User.UserId, validation.User.DivCode, validation.User.DbName);
 
         if (freshUser is null) return null;
 
@@ -54,6 +66,7 @@ public class AuthService : IAuthService
         var validation = _jwtTokenService.ValidateRefreshToken(refreshToken);
         if (validation is null) return;
 
+        _logger.LogInformation("Logout | User: {UserId}", validation.User.UserId);
         await _refreshTokenStore.RevokeAsync(validation.TokenId);
     }
 

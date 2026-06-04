@@ -14,4 +14,8 @@ public class LoginRequestDto
 
     [Required]
     public string Password { get; set; } = null!;
+
+    [Required]
+    [StringLength(128, MinimumLength = 1)]
+    public string DbName { get; set; } = null!;
 }
