@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.DTOs;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Interfaces;
 
@@ -6,10 +7,12 @@ namespace Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Services;
 public class PrService : IPrService
 {
     private readonly IPrRepository _repo;
+    private readonly ILogger<PrService> _logger;
 
-    public PrService(IPrRepository repo)
+    public PrService(IPrRepository repo, ILogger<PrService> logger)
     {
         _repo = repo;
+        _logger = logger;
     }
 
     public Task<PrParametersDto?> GetParametersAsync(string divCode) =>
@@ -47,21 +50,28 @@ public class PrService : IPrService
         string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate)
     {
         ValidateForSave(request, "ADD");
-        return await _repo.SaveAsync("ADD", divCode, request, userId, hostName, ipAddress, fDate, lDate);
+        var prNo = await _repo.SaveAsync("ADD", divCode, request, userId, hostName, ipAddress, fDate, lDate);
+        _logger.LogInformation("PR Add | Div: {DivCode} | PR: {PrNo} | User: {UserId}", divCode, prNo, userId);
+        return prNo;
     }
 
     public async Task<decimal> ModifyAsync(string divCode, SavePrRequest request, string userId,
         string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate)
     {
         if (request.ExistingPrNo is null || request.ExistingPrDate is null)
-            throw new InvalidOperationException("ExistingPrNo and ExistingPrDate are required for Modify.");
+            throw new InvalidOperationException("PR number and date are required to update this record.");
 
         ValidateForSave(request, "MODIFY");
-        return await _repo.SaveAsync("MODIFY", divCode, request, userId, hostName, ipAddress, fDate, lDate);
+        var prNo = await _repo.SaveAsync("MODIFY", divCode, request, userId, hostName, ipAddress, fDate, lDate);
+        _logger.LogInformation("PR Modify | Div: {DivCode} | PR: {PrNo} | User: {UserId}", divCode, prNo, userId);
+        return prNo;
     }
 
-    public Task DeleteAsync(string divCode, DeletePrRequest request, string userId, string? hostName, string? ipAddress) =>
-        _repo.DeleteAsync(divCode, request, userId, hostName, ipAddress);
+    public async Task DeleteAsync(string divCode, DeletePrRequest request, string userId, string? hostName, string? ipAddress)
+    {
+        await _repo.DeleteAsync(divCode, request, userId, hostName, ipAddress);
+        _logger.LogInformation("PR Delete | Div: {DivCode} | PR: {PrNo} | User: {UserId}", divCode, request.PrNo, userId);
+    }
 
     public Task<PendingOrderDto?> CheckPendingOrderAsync(string divCode, DateOnly fDate, DateOnly lDate,
         string depCode, string itemCode) =>
@@ -85,22 +95,22 @@ public class PrService : IPrService
     private static void ValidateForSave(SavePrRequest request, string mode)
     {
         if (string.IsNullOrWhiteSpace(request.DepCode))
-            throw new InvalidOperationException("Department Cannot be empty.");
+            throw new InvalidOperationException("Please select a department before saving.");
 
         var validLines = request.Lines
             .Where(l => !string.IsNullOrWhiteSpace(l.ItemCode))
             .ToList();
 
         if (validLines.Count == 0)
-            throw new InvalidOperationException("Purchase Requisition Requires at least one Item.");
+            throw new InvalidOperationException("Please add at least one item to the requisition.");
 
         foreach (var line in validLines)
         {
             if (line.QtyInd <= 0)
-                throw new InvalidOperationException("Required quantity cannot be empty.");
+                throw new InvalidOperationException("Required quantity must be greater than zero for all items.");
 
             if (line.RateSource == "MANUAL" && string.IsNullOrWhiteSpace(line.RateJustification))
-                throw new InvalidOperationException("Rate justification is required when Manual rate is selected.");
+                throw new InvalidOperationException("Please enter a rate justification for all items with a manual rate.");
         }
     }
 }

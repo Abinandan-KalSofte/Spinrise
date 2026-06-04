@@ -3,15 +3,30 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using QuestPDF.Infrastructure;
+using Serilog;
 using Spinrise.API.Middleware;
 using Spinrise.Application.Areas.Security.Auth.Interfaces;
 using Spinrise.Application.Areas.Security.Auth.Services;
 using Spinrise.Application.Areas.Security.Division.Interfaces;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Interfaces;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Services;
+using Spinrise.Application.Areas.PurchaseOrder.Amendment.Interfaces;
+using Spinrise.Application.Areas.PurchaseOrder.Amendment.Services;
+using Spinrise.Application.Areas.PurchaseOrder.FirstLevelApproval.Interfaces;
+using Spinrise.Application.Areas.PurchaseOrder.FirstLevelApproval.Services;
+using Spinrise.Application.Areas.Security.Company.Interfaces;
+using Spinrise.Infrastructure.Areas.Security.Company;
+using Spinrise.Application.Areas.Security.Database.Interfaces;
+using Spinrise.Infrastructure.Areas.Security.Database;
+using Spinrise.Application.Areas.PurchaseOrder.FinalLevelApproval.Interfaces;
+using Spinrise.Application.Areas.PurchaseOrder.FinalLevelApproval.Services;
+using Spinrise.Infrastructure.Areas.PurchaseOrder.FinalLevelApproval;
 using Spinrise.Infrastructure.Areas.Security.Auth;
 using Spinrise.Infrastructure.Areas.Security.Division;
 using Spinrise.Infrastructure.Areas.PurchaseOrder.PurchaseRequisition;
+using Spinrise.Infrastructure.Areas.PurchaseOrder.Amendment;
+using Spinrise.Infrastructure.Areas.PurchaseOrder.PurchaseRequisition;
+using Spinrise.Infrastructure.Areas.PurchaseOrder.FirstLevelApproval;
 using Dapper;
 using Spinrise.Infrastructure.Data;
 
@@ -19,6 +34,9 @@ SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
 QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((ctx, lc) => lc
+    .ReadFrom.Configuration(ctx.Configuration));
 
 // ── CORS ──────────────────────────────────────────────────────────────────
 var allowedOrigins = builder.Configuration
@@ -89,7 +107,10 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── Infrastructure / DI ────────────────────────────────────────────────────
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IDatabaseRepository, DatabaseRepository>();
 builder.Services.AddScoped<IAuthUserStore, DbAuthUserStore>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
@@ -97,12 +118,25 @@ builder.Services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
 builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
 builder.Services.AddScoped<IPrRepository, PrRepository>();
 builder.Services.AddScoped<IPrService, PrService>();
+builder.Services.AddScoped<IPrAmendmentRepository, PrAmendmentRepository>();
+builder.Services.AddScoped<IPrAmendmentService, PrAmendmentService>();
+builder.Services.AddScoped<IPrForeclosureRepository, PrForeclosureRepository>();
+builder.Services.AddScoped<IPrForeclosureService, PrForeclosureService>();
+builder.Services.AddScoped<IPrCancellationRepository, PrCancellationRepository>();
+builder.Services.AddScoped<IPrCancellationService, PrCancellationService>();
+builder.Services.AddScoped<IPrFirstApprovalRepository, PrFirstApprovalRepository>();
+builder.Services.AddScoped<IPrFirstApprovalService, PrFirstApprovalService>();
+builder.Services.AddScoped<IFinalLevelApprovalRepository, FinalLevelApprovalRepository>();
+builder.Services.AddScoped<IFinalLevelApprovalService, FinalLevelApprovalService>();
+builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 
 // ══════════════════════════════════════════════════════════════════════════
 var app = builder.Build();
 // ══════════════════════════════════════════════════════════════════════════
 
+app.UseSerilogRequestLogging();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<DbNameMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
