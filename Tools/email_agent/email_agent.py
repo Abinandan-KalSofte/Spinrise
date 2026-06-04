@@ -511,6 +511,11 @@ Rules:
 - Meetings, reports, communication tasks → Task
 - Maximum 3 tasks per email
 - Only include tasks clearly actionable by Abinandan or the team
+- Date-anchor rule: only extract a task if a date signal appears within 3 sentences of the action item.
+  Date signals include: a specific date (DD/MM/YYYY, YYYY-MM-DD), day names (Monday–Sunday),
+  "today", "tomorrow", "EOD", "by [date]", "ASAP", "this week", "next week", month names,
+  or a deadline phrase. If no date signal exists anywhere in the email, extract the task only if
+  it is a direct instruction from CEO/MD, and set due_date to null.
 - Exclude Jira system notifications, delivery receipts, and non-project emails — output NO_TASKS
 - Output ONLY the JSON array or NO_TASKS, nothing else
 
@@ -651,9 +656,13 @@ def process_email(ai: AIClient, msg: email.message.Message,
                 excel_path = cfg.get("excel_output", "")
                 if excel_path:
                     write_excel_row(excel_path, {
-                        "date": date_str, "sender": sender, "subject": subject,
-                        "priority": task.get("priority", "Medium"),
-                        "summary": task_summary, "jira_key": key or "",
+                        "date":        date_str,
+                        "sender":      sender,
+                        "subject":     subject,
+                        "priority":    task.get("priority", "Medium"),
+                        "summary":     task_summary,
+                        "description": task.get("description", ""),
+                        "jira_key":    key or "",
                     })
 
                 # 5. Append Claude prompt file
@@ -689,10 +698,22 @@ def _append_summary(summary_file: str, entry: str,
     logger.info(f"Appended summary to {path.name}")
 
 
+def _parse_email_date(date_str: str):
+    """Convert RFC 2822 email Date header to Python datetime for Excel; fall back to raw string."""
+    if not date_str:
+        return ""
+    try:
+        from email.utils import parsedate_to_datetime
+        return parsedate_to_datetime(date_str).replace(tzinfo=None)
+    except Exception:
+        return date_str
+
+
 def write_excel_row(excel_path: str, row: dict) -> None:
     """Append one task row to the Excel task log, creating the file + header if new."""
     try:
         from openpyxl import load_workbook, Workbook
+        from openpyxl.styles import Alignment
     except ImportError:
         logger.warning("openpyxl not installed — skipping Excel output")
         return
@@ -704,15 +725,28 @@ def write_excel_row(excel_path: str, row: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         wb = Workbook()
         ws = wb.active
-        ws.append(["Date", "From", "Subject", "Priority", "Task Summary", "Jira Key"])
+        ws.append(["Date", "From", "Subject", "Priority", "Task Summary", "Description", "Jira Key"])
+        # Column widths
+        ws.column_dimensions["A"].width = 18   # Date
+        ws.column_dimensions["B"].width = 28   # From
+        ws.column_dimensions["C"].width = 40   # Subject
+        ws.column_dimensions["D"].width = 10   # Priority
+        ws.column_dimensions["E"].width = 45   # Task Summary
+        ws.column_dimensions["F"].width = 55   # Description
+        ws.column_dimensions["G"].width = 12   # Jira Key
     ws.append([
-        row.get("date", ""),
+        _parse_email_date(row.get("date", "")),
         row.get("sender", ""),
         row.get("subject", ""),
         row.get("priority", ""),
         row.get("summary", ""),
+        row.get("description", ""),
         row.get("jira_key", ""),
     ])
+    # Wrap text in description cell
+    last_row = ws.max_row
+    ws.cell(last_row, 6).alignment = Alignment(wrap_text=True, vertical="top")
+    ws.row_dimensions[last_row].height = 40
     wb.save(path)
     logger.info(f"Excel row written → {path.name}")
 

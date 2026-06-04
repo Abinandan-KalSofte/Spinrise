@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Button, Input, Modal, type InputRef } from 'antd'
 import { SearchOutlined, BankOutlined } from '@ant-design/icons'
 import * as prApi from '../../api/prApi'
 import type { CostCentreOption } from '../../types'
 import { LOOKUP_TH as TH, LOOKUP_TD as TD } from '@/shared/styles/erpTable'
+import { useLookupModal } from '@/shared/hooks/useLookupModal'
 
 interface CostCentreLookupModalProps {
   open:      boolean
@@ -13,50 +14,17 @@ interface CostCentreLookupModalProps {
 }
 
 export function CostCentreLookupModal({ open, divCode, onSelect, onCancel }: CostCentreLookupModalProps) {
-  const [items,    setItems]    = useState<CostCentreOption[]>([])
-  const [loading,  setLoading]  = useState(false)
-  const [search,   setSearch]   = useState('')
-  const [selected, setSelected] = useState<CostCentreOption | null>(null)
-
   const searchInputRef = useRef<InputRef>(null)
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  const load = useCallback(async (q: string) => {
-    if (!divCode) return
-    setLoading(true)
-    try {
-      const result = await prApi.getCostCentreLookup(divCode, q.trim() || undefined)
-      setItems(result)
-    } catch { /* swallow */ }
-    finally { setLoading(false) }
-  }, [divCode])
+  const { items, loading, search, selected, handleSearchChange, handleRowClick, handleRowDblClick, handleConfirm } =
+    useLookupModal<CostCentreOption>({
+      fetcher:  (q) => divCode ? prApi.getCostCentreLookup(divCode, q.trim() || undefined) : Promise.resolve([]),
+      keyOf:    (cc) => cc.ccCode,
+      onSelect,
+    })
 
-  // destroyOnClose remounts fresh each open — just load and focus on mount
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load('')
-    setTimeout(() => searchInputRef.current?.focus(), 120)
-  }, [load])
-
-  const handleSearchChange = (q: string) => {
-    setSearch(q)
-    clearTimeout(searchTimerRef.current)
-    searchTimerRef.current = setTimeout(() => void load(q), 300)
-  }
-
-  const handleRowClick = (cc: CostCentreOption) =>
-    setSelected((prev) => prev?.ccCode === cc.ccCode ? null : cc)
-
-  const handleRowDblClick = (cc: CostCentreOption) => {
-    onSelect(cc)
-    setSelected(null)
-  }
-
-  const handleConfirm = () => {
-    if (!selected) return
-    onSelect(selected)
-    setSelected(null)
-  }
+  // destroyOnClose remounts fresh each open — focus search on mount
+  setTimeout(() => searchInputRef.current?.focus(), 120)
 
   return (
     <Modal

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Button, Input, Modal, type InputRef } from 'antd'
 import { SearchOutlined, ToolOutlined } from '@ant-design/icons'
 import * as prApi from '../../api/prApi'
 import type { MachineLookup } from '../../types'
 import { LOOKUP_TH as TH, LOOKUP_TD as TD } from '@/shared/styles/erpTable'
+import { useLookupModal } from '@/shared/hooks/useLookupModal'
 
 interface MachineLookupModalProps {
   open:      boolean
@@ -15,50 +16,19 @@ interface MachineLookupModalProps {
 
 
 export function MachineLookupModal({ open, divCode, depCode, onSelect, onCancel }: MachineLookupModalProps) {
-  const [machines,  setMachines]  = useState<MachineLookup[]>([])
-  const [loading,   setLoading]   = useState(false)
-  const [search,    setSearch]    = useState('')
-  const [selected,  setSelected]  = useState<MachineLookup | null>(null)
-
   const searchInputRef = useRef<InputRef>(null)
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  const load = useCallback(async (q: string) => {
-    if (!divCode || !depCode) return
-    setLoading(true)
-    try {
-      const result = await prApi.getMachineLookup(divCode, depCode, q.trim() || undefined)
-      setMachines(result)
-    } catch { /* swallow */ }
-    finally { setLoading(false) }
-  }, [divCode, depCode])
+  const { items: machines, loading, search, selected, handleSearchChange, handleRowClick, handleRowDblClick, handleConfirm } =
+    useLookupModal<MachineLookup>({
+      fetcher:  (q) => divCode && depCode
+        ? prApi.getMachineLookup(divCode, depCode, q.trim() || undefined)
+        : Promise.resolve([]),
+      keyOf:    (m) => m.macNo,
+      onSelect,
+    })
 
-  // destroyOnClose remounts fresh each open — just load and focus on mount
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load('')
-    setTimeout(() => searchInputRef.current?.focus(), 120)
-  }, [load])
-
-  const handleSearchChange = (q: string) => {
-    setSearch(q)
-    clearTimeout(searchTimerRef.current)
-    searchTimerRef.current = setTimeout(() => void load(q), 300)
-  }
-
-  const handleRowClick = (m: MachineLookup) =>
-    setSelected((prev) => prev?.macNo === m.macNo ? null : m)
-
-  const handleRowDblClick = (m: MachineLookup) => {
-    onSelect(m)
-    setSelected(null)
-  }
-
-  const handleConfirm = () => {
-    if (!selected) return
-    onSelect(selected)
-    setSelected(null)
-  }
+  // destroyOnClose remounts fresh each open — focus search on mount
+  setTimeout(() => searchInputRef.current?.focus(), 120)
 
   return (
     <Modal
