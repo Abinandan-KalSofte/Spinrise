@@ -366,8 +366,30 @@ These habits prevent the most common quality failures in this project.
 
 ### Session management
 
-- **Start with the checklist.** Especially: read yesterday's worklog and check `git status` for stray uncommitted changes.
+- **Read the worklog first — hard rule.** First action every session: `Read Docs/ChangeLog/[yesterday].md`. Identify what was left incomplete and continue from there. Do not start new work until prior WIP is confirmed resolved or explicitly deferred.
+- **Start with the checklist.** After reading the worklog, run `git status` — confirm no stray uncommitted changes before touching any file.
 - **15-turn rule.** After 15 turns on one module, start a new conversation. Reference prior work with `Read @worklog_[YYYYMMDD].md`.
+
+### Slash commands
+
+Use these slash commands consistently — they exist to catch mistakes before they reach production:
+
+| Command | When to use |
+|---|---|
+| `/review` | After **every** generated file — before accepting it |
+| `/explain` | When Claude output is unclear or you don't understand the reasoning |
+| `/fix @file` | When patching a specific bug — attach the file so Claude sees the exact context |
+
+Do not skip `/review` on the assumption that the output "looks right." The review step has caught silent regressions and wrong SP column names multiple times.
+
+### Output validation
+
+Before applying or committing any Claude-generated output:
+
+- **Diff first.** Read the full diff before applying. If an edit replaces more than expected, stop and ask.
+- **C# / TypeScript:** Verify the method signature matches the interface. Verify no new `using` import introduces an unintended dependency.
+- **SQL:** Execute on test DB (`SpinRiseSaranya` / JAT on 172.16.16.52\sql2016) and verify result set columns match what the C# DTO expects. Never touch `merged.sql` before a successful test run.
+- **JSON payloads:** Check the exact property names passed to Dapper match the SP parameter names (case-insensitive, but spelling must match exactly).
 
 ### Code quality
 

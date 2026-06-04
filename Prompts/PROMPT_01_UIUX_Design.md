@@ -117,6 +117,53 @@ Inactive toolbar buttons: `disabled` attribute on the button element.
 Never use `display:none` or `visibility:hidden` on toolbar buttons.
 Disabled state is styled via `.tb-btn:disabled { opacity:.4; cursor:not-allowed; }` (already in reference CSS).
 
+## Rule 9 — Zero Inline Styles
+Never write `style="..."` on any HTML element except:
+- Modal `style="width:NNNpx"` (modal width only — documented exception)
+- `style="display:none"` on hidden state elements toggled by JS
+
+Every spacing, color, font, alignment, and size decision must use CSS classes from the reference.
+If you find yourself writing an inline style that isn't a modal width → stop and add a CSS class instead.
+
+## Rule 10 — Grid Decimal Precision (Non-negotiable)
+All numeric columns in grids must display to the exact decimal places specified:
+
+| Column type | Decimal places | Example |
+|---|---|---|
+| Quantity (Qty Req'd, Qty Approved, Stock) | 3 dp | `100.000` |
+| Rate (LPO Rate, Unit Rate) | 4 dp | `45.5000` |
+| Value / Cost (Approx Cost, Sub Cost) | 2 dp | `4,550.00` |
+| Grand Total / Footer totals | 2 dp | `9,100.00` |
+
+Apply this in sample data cells AND in any JS `toFixed()` calls in the footer/KPI strip.
+Never display a rate as `45.5` — it must always be `45.5000`.
+
+---
+
+# HOW TO WRITE A DESIGN PROMPT FOR THIS TEMPLATE
+
+When invoking this prompt, structure your instruction in this order. Missing any section causes Claude to make assumptions — which is a policy violation.
+
+```
+1. CONTEXT      — Module name, submodule, FSD version, output folder and filename
+2. SCREENS      — Which screens/modes to generate (list every IST-bar state explicitly)
+3. FIELDS       — Any header fields that are ambiguous or need special attention
+4. RULES        — Business rules with UI impact that are NOT clearly stated in the FSD
+5. NEGATIVE SCOPE — What NOT to include (e.g., "Do not include the Delete Approval button — not in scope for this sprint")
+6. SELF-CHECK   — "Output the PASS/FAIL gate table as the last section"
+```
+
+Example:
+```
+Read PROMPT_01_UIUX_Design.md, then generate the HTML prototype for:
+CONTEXT: M01, PR Final Level Approval, FSD v1.2, output → Docs/UI_UX Designs/SPINRISE_FSD_M01_FinalApproval_v1_2/
+SCREENS: Pending List, Approve, View Approved
+FIELDS: Disposition dropdown values come from FSD Table 4 — use exactly those four options
+RULES: QtyApproved cannot exceed QtyRequired (show inline error, not a modal)
+NEGATIVE SCOPE: Do not add an "Undo Approval" button — out of scope
+SELF-CHECK: Output the full PASS/FAIL gate table at the end
+```
+
 ---
 
 # STEP 1 — READ AND PARSE THE FSD
@@ -498,32 +545,37 @@ After writing the new HTML file, update these files to add the new sidebar item:
 
 # OUTPUT CHECKLIST — VERIFY BEFORE FINISHING
 
+**This gate is mandatory. Output the full PASS/FAIL table as the last section of your response.**
+Do not omit it. Do not write "all checks pass" instead of the table.
+
 ```
-HTML PROTOTYPE GATE
-
-FSD:
-  [ ] All fields in prototype derived from FSD only — no invented fields
-  [ ] All toolbar buttons derived from FSD only
-  [ ] All modal columns derived from FSD only
-  [ ] All validations represented (inline error states, red borders)
-  [ ] IST bar has one button per form mode from FSD
-
-Design:
-  [ ] CSS copied verbatim from reference HTML — no modifications
-  [ ] No raw hex colors in HTML or inline styles
-  [ ] All labels Title Case, no ALL CAPS, no abbreviations
-  [ ] F1 not used anywhere in JavaScript
-  [ ] All toolbar buttons present and disabled (not hidden) in inactive states
-  [ ] Grid has minimum 3 sample rows with realistic data
-  [ ] All modals have minimum 5 sample rows
-
-Navigation:
-  [ ] New file has complete sidebar with ALL existing items
-  [ ] New file's nav item marked class="active"
-  [ ] index.html updated: sidebar item added + navigate() key added
-  [ ] All other HTML files updated: sidebar item added + navigate() key added
-  [ ] Relative paths correct (../ for subfolder files, no ../ for index.html)
+HTML PROTOTYPE GATE — [MODULE] [SUBMODULE]
 ```
+
+| # | Check | Status | Note (if FAIL) |
+|---|---|---|---|
+| F1 | All fields derived from FSD only — no invented fields | PASS/FAIL | |
+| F2 | All toolbar buttons derived from FSD only | PASS/FAIL | |
+| F3 | All modal columns derived from FSD only | PASS/FAIL | |
+| F4 | All validation states represented (red borders, error text) | PASS/FAIL | |
+| F5 | IST bar has one button per form mode from FSD | PASS/FAIL | |
+| D1 | CSS block copied verbatim from reference HTML | PASS/FAIL | |
+| D2 | No raw hex colors in HTML or inline styles | PASS/FAIL | |
+| D3 | No unauthorized inline styles (only modal width + display:none) | PASS/FAIL | |
+| D4 | All labels Title Case — no ALL CAPS, no abbreviations | PASS/FAIL | |
+| D5 | F1 not assigned anywhere in JavaScript | PASS/FAIL | |
+| D6 | All toolbar buttons disabled (not hidden) in inactive states | PASS/FAIL | |
+| D7 | Grid has minimum 3 sample rows with realistic mill data | PASS/FAIL | |
+| D8 | All modals have minimum 5 sample rows | PASS/FAIL | |
+| D9 | Qty columns = 3 dp, Rate = 4 dp, Value/Total = 2 dp in all cells | PASS/FAIL | |
+| N1 | New file has complete sidebar with ALL existing items | PASS/FAIL | |
+| N2 | New file's nav item marked class="active" | PASS/FAIL | |
+| N3 | index.html updated: sidebar item + navigate() key | PASS/FAIL | |
+| N4 | All other HTML files updated: sidebar item + navigate() key | PASS/FAIL | |
+| N5 | Relative paths correct (../ for subfolders, no ../ for index.html) | PASS/FAIL | |
+
+Any FAIL item must be fixed before the response is marked complete.
+Any GAP item must have a `<!-- GAP-XX: description -->` comment in the HTML.
 
 ---
 
