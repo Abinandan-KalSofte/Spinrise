@@ -5,6 +5,7 @@ public record ItemDetailDto(
     string    ItemName,
     string    Uom,
     decimal   MinLevel,
+    decimal   MaxLevel,
     byte[]?   ItemImage,
     string?   ImagePath,
     decimal   CurrentStock,

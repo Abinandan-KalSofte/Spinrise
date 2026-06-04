@@ -76,11 +76,17 @@ BEGIN
                 WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
                   AND lx.SecondApp='Y')
                 THEN 'SECOND LEVEL APPROVED'
-            WHEN EXISTS(
+            WHEN ISNULL(h.APPFLG, 'N') = 'Y'
+                AND EXISTS(
                 SELECT 1 FROM dbo.PO_PRL lx
                 WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
                   AND lx.FirstApp='Y')
                 THEN 'FIRST LEVEL APPROVED'
+            WHEN EXISTS(
+                SELECT 1 FROM dbo.PO_PRL lx
+                WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate
+                  AND lx.FirstApp='Y')
+                THEN 'PARTIALLY APPROVED'
             ELSE 'REQUESTED'
         END                             AS PrStatus,
         (SELECT COUNT(*) FROM dbo.PO_PRL lc
@@ -93,12 +99,12 @@ BEGIN
         ON it.ITYPE = h.ITYPE
     WHERE h.divcode = @DivCode
       AND CAST(h.prdate AS DATE) BETWEEN @FDate AND @LDate
+      AND ISNULL(h.amendno, 0) = 0   -- never show amendment records in list (all modes)
       -- Modify/Delete guards: exclude approved, cancelled, amended
       AND (@Mode = 'FIND'
            OR (
                ISNULL(h.APPFLG,      'N') <> 'Y'
            AND ISNULL(h.cancelflag,  '')  = ''
-           AND ISNULL(h.amendno,      0)  = 0
            AND ISNULL(
                (SELECT TOP 1 l2.AmdFlg FROM dbo.PO_PRL l2
                 WHERE l2.divcode=h.divcode AND l2.prno=h.prno AND l2.prdate=h.prdate), 'N') <> 'Y'

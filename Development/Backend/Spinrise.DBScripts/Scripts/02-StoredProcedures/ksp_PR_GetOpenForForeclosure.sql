@@ -23,8 +23,10 @@ BEGIN
                 - ISNULL(b.QTYORD,  0)
                 - ISNULL(b.enq_qty, 0)                    AS Balance,
             RTRIM(ISNULL(e.MAC_NO, ''))                   AS SccCode,
+            RTRIM(ISNULL(e.DESCRIPTION, ISNULL(e.MAC_NO, ''))) AS SccName,
             -- Convert raw PRSTATUS char to readable label matching the HTML prototype badges
             CASE RTRIM(ISNULL(b.PRSTATUS, ''))
+                WHEN 'F' THEN 'First Approved'
                 WHEN 'E' THEN 'Enquired'
                 WHEN 'C' THEN 'Received'
                 WHEN 'X' THEN 'Cancelled'
@@ -47,8 +49,7 @@ BEGIN
           AND CAST(ISNULL(a.prdate, b.prdate) AS DATE) BETWEEN @fdate AND @ldate
           AND ISNULL(a.cancelflag, '') <> 'Y'          -- fix: was 'IS NULL', live DB stores 'N'
           AND ISNULL(b.FClosed, 'N') <> 'Y'
-          AND RTRIM(ISNULL(b.prstatus, '')) <> 'X'   -- FC-BR-04: exclude individually-cancelled lines
-          AND RTRIM(ISNULL(b.prstatus, '')) <> 'C'   -- FC-EX-09/BR-03: exclude Received-status lines
+          AND RTRIM(ISNULL(b.prstatus, '')) NOT IN ('O','E','C','Z','X')   -- FC-EX-09/BR-03: exclude Ordered/Enquired/Received/ForceClosed/Cancelled
           AND (ISNULL(b.QTYREQD, 0) - ISNULL(b.QTYORD, 0) - ISNULL(b.enq_qty, 0)) > 0
           AND (ISNULL(b.QTYORD, 0) - ISNULL(b.qtyrec, 0)) >= 0
           AND (@prno_filter IS NULL

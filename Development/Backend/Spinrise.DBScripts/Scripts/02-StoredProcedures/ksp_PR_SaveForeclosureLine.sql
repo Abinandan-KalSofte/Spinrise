@@ -35,7 +35,7 @@ BEGIN
       AND  prdate   = @PrDate
       AND  itemcode = @ItemCode
       AND  (@PrSno = 0 OR prsno = @PrSno)
-      AND  prstatus <> 'C';   -- FC-EX-09/BR-03: never force-close a Received line
+      AND  prstatus NOT IN ('O','E','C','Z','X');   -- FC-EX-09/BR-03: never force-close Ordered/Enquired/Received/ForceClosed/Cancelled lines
 
     -- Step 2: Resolve depcode from header
     DECLARE @DepCode VARCHAR(3);

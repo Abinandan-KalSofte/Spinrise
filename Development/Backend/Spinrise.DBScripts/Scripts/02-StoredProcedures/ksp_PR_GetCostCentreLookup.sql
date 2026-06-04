@@ -1,30 +1,29 @@
 -- ============================================================
 -- ksp_PR_GetCostCentreLookup
--- Returns cost centres for the given division from IN_CC.
--- FSD Section 3 Col 11 / Section 4.3:
---   Cost Centre Code validates against IN_CC for division.
---   Lookup opens IN_CC listing for division.
--- Supports type-ahead search by cccode or ccname.
+-- Returns Sub Cost Centres for the given division from In_Scc.
+-- Only active records (Active = 'Y') are returned.
+-- Supports type-ahead search by SCCCODE or SCCNAME.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetCostCentreLookup
 (
     @DivCode   VARCHAR(2),
-    @Search    VARCHAR(50) = NULL   -- partial cccode or ccname; NULL = all
+    @Search    VARCHAR(50) = NULL
 )
 AS
 BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        c.cccode          AS CcCode,
-        RTRIM(c.ccname)   AS CcName
-    FROM dbo.IN_CC c
-    WHERE c.divcode = @DivCode
+        s.SCCCODE           AS CcCode,
+        RTRIM(s.SCCNAME)    AS CcName
+    FROM dbo.In_Scc s
+    WHERE s.Divcode = @DivCode
+      AND ISNULL(s.Active, '') = 'Y'
       AND (
             @Search IS NULL
-            OR CAST(c.cccode AS VARCHAR(10)) LIKE '%' + @Search + '%'
-            OR c.ccname LIKE '%' + @Search + '%'
+            OR CAST(s.SCCCODE AS VARCHAR(10)) LIKE '%' + @Search + '%'
+            OR s.SCCNAME LIKE '%' + @Search + '%'
           )
-    ORDER BY c.cccode;
+    ORDER BY s.SCCCODE;
 END;
 GO

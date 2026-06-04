@@ -43,7 +43,7 @@ BEGIN
             NULL AS MacNo,   NULL AS QtyInd,             NULL AS ReqdDate, NULL AS Rate,
             NULL AS LpoRate, NULL AS LpoDate,            NULL AS LpoFrom,
             NULL AS RateSource, NULL AS RateJustification,
-            NULL AS CurStock, NULL AS CcCode,
+            NULL AS CurStock, NULL AS CcCode, NULL AS CcName,
             NULL AS CatCode, NULL AS BgrpCode, NULL AS AppCost, NULL AS Remarks,
             NULL AS Sample,  NULL AS LineStatus
         WHERE 1 = 0;
@@ -146,6 +146,7 @@ BEGIN
         ''                                          AS RateJustification,
         ISNULL(l.curstock,       0)                 AS CurStock,
         l.CCCODE                                    AS CcCode,
+        RTRIM(ISNULL(scc.SCCNAME, ''))              AS CcName,
         RTRIM(ISNULL(l.CATCODE,  ''))               AS CatCode,
         RTRIM(ISNULL(l.BGRPCODE, ''))               AS BgrpCode,
         ISNULL(l.APPCOST,        0)                 AS AppCost,
@@ -153,8 +154,8 @@ BEGIN
         ISNULL(l.Sample,         'N')               AS Sample,
         ISNULL(l.prstatus,       '')                AS LineStatus
     FROM dbo.PO_PRL l
-    LEFT JOIN dbo.IN_ITEM i
-        ON i.itemcode = l.itemcode
+    LEFT JOIN dbo.IN_ITEM i  ON i.itemcode  = l.itemcode
+    LEFT JOIN dbo.In_Scc scc ON scc.SCCCODE = l.CCCODE AND scc.Divcode = l.divcode
     WHERE l.divcode = @DivCode
       AND l.prno    = @PrNo
       AND CAST(l.prdate AS DATE) = @PrDate

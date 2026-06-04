@@ -16,6 +16,7 @@ public record PrLineDto(
     string?  RateJustification,
     decimal  CurStock,
     decimal? CcCode,
+    string?  CcName,
     string?  CatCode,
     string?  BgrpCode,
     decimal  AppCost,

@@ -46,6 +46,42 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
+        -- ── 0a. FY Guard ──────────────────────────────────────────────────────
+        --    CR-PR-05: PR Date must fall within the currently open financial year.
+        --    @FDate / @LDate are the open-FY bounds supplied by the caller.
+        --    Guard applies to ADD only — MODIFY locks @PrDate to the stored date.
+        IF @Mode = 'ADD' AND (@PrDate < @FDate OR @PrDate > @LDate)
+            RAISERROR('PR Date is outside the open financial year. Please select a date within the current financial year.', 16, 1);
+
+        -- ── 0. Validate min / max order level per line ────────────────────────
+        DECLARE @LevelError NVARCHAR(500);
+
+        SELECT TOP 1 @LevelError =
+            CASE
+                WHEN ISNULL(i.minlevel, 0) > 0 AND j.QtyInd < ISNULL(i.minlevel, 0)
+                    THEN 'Required Quantity for ' + RTRIM(j.ItemCode)
+                         + ' cannot be less than Minimum Order Quantity ('
+                         + LTRIM(STR(ISNULL(i.minlevel, 0), 12, 3)) + ').'
+                WHEN ISNULL(i.maxlevel, 0) > 0 AND j.QtyInd > ISNULL(i.maxlevel, 0)
+                    THEN 'Required Quantity for ' + RTRIM(j.ItemCode)
+                         + ' cannot exceed Maximum Order Level ('
+                         + LTRIM(STR(ISNULL(i.maxlevel, 0), 12, 3)) + ').'
+            END
+        FROM OPENJSON(@LinesJson)
+        WITH (
+            ItemCode  VARCHAR(10)    '$.ItemCode',
+            QtyInd    NUMERIC(12,3)  '$.QtyInd'
+        ) j
+        INNER JOIN dbo.IN_ITEM i ON RTRIM(i.itemcode) = RTRIM(j.ItemCode)
+        WHERE RTRIM(ISNULL(j.ItemCode, '')) <> ''
+          AND (
+                (ISNULL(i.minlevel, 0) > 0 AND j.QtyInd < ISNULL(i.minlevel, 0))
+             OR (ISNULL(i.maxlevel, 0) > 0 AND j.QtyInd > ISNULL(i.maxlevel, 0))
+              );
+
+        IF @LevelError IS NOT NULL
+            RAISERROR(@LevelError, 16, 1);
+
         -- ── 1. Generate or retain PR number ───────────────────────────────
         DECLARE @PrNo NUMERIC(6,0);
 

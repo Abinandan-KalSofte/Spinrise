@@ -53,7 +53,7 @@ BEGIN
         CAST(l.reqddate AS DATE)                            AS ReqdDate,
         ISNULL(l.LPO_RATE,        0)                        AS LastPoRate,
         CAST(l.LPO_DATE AS DATE)                            AS LastPoDate,
-        ISNULL(l.curstock,        0)                        AS CurrentStock,
+        ISNULL(i.CURSTK,          0)                        AS CurrentStock,
         ISNULL(l.APPCOST,         0)                        AS AppCost,
         RTRIM(ISNULL(l.remarks,  ''))                       AS Remarks,
 
@@ -64,7 +64,7 @@ BEGIN
         ISNULL(l.DirectApp, 'N')                            AS DirectApp,
 
         -- Approver names (FirstappUser has lowercase 'a' in the actual DB column)
-        RTRIM(ISNULL(l.FirstappUser,  ''))                  AS FirstAppUser,
+        RTRIM(ISNULL(fau.user_name, ISNULL(l.FirstappUser, '')))  AS FirstAppUser,
         RTRIM(ISNULL(l.SecondAppUser, ''))                  AS SecondAppUser,
         RTRIM(ISNULL(l.ThirdAppUser,  ''))                  AS ThirdAppUser,
         RTRIM(ISNULL(l.FinalAppUser,  ''))                  AS FinalAppUser,
@@ -91,6 +91,9 @@ BEGIN
     OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
                  WHERE RTRIM(user_id) = RTRIM(h.createdby)
                    AND RTRIM(divcode) = RTRIM(h.divcode))                 pwd
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(l.FirstappUser)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))                 fau
     LEFT  JOIN dbo.IN_ITEM        i  ON i.itemcode = l.itemcode
     LEFT  JOIN dbo.MM_MACMAS      m  ON m.DIVCODE  = l.divcode
                                     AND m.MAC_NO   = l.macno
