@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { App as AntApp, Button, DatePicker, Form, Input, Select } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import { App as AntApp, Button, DatePicker, Form, Input, Select, Spin } from 'antd'
 import {
   ApartmentOutlined,
   BankOutlined,
@@ -14,13 +14,12 @@ import { getErrorMessage } from '@/shared/lib/errorHandler'
 import { authApi } from '../api/authApi'
 import { authService } from '../services/authService'
 import { useAuthStore } from '../store/useAuthStore'
-import type { ActiveDivisionDto, LoginDto } from '../types'
+import type { ActiveCompanyDto, ActiveDivisionDto, LoginDto } from '../types'
 
-const COMPANIES = [{ value: 'KAL', label: 'Kalpatharu Software Ltd' }]
+const LAST_DB_KEY = 'spinrise_last_db'
 
 interface LoginFormValues extends LoginDto {
   processingDate: ReturnType<typeof dayjs>
-  compCode: string
 }
 
 export default function LoginPage() {
@@ -31,30 +30,93 @@ export default function LoginPage() {
   const navigate          = useNavigate()
   const { execute, loading } = useAsync(authService.login)
 
-  const [divisions,   setDivisions]   = useState<ActiveDivisionDto[]>([])
-  const [divsLoading, setDivsLoading] = useState(false)
-  const [divsFailed,  setDivsFailed]  = useState(false)
-  const [currentTime, setCurrentTime] = useState(dayjs())
+  const [databases,    setDatabases]   = useState<string[]>([])
+  const [dbsLoading,   setDbsLoading]  = useState(true)
+  const [companies,    setCompanies]   = useState<ActiveCompanyDto[]>([])
+  const [divisions,    setDivisions]   = useState<ActiveDivisionDto[]>([])
+  const [divsLoading,  setDivsLoading] = useState(false)
+  const [dbErrorMsg,   setDbErrorMsg]  = useState<string | null>(null)
+  const [backendError, setBackendError] = useState(false)
+  const [currentTime,  setCurrentTime] = useState(dayjs())
+
+  const dataReady = !dbsLoading && !backendError
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(dayjs()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  useEffect(() => {
+  const loadDivisions = useCallback(async (dbName: string) => {
     setDivsLoading(true)
-    authApi.getActiveDivisions()
-      .then((divs) => { setDivisions(divs ?? []) })
-      .catch(() => { setDivsFailed(true) })
-      .finally(() => setDivsLoading(false))
+    setDivisions([])
+    form.setFieldValue('divCode', undefined)
+    try {
+      const divs = await authApi.getActiveDivisions(dbName)
+      setDivisions(divs ?? [])
+      if (divs && divs.length > 0) {
+        form.setFieldValue('divCode', divs[0].divCode)
+      }
+    } catch {
+      setDbErrorMsg('Database not recognised — unable to load Spinrise configuration.')
+    } finally {
+      setDivsLoading(false)
+    }
+  }, [form])
+
+  const loadCompanyName = useCallback(async (dbName: string) => {
+    try {
+      const comps = await authApi.getActiveCompanies(dbName)
+      setCompanies(comps ?? [])
+    } catch {
+      setCompanies([])
+    }
   }, [])
+
+  const loadInitialData = useCallback(async () => {
+    setBackendError(false)
+    setDbsLoading(true)
+    try {
+      const dbs = await authApi.getDatabases()
+      setDatabases(dbs ?? [])
+
+      const lastDb = localStorage.getItem(LAST_DB_KEY)
+      const toSelect = lastDb && (dbs ?? []).includes(lastDb) ? lastDb : null
+      if (toSelect) {
+        form.setFieldValue('dbName', toSelect)
+        await Promise.all([loadDivisions(toSelect), loadCompanyName(toSelect)])
+      }
+    } catch {
+      setBackendError(true)
+    } finally {
+      setDbsLoading(false)
+    }
+  }, [form, loadDivisions, loadCompanyName])
+
+  useEffect(() => {
+    void loadInitialData()
+  }, [loadInitialData])
+
+  const onDbChange = (dbName: string) => {
+    setDbErrorMsg(null)
+    localStorage.setItem(LAST_DB_KEY, dbName)
+    setCompanies([])
+    void Promise.all([loadDivisions(dbName), loadCompanyName(dbName)])
+  }
 
   const onFinish = async (values: LoginFormValues) => {
     try {
       const procDate = values.processingDate.format('YYYY-MM-DD')
-      const { processingDate: _pd, compCode: _cc, ...loginPayload } = values
+      const { processingDate: _pd, ...loginPayload } = values
       const session = await execute(loginPayload)
-      setAuthSession(session)
+
+      localStorage.setItem(LAST_DB_KEY, values.dbName)
+
+      const compName = companies[0]?.compName ?? values.dbName
+
+      setAuthSession({
+        user:   { ...session.user, compCode: values.dbName, compName, dbName: values.dbName },
+        tokens: session.tokens,
+      })
       setProcessingDate(procDate)
       void message.success(`Welcome, ${session.user.userName} — ${session.user.divName || session.user.divCode}`)
       navigate('/dashboard', { replace: true })
@@ -111,8 +173,68 @@ export default function LoginPage() {
             </div>
 
             {/* Right panel */}
-            <div className="login-card__right">
-              <div className="login-card__body">
+            <div className="login-card__right" style={{ position: 'relative' }}>
+
+              {/* ── Overlay: loading or backend error ────────────────── */}
+              {(dbsLoading || backendError) && (
+                <div style={{
+                  position: 'absolute', inset: 0, zIndex: 10,
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(255,255,255,0.94)',
+                  borderRadius: '0 16px 16px 0',
+                  gap: 16, padding: '32px 40px', textAlign: 'center',
+                }}>
+                  <style>{`
+                    @keyframes loginPulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+                  `}</style>
+
+                  {backendError ? (
+                    /* ── Backend not reachable ── */
+                    <>
+                      <div style={{ fontSize: 40, lineHeight: 1 }}>⚠️</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: '#b91c1c' }}>
+                        Cannot Connect to Server
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748b', maxWidth: 260, lineHeight: 1.6 }}>
+                        SPINRISE ERP server is not reachable.<br />
+                        Please check your network connection or contact your system administrator.
+                      </div>
+                      <div style={{
+                        fontSize: 11, color: '#94a3b8', fontFamily: 'monospace',
+                        background: '#f8fafc', border: '1px solid #e2e8f0',
+                        borderRadius: 6, padding: '4px 12px',
+                      }}>
+                        http://172.16.16.40:5001
+                      </div>
+                      <Button
+                        type="primary"
+                        onClick={() => void loadInitialData()}
+                        style={{ marginTop: 4 }}
+                      >
+                        Retry Connection
+                      </Button>
+                    </>
+                  ) : (
+                    /* ── Initial data loading ── */
+                    <>
+                      <Spin size="large" />
+                      <span style={{
+                        fontSize: 13, color: '#64748b', letterSpacing: '0.02em',
+                        animation: 'loginPulse 1.6s ease-in-out infinite',
+                      }}>
+                        Connecting to SPINRISE ERP…
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="login-card__body" style={{
+                opacity: dataReady ? 1 : 0,
+                transition: 'opacity 0.3s ease',
+                pointerEvents: dataReady ? 'auto' : 'none',
+              }}>
 
                 <div className="login-card__form-header">
                   <div className="login-card__form-title">Sign In</div>
@@ -123,19 +245,29 @@ export default function LoginPage() {
                   form={form}
                   layout="vertical"
                   onFinish={onFinish}
-                  initialValues={{ processingDate: dayjs(), compCode: 'KAL' }}
+                  initialValues={{ processingDate: dayjs() }}
                   requiredMark={false}
                   className="login-form"
                 >
                   {/* Company */}
                   <Form.Item
                     label="Company"
-                    name="compCode"
+                    name="dbName"
                     rules={[{ required: true, message: 'Please select a company' }]}
+                    validateStatus={dbErrorMsg ? 'error' : undefined}
+                    help={dbErrorMsg ?? undefined}
                   >
                     <Select
-                      options={COMPANIES}
+                      showSearch
+                      loading={dbsLoading}
+                      placeholder="Select company"
+                      optionFilterProp="label"
                       suffixIcon={<ApartmentOutlined style={{ color: '#9ca3af' }} />}
+                      options={databases.map((db) => ({ value: db, label: db }))}
+                      filterOption={(input, option) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
+                      onChange={onDbChange}
                     />
                   </Form.Item>
 
@@ -145,29 +277,21 @@ export default function LoginPage() {
                     name="divCode"
                     rules={[{ required: true, message: 'Please select your division' }]}
                   >
-                    {divsFailed ? (
-                      <Input
-                        prefix={<BankOutlined style={{ color: '#9ca3af' }} />}
-                        placeholder="Enter division code"
-                        maxLength={4}
-                        style={{ textTransform: 'uppercase' }}
-                      />
-                    ) : (
-                      <Select
-                        showSearch
-                        loading={divsLoading}
-                        placeholder="Select division"
-                        optionFilterProp="label"
-                        suffixIcon={<BankOutlined style={{ color: '#9ca3af' }} />}
-                        options={divisions.map((d) => ({
-                          value: d.divCode,
-                          label: `${d.divCode} – ${d.divName}`,
-                        }))}
-                        filterOption={(input, option) =>
-                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                        }
-                      />
-                    )}
+                    <Select
+                      showSearch
+                      loading={divsLoading}
+                      placeholder="Select Division"
+                      disabled={divisions.length === 0 && !divsLoading}
+                      optionFilterProp="label"
+                      suffixIcon={<BankOutlined style={{ color: '#9ca3af' }} />}
+                      options={divisions.map((d) => ({
+                        value: d.divCode,
+                        label: `${d.divCode} – ${d.divName}`,
+                      }))}
+                      filterOption={(input, option) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
+                    />
                   </Form.Item>
 
                   <div className="login-form-divider"><span>Credentials</span></div>

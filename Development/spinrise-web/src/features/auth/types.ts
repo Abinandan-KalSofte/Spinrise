@@ -1,7 +1,17 @@
 export interface LoginDto {
+  dbName:   string
   divCode:  string
   userName: string
   password: string
+}
+
+export interface DatabaseDto {
+  name: string
+}
+
+export interface ActiveCompanyDto {
+  compCode: string
+  compName: string
 }
 
 export interface ActiveDivisionDto {
@@ -19,6 +29,14 @@ export interface AuthUser {
   role:     UserRole
   divCode:  string
   divName:  string
+  compCode: string
+  compName: string
+  dbName:   string
+}
+
+export interface ActiveCompanyDto {
+  compCode: string
+  compName: string
 }
 
 export interface AuthTokens {

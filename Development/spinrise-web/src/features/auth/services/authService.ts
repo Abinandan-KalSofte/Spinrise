@@ -10,6 +10,9 @@ function mapAuthUser(user: AuthResponse['user']): AuthUser {
     role:     (user.role    ?? 'User') as UserRole,
     divCode:  user.divCode  ?? '',
     divName:  user.divName  ?? '',
+    compCode: '',
+    compName: '',
+    dbName:   user.dbName ?? '',
   }
 }
 

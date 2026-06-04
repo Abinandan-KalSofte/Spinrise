@@ -44,6 +44,7 @@ export const useAuthStore = create<AuthState>()(
           tokens:          state.tokens,
           isAuthenticated: state.isAuthenticated,
           processingDate:  state.processingDate,
+          dbName:          state.user?.dbName ?? null,
         }),
       },
     ),
