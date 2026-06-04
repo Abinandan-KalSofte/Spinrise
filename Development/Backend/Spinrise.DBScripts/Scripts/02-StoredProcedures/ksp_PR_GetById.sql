@@ -31,6 +31,7 @@ BEGIN
         RTRIM(ISNULL(h.PO_GRP,  ''))                            AS PoGrp,
         ISNULL(h.APPFLG, 'N')                                   AS AppFlg,
         ISNULL(h.cancelflag, '')                                AS CancelFlag,
+        RTRIM(ISNULL(h.CANREASON, ''))                          AS CancelReason,
         ISNULL(h.amendno, 0)                                    AS AmendNo,
         -- PR Status: derived from PO_PRL line-level prstatus (not a PO_PRH column)
         CASE
@@ -112,6 +113,7 @@ BEGIN
         ''                                          AS RateJustification,
         ISNULL(l.curstock,       0)                 AS CurStock,
         l.CCCODE                                    AS CcCode,
+        RTRIM(ISNULL(scc.SCCNAME, ''))              AS CcName,
         RTRIM(ISNULL(l.CATCODE,  ''))               AS CatCode,
         RTRIM(ISNULL(l.BGRPCODE, ''))               AS BgrpCode,
         ISNULL(l.APPCOST,        0)                 AS AppCost,
@@ -119,7 +121,8 @@ BEGIN
         ISNULL(l.Sample,         'N')               AS Sample,
         ISNULL(l.prstatus,       '')                AS LineStatus
     FROM dbo.PO_PRL l
-    LEFT JOIN dbo.IN_ITEM i ON i.itemcode = l.itemcode
+    LEFT JOIN dbo.IN_ITEM i  ON i.itemcode  = l.itemcode
+    LEFT JOIN dbo.In_Scc scc ON scc.SCCCODE = l.CCCODE AND scc.Divcode = l.divcode
     WHERE l.divcode = @DivCode
       AND l.prno    = @PrNo
       AND CAST(l.prdate AS DATE) = @PrDate

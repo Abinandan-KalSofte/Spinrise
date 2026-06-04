@@ -15,6 +15,7 @@ public record PrHeaderDto(
     string   PoGrp,
     string   AppFlg,
     string?  CancelFlag,
+    string?  CancelReason,
     decimal  AmendNo,
     string   PrStatus,
     string   CreatedBy,

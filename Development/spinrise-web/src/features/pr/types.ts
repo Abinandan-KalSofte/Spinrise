@@ -67,6 +67,7 @@ export interface ItemDetail {
   itemName:     string
   uom:          string
   minLevel:     number
+  maxLevel:     number
   itemImage:    string | null
   currentStock: number
   lpoRate:      number | null
@@ -76,7 +77,7 @@ export interface ItemDetail {
 
 // ── PR types ───────────────────────────────────────────────────────────────────
 
-export type RateSource = 'LPO' | 'AVG' | 'MANUAL'
+export type RateSource = 'LPO' | 'AVG' | 'MANUAL' | 'ORIGINAL'
 
 export interface PrLine {
   prSno:              number
@@ -117,9 +118,10 @@ export interface PrHeader {
   iDesc:      string
   refNo:      string
   poGrp:      string
-  appFlg:     string
-  cancelFlag: string | null
-  amendNo:    number
+  appFlg:       string
+  cancelFlag:   string | null
+  cancelReason: string | null
+  amendNo:      number
   prStatus:   string
   createdBy:  string
   createdDt:  string
@@ -201,6 +203,200 @@ export interface UserPermissions {
 // ── Screen mode ────────────────────────────────────────────────────────────────
 
 export type ScreenMode = 'VIEW' | 'ADD' | 'EDIT' | 'DELETE'
+
+// ── Amendment types ────────────────────────────────────────────────────────────
+
+export interface AmendmentLine {
+  prSno:             number
+  itemCode:          string
+  itemName:          string
+  uom:               string
+  minLevel:          number
+  maxLevel:          number
+  macNo:             string
+  macDesc:           string
+  qtyInd:            number
+  reqdDate:          string | null
+  rate:              number
+  rateSource:        RateSource
+  rateJustification: string
+  curStock:          number
+  ccCode:            number | null
+  ccName:            string
+  catCode:           string
+  bgrpCode:          string
+  place:             string
+  appCost:           number
+  remarks:           string
+  qtyApproved:       number
+  qtyOrdered:        number
+  qtyReceived:       number
+  lineStatus:        string
+  rowVersion:        string | null   // base64 PO_PRL row_version; null for history/fallback rows
+}
+
+export type AmendmentLineLocal = AmendmentLine & { key: string }
+
+export interface AmendmentHeader {
+  divCode:          string
+  prNo:             number
+  prDate:           string
+  amendNo:          number
+  amendDate:        string
+  amendmentReason:  string
+  refNo:            string
+  createdBy:        string
+  createdDt:        string
+  rowVersion:       string
+  depCode:          string
+  depName:          string
+  reqName:          string
+  reqEmpName:       string
+  section:          string
+  iType:            string
+  iDesc:            string
+  appFlg:           string
+  cancelFlag:       string
+  lines:            AmendmentLine[]
+}
+
+export interface AmendmentSummary {
+  divCode:         string
+  prNo:            number
+  prDate:          string
+  amendNo:         number
+  amendDate:       string
+  amendmentReason: string
+  refNo:           string
+  createdBy:       string
+  depCode:         string
+  depName:         string
+  reqName:         string
+  totalLines:      number
+}
+
+export interface SaveAmendmentLineRequest {
+  prSno:             number
+  itemCode:          string
+  macNo:             string
+  qtyInd:            number
+  reqdDate:          string | null
+  rate:              number
+  rateSource:        RateSource
+  rateJustification: string
+  curStock:          number
+  ccCode:            number | null
+  catCode:           string
+  bgrpCode:          string
+  place:             string
+  appCost:           number
+  remarks:           string
+  rowVersion:        string | null   // base64; required for PATH A (existing lines)
+}
+
+export interface SaveAmendmentRequest {
+  prNo:             string
+  prDate:           string
+  amendDate:        string
+  amendmentReason:  string
+  refNo:            string | null
+  rowVersion:       string | null
+  pDate:            string    // processing date; enforces BR-AMD-01 at SP level
+  lines:            SaveAmendmentLineRequest[]
+}
+
+// ── PR Foreclosure ─────────────────────────────────────────────────────────────
+
+export interface PrForeclosureLineDto {
+  prNo:       number
+  prDate:     string
+  department: string
+  depCode:    string
+  prSno:      number
+  itemCode:   string
+  itemName:   string
+  uom:        string
+  prQty:      number
+  ordQty:     number
+  balance:    number
+  sccCode:    string
+  sccName:    string
+  prevStatus: string
+}
+
+export interface PrForeclosureLineKey {
+  prNo:     number
+  prDate:   string
+  prSno:    number
+  itemCode: string
+  depCode:  string
+  balance:  number
+}
+
+// ── PR Cancellation ────────────────────────────────────────────────────────────
+
+export interface PrCancellablePrDto {
+  prNo:       number
+  prDate:     string
+  depCode:    string
+  department: string
+  requester:  string
+  itemCount:  number
+  refNo:      string
+  prType:     string
+  section:    string
+  createdBy:  string
+  status:     string
+}
+
+export interface PrForCancellationHeader {
+  prNo:        number
+  prDate:      string
+  depCode:     string
+  department:  string
+  section:     string
+  requestedBy: string
+  prType:      string
+  refNo:       string
+  createdBy:   string
+  status:      string
+}
+
+export interface PrForCancellationLine {
+  sno:          number
+  itemCode:     string
+  itemName:     string
+  uom:          string
+  qtyRequired:  number
+  qtyApproved:  number
+  qtyOrdered:   number
+  qtyReceived:  number
+  currentStock: number
+  rate:         number
+  approxCost:   number
+  reqdDate:     string
+  machine:      string
+  placeOfIssue: string
+  remarks:      string
+  isSample:     boolean
+}
+
+export interface PrForCancellationDetail {
+  header: PrForCancellationHeader
+  lines:  PrForCancellationLine[]
+}
+
+export interface PrCancelledPrDto {
+  prNo:         number
+  prDate:       string
+  depCode:      string
+  department:   string
+  requestedBy:  string
+  cancelledOn:  string
+  prevStatus:   string
+  rowVersion:   string
+  cancelReason: string | null
+}
 
 // ── KPI status badge colour map (Blueprint Section 10) ────────────────────────
 

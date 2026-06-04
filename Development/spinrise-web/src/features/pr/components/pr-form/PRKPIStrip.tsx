@@ -40,7 +40,7 @@ function getStageIndex(status: string | null): number {
   return 0
 }
 
-function ApprovalStageBar({ prStatus, savedPrNo }: { prStatus: string | null; savedPrNo: number | null }) {
+function ApprovalStageBar({ prStatus, savedPrNo, cancelReason }: { prStatus: string | null; savedPrNo: number | null; cancelReason?: string | null }) {
   if (!savedPrNo) return null
 
   const cancelled   = prStatus === 'PR. CANCELLED'
@@ -56,6 +56,11 @@ function ApprovalStageBar({ prStatus, savedPrNo }: { prStatus: string | null; sa
         }}>
           ✕ This PR has been cancelled
         </div>
+        {cancelReason && (
+          <span style={{ fontSize: 11, color: C.red, fontStyle: 'italic' }}>
+            Reason: {cancelReason}
+          </span>
+        )}
       </div>
     )
   }
@@ -142,9 +147,10 @@ interface PRKPIStripProps {
   savedPrNo:           number | null
   isNewMode?:          boolean
   hideApprovalStatus?: boolean
+  cancelReason?:       string | null
 }
 
-export function PRKPIStrip({ validLinesCount, totalQtyDisplay, totalCost, prDate, prStatus, savedPrNo, isNewMode = false, hideApprovalStatus = false }: PRKPIStripProps) {
+export function PRKPIStrip({ validLinesCount, totalQtyDisplay, totalCost, prDate, prStatus, savedPrNo, isNewMode = false, hideApprovalStatus = false, cancelReason }: PRKPIStripProps) {
   const statusInfo  = prStatus ? (PR_STATUS_BADGE[prStatus] ?? null) : null
   const daysOpen    = savedPrNo && prDate ? dayjs().diff(dayjs(prDate), 'day') : null
   const daysColor   = daysOpen === null ? C.text3 : daysOpen < 5 ? C.green : daysOpen <= 14 ? C.amber : C.red
@@ -156,7 +162,7 @@ export function PRKPIStrip({ validLinesCount, totalQtyDisplay, totalCost, prDate
 
   return (
     <div style={{ background: C.bg2, borderTop: `1px solid ${C.border}`, padding: '8px 16px', flexShrink: 0 }}>
-      {!hideApprovalStatus && <ApprovalStageBar prStatus={prStatus} savedPrNo={savedPrNo} />}
+      {!hideApprovalStatus && <ApprovalStageBar prStatus={prStatus} savedPrNo={savedPrNo} cancelReason={cancelReason} />}
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
         <KPICard label="Total Lines" value={validLinesCount}
           sub={`${validLinesCount === 1 ? 'Item' : 'Items'} in this PR`}
@@ -166,7 +172,7 @@ export function PRKPIStrip({ validLinesCount, totalQtyDisplay, totalCost, prDate
           <>
             <KPICard label="Approx. Budget"
               value={totalCost > 0 ? `₹ ${totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-              sub="Indicative Cost" valueColor={totalCost > 0 ? C.amber : C.text3}
+              sub="" valueColor={totalCost > 0 ? C.amber : C.text3}
               accent={totalCost > 0 ? C.amber : undefined} />
             <KPICard label="Days Open" value={daysOpen !== null ? daysOpen : '—'}
               sub={daysOpen === null ? 'Not yet saved' : daysOpen === 0 ? 'Created today' : `${daysOpen} days since creation`}
@@ -177,7 +183,7 @@ export function PRKPIStrip({ validLinesCount, totalQtyDisplay, totalCost, prDate
                 value={statusInfo
                   ? <span style={{ fontWeight: 700, color: statusColor }}>{toSentenceCase(prStatus!)}</span>
                   : <span style={{ color: C.text3, fontWeight: 400 }}>Draft</span>}
-                sub={!savedPrNo ? 'Not yet saved' : prStatus === 'PR. CANCELLED' ? 'No further action' : 'Awaiting Approval'}
+                sub={!savedPrNo ? 'Not yet saved' : prStatus === 'PR. CANCELLED' ? 'No further action' : ''}
                 accent={statusColor !== C.text3 ? statusColor : undefined} />
             )}
           </>

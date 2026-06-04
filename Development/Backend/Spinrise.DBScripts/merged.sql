@@ -7,6 +7,22 @@
 --       Run first if needed: ALTER DATABASE JAT SET COMPATIBILITY_LEVEL = 130;
 -- ============================================================
 
+-- ksp_GetDatabases (master — lists all user databases for login screen)
+USE master;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.ksp_GetDatabases
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT name
+    FROM sys.databases
+    WHERE name NOT IN ('master','tempdb','msdb','model','ReportServer','ReportServerTempDB','pubs','Northwind')
+    ORDER BY name;
+END
+GO
+
 USE JAT;
 GO
 
@@ -14,7 +30,7 @@ GO
 ALTER DATABASE JAT SET COMPATIBILITY_LEVEL = 130;
 GO
 
--- â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 -- ksp_Auth_ValidateUser
 CREATE OR ALTER PROCEDURE dbo.ksp_Auth_ValidateUser
 (
@@ -285,9 +301,10 @@ END;
 GO
 
 -- ksp_PR_GetItemDetail
--- NOTE: CurrentStock uses IN_ITEM.CURSTK (direct).
---       FY-based conservative stock calc will be restored
---       once IN_IDET/IN_TRNTAIL column names are confirmed.
+-- CurrentStock formula (ported from VB6 stkchk1):
+--   Opening balance from IN_IDET (YEARMONTH = YYYYoo, TC = 0)
+--   + FY receipts up to @PDate from IN_TRNTAIL (TCTYPE 1/3/5/7/9/12)
+--   - FY issues  up to @PDate from IN_TRNTAIL (TCTYPE 2/4/6/8/11)
 CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetItemDetail
 (
     @DivCode   VARCHAR(2),
@@ -314,19 +331,58 @@ BEGIN
       AND ISNULL(i.IsItemActive, 1) = 1;
 
     -- Result set 2: Stock + rates
-    DECLARE @CurrentStock NUMERIC(12,3) = 0;
-    SELECT @CurrentStock = ISNULL(CURSTK, 0) FROM dbo.IN_ITEM WHERE itemcode = @ItemCode;
+    -- oym: opening year-month key — e.g. FY start 01-Apr-2025 → '202500'
+    DECLARE @OYM          VARCHAR(6)     = CAST(YEAR(@FDate) AS VARCHAR(4)) + '00';
+    DECLARE @CurrentStock NUMERIC(12,3)  = 0;
+
+    SELECT @CurrentStock = ISNULL(SUM(ALLREC) - SUM(ALLISS), 0)
+    FROM (
+        -- 1. Opening balance: IN_IDET opening record (TC = 0)
+        SELECT ISNULL(SUM(QUANTITY), 0)   AS ALLREC,
+               CAST(0 AS NUMERIC(12,3))   AS ALLISS
+        FROM   dbo.IN_IDET
+        WHERE  DIVCODE   = @DivCode
+          AND  ITEMCODE  = @ItemCode
+          AND  YEARMONTH = @OYM
+          AND  TC        = 0
+
+        UNION ALL
+
+        -- 2. FY receipts up to @PDate (TCTYPE = 1,3,5,7,9,12)
+        SELECT ISNULL(SUM(A.QUANTITY), 0) AS ALLREC,
+               CAST(0 AS NUMERIC(12,3))   AS ALLISS
+        FROM   dbo.IN_TRNTAIL A
+        INNER JOIN dbo.IN_TC  T ON T.TC = A.TC
+        WHERE  A.DIVCODE  = @DivCode
+          AND  A.ITEMCODE = @ItemCode
+          AND  T.TCTYPE   IN (1, 3, 5, 7, 9, 12)
+          AND  A.DOCDT   >= @FDate
+          AND  A.DOCDT   <= @PDate
+
+        UNION ALL
+
+        -- 3. FY issues up to @PDate (TCTYPE = 2,4,6,8,11)
+        SELECT CAST(0 AS NUMERIC(12,3))          AS ALLREC,
+               ISNULL(SUM(ABS(A.QUANTITY)), 0)   AS ALLISS
+        FROM   dbo.IN_TRNTAIL A
+        INNER JOIN dbo.IN_TC  T ON T.TC = A.TC
+        WHERE  A.DIVCODE  = @DivCode
+          AND  A.ITEMCODE = @ItemCode
+          AND  T.TCTYPE   IN (2, 4, 6, 8, 11)
+          AND  A.DOCDT   >= @FDate
+          AND  A.DOCDT   <= @PDate
+    ) S;
 
     DECLARE @LpoRate NUMERIC(13,4) = NULL;
-    DECLARE @LpoDate DATE = NULL;
+    DECLARE @LpoDate DATE          = NULL;
     SELECT TOP 1
         @LpoRate = pl.RATE,
         @LpoDate = CAST(ph.porddt AS DATE)
     FROM dbo.PO_ORDL pl
     INNER JOIN dbo.PO_ORDH ph
-        ON ph.divcode = pl.divcode
-       AND ph.pordno  = pl.pordno
-       AND ph.porddt  = pl.porddt
+        ON  ph.divcode = pl.divcode
+        AND ph.pordno  = pl.pordno
+        AND ph.porddt  = pl.porddt
     WHERE pl.itemcode = @ItemCode
       AND pl.divcode  = @DivCode
       AND ISNULL(ph.CANFLG, 'N') = 'N'
@@ -496,6 +552,7 @@ BEGIN
         RTRIM(ISNULL(h.PO_GRP,  ''))                            AS PoGrp,
         ISNULL(h.APPFLG, 'N')                                   AS AppFlg,
         ISNULL(h.cancelflag, '')                                AS CancelFlag,
+        RTRIM(ISNULL(h.CANREASON, ''))                          AS CancelReason,
         ISNULL(h.amendno, 0)                                    AS AmendNo,
         CASE
             WHEN ISNULL(h.cancelflag, '') <> ''
@@ -616,8 +673,11 @@ BEGIN
                 THEN 'THIRD LEVEL APPROVED'
             WHEN EXISTS(SELECT 1 FROM dbo.PO_PRL lx WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate AND lx.SecondApp='Y')
                 THEN 'SECOND LEVEL APPROVED'
-            WHEN EXISTS(SELECT 1 FROM dbo.PO_PRL lx WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate AND lx.FirstApp='Y')
+            WHEN ISNULL(h.APPFLG, 'N') = 'Y'
+                AND EXISTS(SELECT 1 FROM dbo.PO_PRL lx WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate AND lx.FirstApp='Y')
                 THEN 'FIRST LEVEL APPROVED'
+            WHEN EXISTS(SELECT 1 FROM dbo.PO_PRL lx WHERE lx.divcode=h.divcode AND lx.prno=h.prno AND lx.prdate=h.prdate AND lx.FirstApp='Y')
+                THEN 'PARTIALLY APPROVED'
             ELSE 'REQUESTED'
         END                             AS PrStatus,
         (SELECT COUNT(*) FROM dbo.PO_PRL lc
@@ -674,6 +734,13 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
+
+        -- ── 0a. FY Guard ──────────────────────────────────────────────────────
+        --    CR-PR-05: PR Date must fall within the currently open financial year.
+        --    @FDate / @LDate are the open-FY bounds supplied by the caller.
+        --    Guard applies to ADD only — MODIFY locks @PrDate to the stored date.
+        IF @Mode = 'ADD' AND (@PrDate < @FDate OR @PrDate > @LDate)
+            RAISERROR('PR Date is outside the open financial year. Please select a date within the current financial year.', 16, 1);
 
         -- â”€â”€ 0. Validate min / max order level per line â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         DECLARE @LevelError NVARCHAR(500);
@@ -1206,7 +1273,7 @@ BEGIN
         ISNULL(l.DirectApp, 'N')                            AS DirectApp,
 
         -- Approver names (FirstappUser has lowercase 'a' in the actual DB column)
-        RTRIM(ISNULL(l.FirstappUser,  ''))                  AS FirstAppUser,
+        RTRIM(ISNULL(fau.user_name, ISNULL(l.FirstappUser, '')))  AS FirstAppUser,
         RTRIM(ISNULL(l.SecondAppUser, ''))                  AS SecondAppUser,
         RTRIM(ISNULL(l.ThirdAppUser,  ''))                  AS ThirdAppUser,
         RTRIM(ISNULL(l.FinalAppUser,  ''))                  AS FinalAppUser,
@@ -1233,6 +1300,9 @@ BEGIN
     OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
                  WHERE RTRIM(user_id) = RTRIM(h.createdby)
                    AND RTRIM(divcode) = RTRIM(h.divcode))                 pwd
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(l.FirstappUser)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))                 fau
     LEFT  JOIN dbo.IN_ITEM        i  ON i.itemcode = l.itemcode
     LEFT  JOIN dbo.MM_MACMAS      m  ON m.DIVCODE  = l.divcode
                                     AND m.MAC_NO   = l.macno
@@ -1476,7 +1546,7 @@ BEGIN
             OR ISNULL(a.amendreason, '')     LIKE '%' + @Search + '%'
             OR ISNULL(d.Depname,     '')     LIKE '%' + @Search + '%'
            )
-    ORDER BY a.amenddate DESC, a.amendno DESC
+    ORDER BY a.amendno ASC
     OFFSET (@PageNumber - 1) * @PageSize ROWS
     FETCH  NEXT @PageSize ROWS ONLY;
 END;
@@ -1489,10 +1559,10 @@ GO
 -- ============================================================
 -- ksp_PR_GetAmendmentForNew
 -- Returns PR header + lines to pre-populate a new amendment form.
--- FSD: M01 PR Amendment Entry v2.3
--- First amendment:  reads header from PO_PRH, lines from PO_PRL.
--- 2nd+ amendment:   PO_PRH/PO_PRL deleted â€” falls back to latest
---                   PO_APRH / PO_APRL (ORDER BY amendno DESC / MAX).
+-- FSD: M01 PR Amendment Entry v2.3 / CR-M01-AM-001
+-- BR-AMD-03: PR eligibility guard added (02-Jun-2026)
+-- Primary path:   reads header from PO_PRH, lines from PO_PRL (includes row_version per line).
+-- Fallback path:  PO_PRH/PO_PRL absent (legacy data from pre-CR save) — reads from PO_APRH/PO_APRL.
 -- ============================================================
 CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_GetAmendmentForNew]
     @DivCode    VARCHAR(10),
@@ -1501,6 +1571,26 @@ CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_GetAmendmentForNew]
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    -- ── 0. BR-AMD-03: PR eligibility guard ────────────────────────────────────
+    IF NOT EXISTS (
+        SELECT 1 FROM dbo.PO_PRH
+        WHERE  divcode              = @DivCode
+          AND  prno                 = @PrNo
+          AND  CAST(prdate AS DATE) = @PrDate
+          AND  ISNULL(APPFLG, 'N') = 'N'
+          AND  ISNULL(cancelflag, 'N') <> 'Y'
+    )
+        RAISERROR('This PR is not eligible for amendment — it is approved or cancelled.', 16, 1);
+
+    IF EXISTS (
+        SELECT 1 FROM dbo.PO_PRL
+        WHERE  divcode              = @DivCode
+          AND  prno                 = @PrNo
+          AND  CAST(prdate AS DATE) = @PrDate
+          AND  (ISNULL(qtyord, 0) > 0 OR ISNULL(prstatus, '') IN ('O', 'E', 'C', 'Z'))
+    )
+        RAISERROR('This PR is not eligible for amendment — lines have been ordered, enquired, or received.', 16, 1);
 
     -- â”€â”€ 1. Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     IF EXISTS (
@@ -1632,7 +1722,8 @@ BEGIN
             ISNULL(l.FirstAppQty, 0)                AS qtyApproved,
             ISNULL(l.qtyord, 0)                     AS qtyOrdered,
             ISNULL(l.qtyrec, 0)                     AS qtyReceived,
-            ISNULL(l.prstatus, '')                  AS lineStatus
+            ISNULL(l.prstatus, '')                  AS lineStatus,
+            l.row_version                           AS RowVersion
         FROM   dbo.PO_PRL l
         JOIN   dbo.IN_ITEM i    ON i.itemcode  = l.itemcode
         JOIN   dbo.PO_PRH  h    ON h.divcode              = l.divcode
@@ -1680,7 +1771,8 @@ BEGIN
             0                                       AS qtyApproved,
             0                                       AS qtyOrdered,
             0                                       AS qtyReceived,
-            ''                                      AS lineStatus
+            ''                                      AS lineStatus,
+            NULL                                    AS RowVersion
         FROM   dbo.PO_APRL l
         JOIN   dbo.IN_ITEM i    ON i.itemcode  = l.itemcode
         JOIN   dbo.PO_APRH ah   ON ah.divcode              = l.divcode
@@ -1934,19 +2026,31 @@ GO
 
 -- ============================================================
 -- ksp_PR_SaveAmendment
--- FSD: M01 PR Amendment Entry v2.3  Â§4 Save Sequence
--- ADD:    capture header from PO_PRH â†’ INSERT PO_APRH + PO_APRL
---         â†’ DELETE PO_PRL â†’ DELETE PO_PRH â†’ LogDet_PO
--- MODIFY: UPDATE PO_APRH header, DELETE + re-INSERT PO_APRL, audit.
--- DELETE: DELETE PO_APRL + PO_APRH, audit.
--- Business rules:
---   FY guard via PP_Year (CLOSED <> 'Y')
---   AmendDate defaults to GETDATE() at time of amendment creation
---   RATE_JUSTIFICATION mandatory when RATE_SOURCE = 'MANUAL'
---   row_version concurrency on MODIFY / DELETE
+-- FSD: M01 PR Amendment Entry v2.3  §4 Save Sequence
+-- CR:  CR-M01-AM-001 — QA/CEO approved 31-May-2026 (T. Mani)
+-- Business logic: PR_Amendment_Form.md (Mariyaiya) — implemented 02-Jun-2026
+--
+-- ADD:         INSERT PO_APRH + PO_APRL snapshot; UPDATE PO_PRH (refno);
+--              delta-update PO_PRL — PATH A (UPDATE) / PATH B (INSERT) / PATH C (DELETE)
+-- MODIFY:      UPDATE PO_APRH header, DELETE + re-INSERT PO_APRL, audit.
+-- DELETE:      Dependency check; DELETE PO_APRL + PO_APRH, audit.
+-- DELETE_LINE: Single-line DELETE from PO_APRL (deltype=2), dependency check, audit.
+--
+-- Business rules enforced:
+--   BR-AMD-01: AmendDate must equal @PDate (processing date)
+--   BR-AMD-03: PR eligibility checked in ksp_PR_GetAmendmentForNew
+--   BR-AMD-04: Duplicate item codes rejected
+--   Qty < ordered qty rejected on ADD
+--   Required Date < pdate rejected on ADD
+--   PATH C: guard PRSTATUS NOT IN ('O','E','C','Z','X')
+--   PATH A: row_version concurrency per line; approval flags preserved
+--   PATH B: MAX(prsno)+1 with UPDLOCK
+--   DELETE/DELETE_LINE: PO_PRL dependency check (qtyord > 0 or status ordered/enquired)
+--   amdflg = 'Y' set on PO_APRL snapshot lines and PATH B new PO_PRL inserts
+--   No DELETE of PO_PRH or PO_PRL
 -- ============================================================
 CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_SaveAmendment]
-    @Mode               VARCHAR(6),         -- 'ADD' | 'MODIFY' | 'DELETE'
+    @Mode               VARCHAR(15),        -- 'ADD' | 'MODIFY' | 'DELETE' | 'DELETE_LINE'
     @DivCode            VARCHAR(10),
     @PrNo               NUMERIC(6,0),
     @PrDate             DATE,
@@ -1958,9 +2062,11 @@ CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_SaveAmendment]
     @IpAddress          VARCHAR(50)     = NULL,
     @FDate              DATE,
     @LDate              DATE,
+    @PDate              DATE,               -- processing date; enforces BR-AMD-01
     @AmendNo            INT             = NULL,
     @RowVersion         VARBINARY(8)    = NULL,
-    @LinesJson          NVARCHAR(MAX)   = NULL
+    @LinesJson          NVARCHAR(MAX)   = NULL,
+    @PrSno              INT             = NULL  -- used by DELETE_LINE mode only
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1969,15 +2075,30 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        -- â”€â”€ 1. FY Guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        --    @FDate / @LDate are the open-FY bounds computed by the caller.
-        --    Check AmendDate falls within them instead of re-querying PP_Year
-        --    (avoids CLOSED = NULL false-negative in some PP_Year configurations).
+        -- ── 1. FY Guard ──────────────────────────────────────────────────────
         IF @AmendDate < @FDate OR @AmendDate > @LDate
             RAISERROR('Amendment Date is outside the open financial year.', 16, 1);
 
-        -- â”€â”€ 3. Validate RATE_JUSTIFICATION when RATE_SOURCE = MANUAL â”€â”€â”€â”€â”€â”€â”€â”€
-        IF @Mode <> 'DELETE' AND @LinesJson IS NOT NULL
+        -- ── 2. BR-AMD-01: Amendment Date must equal processing date (ADD/MODIFY only) ──
+        IF @Mode IN ('ADD', 'MODIFY') AND @AmendDate <> @PDate
+            RAISERROR('Amendment Date must equal the current processing date.', 16, 1);
+
+        -- ── 3. BR-AMD-04: Duplicate item codes ───────────────────────────────
+        IF @Mode IN ('ADD', 'MODIFY') AND @LinesJson IS NOT NULL
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM OPENJSON(@LinesJson)
+                WITH (ItemCode VARCHAR(10) '$.ItemCode')
+                WHERE RTRIM(ISNULL(ItemCode, '')) <> ''
+                GROUP BY ItemCode
+                HAVING COUNT(*) > 1
+            )
+                RAISERROR('Duplicate item codes found. Each item may appear only once in an amendment.', 16, 1);
+        END
+
+        -- ── 4. Validate RATE_JUSTIFICATION when RATE_SOURCE = MANUAL ─────────
+        IF @Mode NOT IN ('DELETE', 'DELETE_LINE') AND @LinesJson IS NOT NULL
         BEGIN
             DECLARE @BadItem VARCHAR(10);
             SELECT TOP 1 @BadItem = j.ItemCode
@@ -1994,8 +2115,8 @@ BEGIN
                 RAISERROR('Rate justification is required for item %s when rate is manually overridden.', 16, 1, @BadItem);
         END
 
-        -- â”€â”€ 4. Concurrency check (MODIFY / DELETE) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        IF @Mode IN ('MODIFY', 'DELETE')
+        -- ── 5. Concurrency check (MODIFY / DELETE / DELETE_LINE) ─────────────
+        IF @Mode IN ('MODIFY', 'DELETE', 'DELETE_LINE')
         BEGIN
             IF NOT EXISTS (
                 SELECT 1 FROM dbo.PO_APRH
@@ -2008,7 +2129,7 @@ BEGIN
                 RAISERROR('Record has been modified by another user. Please reload.', 16, 1);
         END
 
-        -- â”€â”€ 5. Resolve AmendNo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        -- ── 6. Resolve AmendNo ────────────────────────────────────────────────
         DECLARE @ResolvedAmendNo INT;
 
         IF @Mode = 'ADD'
@@ -2025,9 +2146,19 @@ BEGIN
         ELSE
             SET @ResolvedAmendNo = @AmendNo;
 
-        -- â”€â”€ 6. DELETE path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        -- ── 7. DELETE path ────────────────────────────────────────────────────
         IF @Mode = 'DELETE'
         BEGIN
+            -- Dependency check: block if any PRL line has been ordered or enquired
+            IF EXISTS (
+                SELECT 1 FROM dbo.PO_PRL
+                WHERE  divcode              = @DivCode
+                  AND  prno                 = @PrNo
+                  AND  CAST(prdate AS DATE) = @PrDate
+                  AND  (ISNULL(qtyord, 0) > 0 OR ISNULL(prstatus, '') IN ('O', 'E', 'C'))
+            )
+                RAISERROR('Cannot delete amendment — one or more PR lines have been ordered or enquired.', 16, 1);
+
             DELETE FROM dbo.PO_APRL
             WHERE  divcode              = @DivCode
               AND  prno                 = @PrNo
@@ -2054,8 +2185,51 @@ BEGIN
             RETURN;
         END
 
-        -- â”€â”€ 7. ADD: capture header fields from PO_PRH (or latest PO_APRH) â”€â”€â”€â”€
-        --         PO_PRH may already be deleted on a 2nd+ amendment
+        -- ── 8. DELETE_LINE path (deltype=2 — single line from amendment) ──────
+        IF @Mode = 'DELETE_LINE'
+        BEGIN
+            IF @PrSno IS NULL
+                RAISERROR('PrSno is required for DELETE_LINE mode.', 16, 1);
+
+            -- Cannot delete last line
+            IF (SELECT COUNT(*) FROM dbo.PO_APRL
+                WHERE divcode = @DivCode AND prno = @PrNo
+                  AND CAST(prdate AS DATE) = @PrDate AND amendno = @ResolvedAmendNo) <= 1
+                RAISERROR('Cannot delete the last line of an amendment.', 16, 1);
+
+            -- Dependency check: block if the corresponding PO_PRL line is protected
+            IF EXISTS (
+                SELECT 1 FROM dbo.PO_PRL
+                WHERE  divcode              = @DivCode
+                  AND  prno                 = @PrNo
+                  AND  CAST(prdate AS DATE) = @PrDate
+                  AND  prsno                = @PrSno
+                  AND  ISNULL(prstatus, '') IN ('O', 'E', 'C', 'Z', 'X')
+            )
+                RAISERROR('Line %d cannot be deleted — its status is beyond amendment scope.', 16, 1, @PrSno);
+
+            DELETE FROM dbo.PO_APRL
+            WHERE  divcode              = @DivCode
+              AND  prno                 = @PrNo
+              AND  CAST(prdate AS DATE) = @PrDate
+              AND  amendno              = @ResolvedAmendNo
+              AND  prsno                = @PrSno;
+
+            INSERT INTO dbo.LogDet_po
+                (divcode, prno, prdate, prsno, itemcode,
+                 Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
+                 Trans_UserId, Trans_date, moduleNo)
+            VALUES
+                (@DivCode, @PrNo, @PrDate, @PrSno, '',
+                 'PR Amendment', 'DELETE_LINE', @HostName, @IpAddress,
+                 @UserId, GETDATE(), 4);
+
+            COMMIT TRANSACTION;
+            SELECT @ResolvedAmendNo AS AmendNo;
+            RETURN;
+        END
+
+        -- ── 9. ADD: capture current header fields from PO_PRH ─────────────────
         DECLARE @DepCode    VARCHAR(3);
         DECLARE @ReqName    VARCHAR(25);
         DECLARE @Section    VARCHAR(20);
@@ -2080,7 +2254,7 @@ BEGIN
             END
             ELSE
             BEGIN
-                -- PO_PRH already deleted (2nd+ amendment) â€” read from latest PO_APRH
+                -- Legacy fallback: PO_PRH absent (pre-CR save) — read from latest PO_APRH
                 SELECT TOP 1
                        @DepCode = depcode, @ReqName = REQNAME,
                        @Section = SECTION, @IType = ITYPE, @PlaceOfIss = PLACEOFISS
@@ -2092,7 +2266,7 @@ BEGIN
             END
         END
 
-        -- â”€â”€ 8. ADD: insert header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        -- ── 10. ADD: insert amendment header snapshot ─────────────────────────
         DECLARE @CreatedDt VARCHAR(25) =
             CONVERT(VARCHAR(10), GETDATE(), 103) + ' ' +
             CONVERT(VARCHAR(8),  GETDATE(), 108);
@@ -2111,7 +2285,7 @@ BEGIN
                  @DepCode, @ReqName, @Section, @IType, @PlaceOfIss);
         END
 
-        -- â”€â”€ 9. MODIFY: update header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        -- ── 11. MODIFY: update amendment header ───────────────────────────────
         ELSE
         BEGIN
             UPDATE dbo.PO_APRH
@@ -2129,23 +2303,25 @@ BEGIN
               AND  amendno              = @ResolvedAmendNo;
         END
 
-        -- â”€â”€ 10. Insert lines (ADD and MODIFY) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        -- ── 12. Insert amendment lines snapshot (ADD and MODIFY) ─────────────
+        --        amdflg = 'Y' flags all snapshot lines (BR from markdown §9)
         INSERT INTO dbo.PO_APRL
-            (divcode, prno, prdate, amendno, prsno,
+            (divcode, prno, prdate, amendno, amenddate, prsno,
              itemcode, macno, qtyind, reqddate, RATE,
              RATE_SOURCE, RATE_JUSTIFICATION,
              curstock, CCCODE, CATCODE, BGRPCODE,
-             PLACE, APPCOST, remarks)
+             PLACE, APPCOST, remarks, amdflg)
         SELECT
             @DivCode,
             @PrNo,
             @PrDate,
             @ResolvedAmendNo,
+            @AmendDate,
             j.PrSno,
             RTRIM(j.ItemCode),
             NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
             j.QtyInd,
-            TRY_CONVERT(DATE, NULLIF(j.ReqdDate, ''), 103),
+            TRY_CONVERT(DATE, NULLIF(j.ReqdDate, '')),
             j.Rate,
             ISNULL(NULLIF(RTRIM(j.RateSource), ''), 'ORIGINAL'),
             NULLIF(RTRIM(ISNULL(j.RateJustification, '')), ''),
@@ -2155,7 +2331,8 @@ BEGIN
             NULLIF(RTRIM(ISNULL(j.BgrpCode, '')), ''),
             NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
             NULLIF(j.AppCost, 0),
-            NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), '')
+            NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), ''),
+            'Y'
         FROM OPENJSON(@LinesJson)
         WITH (
             PrSno              INT             '$.PrSno',
@@ -2176,21 +2353,190 @@ BEGIN
         ) j
         WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
 
-        -- â”€â”€ 11. ADD: DELETE original PR lines then header (FSD Â§4 Steps 6-7) â”€â”€
+        -- ── 13. ADD: delta-update PO_PRH and PO_PRL (CR-M01-AM-001) ──────────
         IF @Mode = 'ADD'
         BEGIN
+            -- Update PO_PRH refno
+            IF EXISTS (SELECT 1 FROM dbo.PO_PRH WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate)
+            BEGIN
+                UPDATE dbo.PO_PRH
+                SET    refno = NULLIF(RTRIM(ISNULL(@RefNo, '')), '')
+                WHERE  divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate;
+            END
+
+            -- Parse submitted lines into work table (includes RowVersion for PATH A)
+            DECLARE @LineWork TABLE (
+                PrSno             INT,
+                ItemCode          VARCHAR(10),
+                MacNo             VARCHAR(5),
+                QtyInd            NUMERIC(12,3),
+                ReqdDate          VARCHAR(10),
+                Rate              NUMERIC(13,4),
+                RateSource        VARCHAR(20),
+                RateJustification VARCHAR(200),
+                CurStock          NUMERIC(12,3),
+                CcCode            NUMERIC(4,0),
+                CatCode           VARCHAR(1),
+                BgrpCode          VARCHAR(4),
+                Place             VARCHAR(40),
+                AppCost           NUMERIC(11,2),
+                Remarks           VARCHAR(50),
+                RowVersion        CHAR(18)
+            );
+
+            INSERT INTO @LineWork
+            SELECT
+                j.PrSno,
+                RTRIM(j.ItemCode),
+                NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
+                j.QtyInd,
+                j.ReqdDate,
+                j.Rate,
+                ISNULL(NULLIF(RTRIM(j.RateSource), ''), 'ORIGINAL'),
+                NULLIF(RTRIM(ISNULL(j.RateJustification, '')), ''),
+                ISNULL(j.CurStock, 0),
+                NULLIF(j.CcCode, 0),
+                NULLIF(RTRIM(ISNULL(j.CatCode, '')), ''),
+                NULLIF(RTRIM(ISNULL(j.BgrpCode, '')), ''),
+                NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
+                NULLIF(j.AppCost, 0),
+                NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), ''),
+                j.RowVersion
+            FROM OPENJSON(@LinesJson)
+            WITH (
+                PrSno              INT             '$.PrSno',
+                ItemCode           VARCHAR(10)     '$.ItemCode',
+                MacNo              VARCHAR(5)      '$.MacNo',
+                QtyInd             NUMERIC(12,3)   '$.QtyInd',
+                ReqdDate           VARCHAR(10)     '$.ReqdDate',
+                Rate               NUMERIC(13,4)   '$.Rate',
+                RateSource         VARCHAR(20)     '$.RateSource',
+                RateJustification  VARCHAR(200)    '$.RateJustification',
+                CurStock           NUMERIC(12,3)   '$.CurStock',
+                CcCode             NUMERIC(4,0)    '$.CcCode',
+                CatCode            VARCHAR(1)      '$.CatCode',
+                BgrpCode           VARCHAR(4)      '$.BgrpCode',
+                Place              VARCHAR(40)     '$.Place',
+                AppCost            NUMERIC(11,2)   '$.AppCost',
+                Remarks            VARCHAR(50)     '$.Remarks',
+                RowVersion         CHAR(18)        '$.RowVersion'
+            ) j
+            WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
+
+            -- Required Date ≥ pdate validation
+            IF EXISTS (
+                SELECT 1 FROM @LineWork
+                WHERE  ReqdDate IS NOT NULL
+                  AND  TRY_CONVERT(DATE, NULLIF(ReqdDate, '')) < @PDate
+            )
+                RAISERROR('Required Date cannot be earlier than the current processing date.', 16, 1);
+
+            -- Qty < ordered qty validation (cannot reduce below already-approved quantity)
+            IF EXISTS (
+                SELECT 1 FROM @LineWork lw
+                INNER JOIN dbo.PO_PRL p
+                    ON  p.divcode              = @DivCode
+                    AND p.prno                 = @PrNo
+                    AND CAST(p.prdate AS DATE) = @PrDate
+                    AND p.prsno                = lw.PrSno
+                WHERE lw.QtyInd < ISNULL(p.qtyreqd, 0)
+            )
+                RAISERROR('Amended quantity cannot be less than the already-approved quantity.', 16, 1);
+
+            -- PATH C guard: RAISERROR before DELETE if any removed line has a protected status
+            IF EXISTS (
+                SELECT 1 FROM dbo.PO_PRL p
+                WHERE  p.divcode              = @DivCode
+                  AND  p.prno                 = @PrNo
+                  AND  CAST(p.prdate AS DATE) = @PrDate
+                  AND  p.prsno NOT IN (SELECT PrSno FROM @LineWork)
+                  AND  ISNULL(p.prstatus, '') IN ('O', 'E', 'C', 'Z', 'X')
+            )
+            BEGIN
+                DECLARE @BlockedSno  INT;
+                DECLARE @BlockedStat CHAR(1);
+                SELECT TOP 1
+                    @BlockedSno  = p.prsno,
+                    @BlockedStat = p.prstatus
+                FROM dbo.PO_PRL p
+                WHERE  p.divcode              = @DivCode
+                  AND  p.prno                 = @PrNo
+                  AND  CAST(p.prdate AS DATE) = @PrDate
+                  AND  p.prsno NOT IN (SELECT PrSno FROM @LineWork)
+                  AND  ISNULL(p.prstatus, '') IN ('O', 'E', 'C', 'Z', 'X');
+                RAISERROR('Line %d cannot be deleted — status ''%s'' is beyond amendment scope.', 16, 1, @BlockedSno, @BlockedStat);
+            END
+
+            -- PATH C: DELETE lines removed by the user
             DELETE FROM dbo.PO_PRL
             WHERE  divcode              = @DivCode
               AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate;
+              AND  CAST(prdate AS DATE) = @PrDate
+              AND  prsno NOT IN (SELECT PrSno FROM @LineWork);
 
-            DELETE FROM dbo.PO_PRH
+            -- PATH A: UPDATE existing lines (approval flags preserved, rowversion enforced)
+            DECLARE @PathAExpected INT;
+            SELECT @PathAExpected = COUNT(*)
+            FROM @LineWork lw
+            INNER JOIN dbo.PO_PRL p
+                ON  p.divcode              = @DivCode
+                AND p.prno                 = @PrNo
+                AND CAST(p.prdate AS DATE) = @PrDate
+                AND p.prsno                = lw.PrSno;
+
+            -- amdflg NOT set here — only PATH B (new inserts) gets amdflg = 'Y'
+            UPDATE p
+            SET    p.qtyind   = lw.QtyInd,
+                   p.RATE     = lw.Rate,
+                   p.reqddate = TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
+                   p.APPCOST  = lw.AppCost,
+                   p.remarks  = lw.Remarks,
+                   p.macno    = lw.MacNo,
+                   p.PLACE    = lw.Place,
+                   p.CCCODE   = lw.CcCode
+                   -- FirstApp, SecondApp, ThirdApp, PRSTATUS, DirectApp preserved
+            FROM   dbo.PO_PRL p
+            INNER JOIN @LineWork lw
+                ON  p.divcode              = @DivCode
+                AND p.prno                 = @PrNo
+                AND CAST(p.prdate AS DATE) = @PrDate
+                AND p.prsno                = lw.PrSno
+                AND p.row_version          = CONVERT(VARBINARY(8), lw.RowVersion, 1);
+
+            IF @@ROWCOUNT <> @PathAExpected
+                RAISERROR('One or more lines were modified by another user. Please reload and try again.', 16, 1);
+
+            -- PATH B: INSERT new lines (prsno not yet in PO_PRL)
+            DECLARE @MaxPrSno INT;
+            SELECT @MaxPrSno = ISNULL(MAX(prsno), 0)
+            FROM   dbo.PO_PRL WITH (UPDLOCK)
             WHERE  divcode              = @DivCode
               AND  prno                 = @PrNo
               AND  CAST(prdate AS DATE) = @PrDate;
+
+            INSERT INTO dbo.PO_PRL
+                (divcode, prno, prdate, prsno,
+                 itemcode, macno, qtyind, reqddate, RATE,
+                 CCCODE, CATCODE, BGRPCODE, PLACE, APPCOST, remarks,
+                 amdflg, Depcode,
+                 FirstApp, SecondApp, ThirdApp, prstatus, DirectApp)
+            SELECT
+                @DivCode, @PrNo, @PrDate,
+                @MaxPrSno + ROW_NUMBER() OVER (ORDER BY lw.PrSno),
+                lw.ItemCode, lw.MacNo, lw.QtyInd,
+                TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
+                lw.Rate, lw.CcCode, lw.CatCode, lw.BgrpCode,
+                lw.Place, lw.AppCost, lw.Remarks,
+                'Y', @DepCode,
+                NULL, NULL, NULL, NULL, NULL
+            FROM @LineWork lw
+            WHERE lw.PrSno NOT IN (
+                SELECT prsno FROM dbo.PO_PRL
+                WHERE  divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate
+            );
         END
 
-        -- â”€â”€ 12. Audit log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        -- ── 14. Audit log ──────────────────────────────────────────────────────
         INSERT INTO dbo.LogDet_po
             (divcode, prno, prdate, prsno, itemcode, macno, quantity, RATE,
              Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
@@ -2218,6 +2564,8 @@ BEGIN
     END CATCH
 END;
 GO
+
+
 
 -- ============================================================
 -- PR Foreclosure & Cancellation SPs  (updated 28 May 2026)
@@ -2249,8 +2597,10 @@ BEGIN
                 - ISNULL(b.QTYORD,  0)
                 - ISNULL(b.enq_qty, 0)                    AS Balance,
             RTRIM(ISNULL(e.MAC_NO, ''))                   AS SccCode,
+            RTRIM(ISNULL(e.DESCRIPTION, ISNULL(e.MAC_NO, ''))) AS SccName,
             -- Convert raw PRSTATUS char to readable label matching the HTML prototype badges
             CASE RTRIM(ISNULL(b.PRSTATUS, ''))
+                WHEN 'F' THEN 'First Approved'
                 WHEN 'E' THEN 'Enquired'
                 WHEN 'C' THEN 'Received'
                 WHEN 'X' THEN 'Cancelled'
@@ -2273,8 +2623,7 @@ BEGIN
           AND CAST(ISNULL(a.prdate, b.prdate) AS DATE) BETWEEN @fdate AND @ldate
           AND ISNULL(a.cancelflag, '') <> 'Y'          -- fix: was 'IS NULL', live DB stores 'N'
           AND ISNULL(b.FClosed, 'N') <> 'Y'
-          AND RTRIM(ISNULL(b.prstatus, '')) <> 'X'   -- FC-BR-04: exclude individually-cancelled lines
-          AND RTRIM(ISNULL(b.prstatus, '')) <> 'C'   -- FC-EX-09/BR-03: exclude Received-status lines
+          AND RTRIM(ISNULL(b.prstatus, '')) NOT IN ('O','E','C','Z','X')   -- FC-EX-09/BR-03: exclude Ordered/Enquired/Received/ForceClosed/Cancelled
           AND (ISNULL(b.QTYREQD, 0) - ISNULL(b.QTYORD, 0) - ISNULL(b.enq_qty, 0)) > 0
           AND (ISNULL(b.QTYORD, 0) - ISNULL(b.qtyrec, 0)) >= 0
           AND (@prno_filter IS NULL
@@ -2374,7 +2723,8 @@ BEGIN
             ISNULL(a.reqname, '')                 AS RequestedBy,
             CONVERT(varchar(12), a.canceldt, 106) AS CancelledOn,
             ISNULL(a.pre_cancel_status, '')        AS PrevStatus,
-            a.row_version                          AS RowVersion
+            a.row_version                          AS RowVersion,
+            RTRIM(ISNULL(a.CANREASON, ''))         AS CancelReason
         FROM  PO_PRH a
         INNER JOIN In_dep c ON c.depcode  = a.depcode
                             AND c.divcode  = a.divcode
@@ -2545,8 +2895,22 @@ GO
 --      (BR-UNDO-01 -- read BEFORE the transaction begins)
 --   2. Clears all cancel columns on the header
 --      (SP-I1: row_version guard -- RAISERROR on conflict)
---   3. Restores PO_PRL PRSTATUS to the pre-cancel value
+--   3. Restores PO_PRL PRSTATUS to NULL (BR-UNDO-01 Sprint 1)
+--      Cancellation is only permitted pre-First Level approval
+--      where PRSTATUS is always NULL. Undo therefore always
+--      restores NULL. pre_cancel_status restore logic is
+--      retained for Sprint 2 use -- PO_PRH.pre_cancel_status
+--      column is preserved but not consumed in Sprint 1.
 --   4. Writes audit log entry (Trans_Mod='DELETE')
+--
+-- SP-I2 DESIGN NOTE -- depcode Asymmetry (Intentional)
+--   PO_PRH UPDATE: WHERE includes AND depcode = @DepCode
+--   PO_PRL UPDATE: depcode is NOT in the WHERE clause
+--   Reason: PO_PRL lines do not store depcode as a filter key.
+--   All lines under the same divcode+prno+prdate belong to one
+--   PR regardless of depcode. Filtering PO_PRL by depcode would
+--   silently skip lines. This asymmetry is intentional design --
+--   do NOT add depcode to the PO_PRL WHERE clause.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PR_UndoCancellation
 (
@@ -2630,6 +2994,17 @@ GO
 -- Called once per line from C#, which wraps all calls in an
 -- outer UnitOfWork transaction covering the full save batch.
 -- ============================================================
+-- ============================================================
+-- ksp_PR_SaveForeclosureLine
+-- Force-closes a single PR line:
+--   1. Sets prstatus='Z', FClosed='Y', FCloseddt=GETDATE() on PO_PRL
+--   2. Resolves depcode from PO_PRH
+--   3. Writes audit log entry (Trans_Mod='ADD')
+-- NOTE: PO_PRH has NO prstatus column — Step 4 (header status promotion)
+-- removed. Foreclosure status tracked via PO_PRL.prstatus only.
+-- Called once per line from C#, which wraps all calls in an
+-- outer UnitOfWork transaction covering the full save batch.
+-- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PR_SaveForeclosureLine
 (
     @DivCode   VARCHAR(2),
@@ -2656,7 +3031,7 @@ BEGIN
       AND  prdate   = @PrDate
       AND  itemcode = @ItemCode
       AND  (@PrSno = 0 OR prsno = @PrSno)
-      AND  prstatus <> 'C';   -- FC-EX-09/BR-03: never force-close a Received line
+      AND  prstatus NOT IN ('O','E','C','Z','X');   -- FC-EX-09/BR-03: never force-close Ordered/Enquired/Received/ForceClosed/Cancelled lines
 
     -- Step 2: Resolve depcode from header
     DECLARE @DepCode VARCHAR(3);
@@ -2704,7 +3079,16 @@ BEGIN
         AppUserLevel3   AS AppUserLevel3,
         AppUserLabel1   AS AppUserLabel1,
         AppUserLabel2   AS AppUserLabel2,
-        AppUserLabel3   AS AppUserLabel3
+        AppUserLabel3   AS AppUserLabel3,
+        -- Financial year bounds computed server-side (April–March)
+        CASE WHEN MONTH(GETDATE()) >= 4
+             THEN CAST(DATEFROMPARTS(YEAR(GETDATE()),     4, 1) AS DATETIME)
+             ELSE CAST(DATEFROMPARTS(YEAR(GETDATE()) - 1, 4, 1) AS DATETIME)
+        END AS YFDate,
+        CASE WHEN MONTH(GETDATE()) >= 4
+             THEN CAST(DATEFROMPARTS(YEAR(GETDATE()) + 1, 3, 31) AS DATETIME)
+             ELSE CAST(DATEFROMPARTS(YEAR(GETDATE()),     3, 31) AS DATETIME)
+        END AS YLDate
     FROM PO_PARA
     WHERE divcode = @DivCode;
 END;
@@ -2720,13 +3104,42 @@ BEGIN
     SET NOCOUNT ON;
 
     -- PO_IndentAppUser.UserID is varchar(6) — no PP_PASSWD join needed
+    DECLARE @YFDate DATETIME =
+        CASE WHEN MONTH(GETDATE()) >= 4
+             THEN CAST(DATEFROMPARTS(YEAR(GETDATE()),     4, 1) AS DATETIME)
+             ELSE CAST(DATEFROMPARTS(YEAR(GETDATE()) - 1, 4, 1) AS DATETIME) END;
+
+    DECLARE @YLDate DATETIME =
+        CASE WHEN MONTH(GETDATE()) >= 4
+             THEN CAST(DATEFROMPARTS(YEAR(GETDATE()) + 1, 3, 31) AS DATETIME)
+             ELSE CAST(DATEFROMPARTS(YEAR(GETDATE()),     3, 31) AS DATETIME) END;
+
     SELECT DISTINCT
         d.DEPCODE AS DepCode,
-        d.DEPNAME AS DepName
+        d.DEPNAME AS DepName,
+        (
+            SELECT COUNT(DISTINCT h.prno)
+            FROM   PO_PRH h
+            WHERE  h.divcode = @DivCode
+              AND  h.depcode = d.DEPCODE
+              AND  h.prdate BETWEEN @YFDate AND @YLDate
+              AND  ISNULL(h.cancelflag, 'N') <> 'Y'
+              AND  EXISTS (
+                       SELECT 1 FROM PO_PRL l
+                       WHERE  l.divcode   = h.divcode
+                         AND  l.prno      = h.prno
+                         AND  l.prdate    = h.prdate
+                         AND  l.FirstApp  IS NULL
+                         AND  l.SecondApp IS NULL
+                         AND  l.ThirdApp  IS NULL
+                         AND  l.DirectApp IS NULL
+                         AND  ISNULL(l.FClosed, 'N') <> 'Y'
+                   )
+        ) AS PendingCount
     FROM PO_IndentAppUser u
     INNER JOIN IN_DEP d
-        ON  d.DEPCODE  = u.Depcode
-        AND d.divcode  = u.Divcode
+        ON  d.DEPCODE = u.Depcode
+        AND d.divcode = u.Divcode
     WHERE u.Divcode = @DivCode
       AND u.UserID  = @UserId
     ORDER BY d.DEPNAME;
@@ -2844,18 +3257,7 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        -- ── 1. Update PO_PRH header ──────────────────────────────────────────
-        -- APP1TIME is datetime — use GETDATE(), not a varchar string
-        UPDATE PO_PRH
-        SET APPFLG   = 'Y',
-            APP1     = @UserId,
-            APP1DATE = @AppDate,
-            APP1TIME = GETDATE()
-        WHERE divcode = @DivCode
-          AND prno    = @PrNo
-          AND prdate  = @PrDate;
-
-        -- ── 2. Parse JSON lines ──────────────────────────────────────────────
+        -- ── 1. Parse JSON lines ──────────────────────────────────────────────
         DECLARE @Lines TABLE (
             PrSno       NUMERIC(5,0),
             ItemCode    VARCHAR(10),
@@ -2891,7 +3293,23 @@ BEGIN
             Uom         VARCHAR(3)   '$.uom'
         ) j;
 
-        -- ── 3. Update PO_PRL lines ───────────────────────────────────────────
+        -- ── DEF-FA-01: server-side qty guard ─────────────────────────────────
+        IF EXISTS (SELECT 1 FROM @Lines WHERE FirstAppQty > QtyReqd)
+        BEGIN
+            RAISERROR('First Approval Quantity exceeds Quantity Required on one or more lines.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- ── FA-ADD-09: reject zero or negative FirstAppQty ────────────────────
+        IF EXISTS (SELECT 1 FROM @Lines WHERE FirstAppQty <= 0)
+        BEGIN
+            RAISERROR('First Approval Quantity must be greater than zero.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- ── 2. Update PO_PRL lines ───────────────────────────────────────────
         -- PO_PRL columns: qtyreqd, FirstAppQty, FirstApp, RATE, VALUE, prstatus
         UPDATE l
         SET l.qtyreqd     = ln.QtyReqd,
@@ -2908,6 +3326,27 @@ BEGIN
         WHERE l.divcode = @DivCode
           AND l.prno    = @PrNo
           AND l.prdate  = @PrDate;
+
+        -- ── 3. Update PO_PRH header — DEF-FA-03: only when ALL lines approved ─
+        -- PO_PRH has NO PRSTATUS column. APPFLG tracks overall header approval.
+        -- Only promote header to APPFLG='Y' when every PO_PRL line now has FirstApp='Y'.
+        UPDATE PO_PRH
+        SET APPFLG   = 'Y',
+            APP1     = @UserId,
+            APP1DATE = @AppDate,
+            APP1TIME = GETDATE()
+        WHERE divcode = @DivCode
+          AND prno    = @PrNo
+          AND prdate  = @PrDate
+          AND NOT EXISTS (
+              SELECT 1 FROM PO_PRL
+              WHERE  divcode  = @DivCode
+                AND  prno     = @PrNo
+                AND  prdate   = @PrDate
+                AND  ISNULL(FirstApp,  '') <> 'Y'
+                AND  ISNULL(DirectApp, '') <> 'Y'           -- DirectApp lines bypass first-level
+                AND  ISNULL(prstatus,  '') NOT IN ('X','Z') -- cancelled/foreclosed cannot be approved
+          );
 
         -- ── 4. Audit log per line ────────────────────────────────────────────
         -- LogDet_po columns verified from live schema
@@ -2970,12 +3409,13 @@ BEGIN
           AND prdate  = @PrDate;
 
         -- ── 2. Reset PO_PRL lines (where DirectApp IS NULL) ──────────────────
+        -- qtyreqd is written during SaveFirstApproval so must be cleared on delete
         UPDATE PO_PRL
-        SET qtyreqd     = NULL,
-            FirstAppQty = 0,
-            FirstApp    = NULL,
-            prstatus    = NULL,
-            FirstappUser= NULL
+        SET qtyreqd      = NULL,
+            FirstAppQty  = 0,
+            FirstApp     = NULL,
+            prstatus     = NULL,
+            FirstappUser = NULL
         WHERE divcode   = @DivCode
           AND prno      = @PrNo
           AND prdate    = @PrDate
@@ -2987,7 +3427,7 @@ BEGIN
             Trans_UserId, prsno, Quantity, username,
             Trans_date, Trans_Name, Trans_Mod,
             Trans_IPADD, Trans_Host,
-            UOM, RATE, macno, moduleNo,
+            UOM, RATE, macno, SubCost, moduleNo,
             docno, docdt
         )
         SELECT
@@ -2995,10 +3435,13 @@ BEGIN
             @UserId, l.prsno, ISNULL(l.qtyind, 0), @UserName,
             GETDATE(), 'Purchase Requisition Approval', 'DELETE',
             @IpAddress, @HostName,
-            i.CUOM, ISNULL(l.RATE, 0), l.macno, @ModuleNo,
+            i.CUOM, ISNULL(l.RATE, 0), l.macno, h.SubCost, @ModuleNo,
             @PrNo, @PrDate
         FROM PO_PRL l
         INNER JOIN IN_ITEM i ON i.ITEMCODE = l.itemcode
+        LEFT  JOIN PO_PRH  h ON h.divcode = l.divcode
+                             AND h.prno    = l.prno
+                             AND h.prdate  = l.prdate
         WHERE l.divcode  = @DivCode
           AND l.prno     = @PrNo
           AND l.prdate   = @PrDate
@@ -3048,7 +3491,7 @@ BEGIN
         RTRIM(ISNULL(h.SECTION, ''))                         AS Section,
         h.APP1DATE                                           AS App1Date,
         RTRIM(ISNULL(e.ename, h.REQNAME))                    AS ReqName,
-        RTRIM(ISNULL(h.APP1, ''))                            AS ApproverUserId,
+        RTRIM(ISNULL(apv.user_name, ISNULL(h.APP1, '')))    AS ApproverName,
         RTRIM(ISNULL(pwd.user_name, ISNULL(h.createdby,''))) AS CreatedBy,
         RTRIM(ISNULL(h.createddt, ''))                       AS CreatedDt
 
@@ -3057,6 +3500,11 @@ BEGIN
     LEFT JOIN IN_DEP    d  ON d.DEPCODE  = h.depcode AND d.divcode = h.divcode
     LEFT JOIN PR_EMP    e  ON TRY_CAST(h.REQNAME AS decimal(5,0)) = e.empno
                           AND e.divcode = h.divcode
+    OUTER APPLY (
+        SELECT TOP 1 user_name FROM PP_PASSWD
+        WHERE RTRIM(user_id) = RTRIM(h.APP1)
+          AND RTRIM(divcode)  = RTRIM(h.divcode)
+    ) apv
     OUTER APPLY (
         SELECT TOP 1 user_name FROM PP_PASSWD
         WHERE RTRIM(user_id) = RTRIM(h.createdby)
@@ -3119,26 +3567,21 @@ GO
 -- ksp_PR_GetPendingFirstApproval
 CREATE OR ALTER PROCEDURE ksp_PR_GetPendingFirstApproval
     @DivCode VARCHAR(2),
-    @Dep     VARCHAR(3)       -- specific depcode from PO_IndentAppUser for logged-in user
+    @Dep     VARCHAR(3),       -- specific depcode from PO_IndentAppUser for logged-in user
+    @YFDate  DATETIME,         -- financial year start (B13/B14: year guard required)
+    @YLDate  DATETIME          -- financial year end
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- No year guard — no @yfdate / @yldate parameters (confirmed FSD OI-02 closed)
-    --
-    -- Eligible PR = header not cancelled + at least one line where:
-    --   FirstApp IS NULL AND SecondApp IS NULL AND ThirdApp IS NULL
-    --   AND DirectApp IS NULL AND line not force-closed (FClosed IS NULL or <> 'Y')
-    --
-    -- FClosed exists on PO_PRL (col 57), NOT on PO_PRH — checked via EXISTS subquery.
-    -- cancelflag exists on PO_PRH (col 22).
+    -- Year guard applied per prompt clarification B13/B14 (overrides OI-02).
 
     SELECT DISTINCT
         h.prno              AS PrNo,
         h.prdate            AS PrDate,
         h.depcode           AS DepCode,
         ISNULL(d.DEPNAME, h.depcode) AS DepName,
-        ISNULL(h.refno, '') AS RefNo,
+        ISNULL(h.refno, '')  AS RefNo,
         ISNULL(h.SECTION,'') AS Section
     FROM PO_PRH h
     LEFT JOIN IN_DEP d
@@ -3146,6 +3589,7 @@ BEGIN
         AND d.divcode = h.divcode
     WHERE h.divcode = @DivCode
       AND h.depcode = @Dep
+      AND h.prdate BETWEEN @YFDate AND @YLDate
       AND ISNULL(h.cancelflag, 'N') <> 'Y'
       AND EXISTS (
             SELECT 1
@@ -3166,31 +3610,29 @@ GO
 
 -- ksp_PR_GetFirstApprovedForDeletion
 CREATE OR ALTER PROCEDURE ksp_PR_GetFirstApprovedForDeletion
-    @DivCode VARCHAR(2)
+    @DivCode VARCHAR(2),
+    @YFDate  DATETIME,         -- financial year start (B13/B14: year guard required)
+    @YLDate  DATETIME          -- financial year end
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- No year guard — no @yfdate / @yldate parameters (confirmed FSD OI-02 closed)
-    --
-    -- Used for both Delete-Approval listing AND Find (re-uses same result set).
-    --
-    -- Eligible PR = header not cancelled + at least one line where:
-    --   FirstApp IS NOT NULL (first level done) AND DirectApp IS NULL (not final-level)
-    -- cancelflag on PO_PRH; FClosed on PO_PRL — both checked correctly.
+    -- Year guard applied per prompt clarification B13/B14 (overrides OI-02).
+    -- Used for Delete-Approval listing, Find, and Navigation.
 
     SELECT DISTINCT
         h.prno              AS PrNo,
         h.prdate            AS PrDate,
         h.depcode           AS DepCode,
         ISNULL(d.DEPNAME, h.depcode) AS DepName,
-        ISNULL(h.refno, '') AS RefNo,
+        ISNULL(h.refno, '')  AS RefNo,
         ISNULL(h.SECTION,'') AS Section
     FROM PO_PRH h
     LEFT JOIN IN_DEP d
         ON  d.DEPCODE = h.depcode
         AND d.divcode = h.divcode
     WHERE h.divcode = @DivCode
+      AND h.prdate BETWEEN @YFDate AND @YLDate
       AND ISNULL(h.cancelflag, 'N') <> 'Y'
       AND EXISTS (
             SELECT 1
@@ -3205,4 +3647,342 @@ BEGIN
     ORDER BY h.prdate DESC, h.prno DESC;
 END;
 
+GO
+-- ============================================================
+-- SP: ksp_po_finalapproval
+-- Purpose: Final Level PR Approval — Grid load (imode 2/3) and Save (imode 4)
+-- FSD: v1.4  |  Mockdown: SPINRISE_M01_FinalLevel_PR_Approval_Mockdown.md §4-§8
+-- Author: Mohan Babu  |  Date: [implementation date]
+-- DB: JAT (172.16.16.52\sql2016)
+-- ============================================================
+-- CD Fixes applied vs VB6 AS-IS:
+--   CD-07: @logindate removed — SP uses GETDATE() internally
+--   CD-08: @FinalLevel_Remarks is int; stored as CAST(int -> varchar)
+-- ============================================================
+-- SP: ksp_po_finalapproval
+-- Purpose: Final Level PR Approval — Grid load (imode 2/3) and Save (imode 4)
+-- FSD: v1.4  |  Mockdown: SPINRISE_M01_FinalLevel_PR_Approval_Mockdown.md §4-§8
+-- Author: Mohan Babu  |  Date: [implementation date]
+-- DB: JAT (172.16.16.52\sql2016)
+-- ============================================================
+-- CD Fixes applied vs VB6 AS-IS:
+--   CD-07: @logindate removed — SP uses GETDATE() internally
+--   CD-08: @FinalLevel_Remarks is int; stored as CAST(int -> varchar)
+--   CD-09: All PRINT statements removed
+--   CD-10: Phone lookup (@phno) inside imode=4 block only
+--   CD-11: Al_SMSMessage INSERT for Disposition=5 includes SendDate + NoofTry
+--   CD-12: CAST(@Prdate AS DATE) used; @@ROWCOUNT checked
+-- OI-09: FirstApp NOT written by this SP.
+--        SecondApp='Y' written ONLY when @Bypass=1.
+-- OBS-2: imode=1 does NOT exist.
+--        Company=ALL -> imode=2, divcode='0'.
+-- ============================================================
+CREATE OR ALTER PROCEDURE [dbo].[ksp_po_finalapproval]
+    @imode              int,
+    @divcode            varchar(2),
+    @dbname             varchar(20)     = NULL,
+    @Prno               numeric(6,0)    = NULL,
+    @Prdate             datetime        = NULL,
+    @Prsno              numeric(5,0)    = NULL,
+    @FinalAppUser       varchar(35)     = NULL,
+    @FinalAppQty        numeric(12,3)   = NULL,
+    @FinalLevel_Remarks int             = NULL,   -- CD-08: int (not varchar)
+    @Bypass             int             = 1,
+    @row_version        binary(8)       = NULL,
+    @Result             int             OUTPUT    -- 0=success, 2=business, 3=conflict, 4=not found
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- ── imode 2/3 — SELECT pending grid rows ──────────────────────────────────
+    -- imode=2: all divisions (Company=ALL or Division=ALL) — no division filter
+    -- imode=3: specific division
+    IF @imode IN (2, 3)
+    BEGIN
+        SELECT
+            l.divcode,
+            h.prno,
+            CONVERT(varchar(10), h.prdate, 103)         AS prdate,
+            l.prsno,
+            d.DEPNAME                                   AS department,
+            l.itemcode                                  AS itemCode,
+            i.ITEMNAME                                  AS itemName,
+            i.UOM                                       AS uom,
+            -- TODO: Replace with stock functions once confirmed to exist in JAT DB.
+            --       KSP_PRItemStock_FUN and KSP_PRItemStock_WITH_DIV not found in JAT.
+            --       Using PO_PRL.curstock as fallback (confirmed column, schema §PO_PRL).
+            ISNULL(l.curstock, 0)                       AS currentStock,
+            CASE
+                WHEN l.ThirdAppQty  > 0 THEN l.ThirdAppQty
+                WHEN l.SecondAppQty > 0 THEN l.SecondAppQty
+                WHEN l.FirstAppQty  > 0 THEN l.FirstAppQty
+                ELSE l.qtyreqd
+            END                                         AS qtyRequired,
+            ISNULL(l.FinalAppQty,
+                CASE
+                    WHEN l.ThirdAppQty  > 0 THEN l.ThirdAppQty
+                    WHEN l.SecondAppQty > 0 THEN l.SecondAppQty
+                    WHEN l.FirstAppQty  > 0 THEN l.FirstAppQty
+                    ELSE l.qtyreqd
+                END)                                    AS qtyApproved,
+            ISNULL(TRY_CAST(l.FinalLevel_Remarks AS int), 2) AS disposition,
+            l.LPO_RATE                                  AS lpoRate,
+            CASE
+                WHEN l.LPO_DATE IS NOT NULL
+                THEN CONVERT(varchar(10), l.LPO_DATE, 103)
+                ELSE NULL
+            END                                         AS lpoDate,
+            CASE WHEN ISNULL(l.APPCOST, 0) = 0
+                THEN NULL
+                ELSE l.APPCOST
+            END                                         AS approxCost,
+            CASE
+                WHEN l.ThirdApp  IS NOT NULL AND l.ThirdApp  = 'Y' THEN 'final'
+                WHEN l.SecondApp IS NOT NULL AND l.SecondApp = 'Y' THEN 'second'
+                ELSE 'first'
+            END                                         AS approvalStatus,
+            -- Return raw timestamp; C# layer converts to hex via Convert.ToHexString
+            l.row_version                               AS rowVersion
+        FROM   PO_PRL  l
+        JOIN   PO_PRH  h  ON  h.divcode = l.divcode
+                          AND h.prno    = l.prno
+                          AND CAST(h.prdate AS DATE) = CAST(l.prdate AS DATE)
+        JOIN   IN_DEP  d  ON  d.DEPCODE = h.depcode
+                          AND d.divcode = h.divcode
+        JOIN   IN_ITEM i  ON  i.ITEMCODE = l.itemcode
+        WHERE  ISNULL(l.prstatus, '') NOT IN ('C', 'X', 'Z', 'O', 'D')
+          AND  ISNULL(h.cancelflag, 'N') <> 'Y'
+          AND  l.FirstApp = 'Y'
+          AND  (
+                @Bypass = 1
+                OR (
+                    @Bypass = 0
+                    AND (ISNULL(l.SecondApp, 'N') = 'Y' OR ISNULL(l.ThirdApp, 'N') = 'Y')
+                )
+               )
+          AND  (@imode = 2 OR l.divcode = @divcode)
+        ORDER BY l.divcode, h.prno, h.prdate, l.prsno;
+
+        SET @Result = 0;
+        RETURN;
+    END
+
+    -- ── imode=4 — SAVE (one row per call; backend loops) ─────────────────────
+    IF @imode = 4
+    BEGIN
+        BEGIN TRY
+            BEGIN TRANSACTION;
+
+            -- Guard: cancelled PR
+            IF EXISTS (
+                SELECT 1 FROM PO_PRH
+                WHERE divcode  = @divcode
+                  AND prno     = @Prno
+                  AND CAST(prdate AS DATE) = CAST(@Prdate AS DATE)
+                  AND cancelflag = 'Y'
+            )
+            BEGIN
+                SET @Result = 2;
+                RAISERROR('This PR has been cancelled and cannot be approved.', 16, 1);
+                ROLLBACK TRANSACTION;
+                RETURN;
+            END
+
+            -- UPDATE PO_PRL with concurrency guard on row_version
+            UPDATE PO_PRL
+            SET
+                FinalAppUser       = @FinalAppUser,
+                prstatus           = 'D',
+                DirectApp          = 'Y',
+                -- OI-09: SecondApp='Y' ONLY when Bypass is active
+                SecondApp          = CASE WHEN @Bypass = 1 THEN 'Y' ELSE SecondApp END,
+                ThirdApp           = 'Y',
+                DirectAppDate      = GETDATE(),
+                qtyreqd            = @FinalAppQty,
+                FinalAppQty        = @FinalAppQty,
+                FinalLevel_Remarks = CAST(@FinalLevel_Remarks AS varchar(20)),   -- CD-08
+                FClosed            = CASE WHEN @FinalLevel_Remarks = 4 THEN 'Y' ELSE FClosed END,
+                FCloseddt          = CASE WHEN @FinalLevel_Remarks = 4 THEN GETDATE() ELSE FCloseddt END
+            WHERE divcode     = @divcode
+              AND prno        = @Prno
+              AND CAST(prdate AS DATE) = CAST(@Prdate AS DATE)   -- CD-12
+              AND prsno       = @Prsno
+              AND row_version = @row_version;                     -- concurrency guard
+
+            -- CD-12: Check if UPDATE matched a row
+            IF @@ROWCOUNT = 0
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM PO_PRL
+                    WHERE divcode = @divcode AND prno = @Prno
+                      AND CAST(prdate AS DATE) = CAST(@Prdate AS DATE)
+                      AND prsno = @Prsno
+                )
+                    SET @Result = 3;   -- concurrency conflict
+                ELSE
+                    SET @Result = 4;   -- not found
+                ROLLBACK TRANSACTION;
+                RETURN;
+            END
+
+            -- UPDATE PO_PRH — ISNULL pattern so existing approvals are preserved
+            UPDATE PO_PRH
+            SET
+                APPFLG   = 'Y',
+                APP1     = ISNULL(APP1,    'DIR'),
+                APP1DATE = ISNULL(APP1DATE, GETDATE()),
+                APP1TIME = ISNULL(APP1TIME, GETDATE()),
+                APP2     = ISNULL(APP2,    'DIR'),
+                APP2DATE = ISNULL(APP2DATE, GETDATE()),
+                APP2TIME = ISNULL(APP2TIME, GETDATE()),
+                APP3     = ISNULL(APP3,    'DIR'),
+                APP3DATE = ISNULL(APP3DATE, GETDATE()),
+                APP3TIME = ISNULL(APP3TIME, GETDATE())
+            WHERE divcode = @divcode
+              AND prno    = @Prno
+              AND CAST(prdate AS DATE) = CAST(@Prdate AS DATE);
+
+            -- UPDATE PO_Para — PRSMSStatusFlg
+            -- TODO: Confirm key column(s) for WHERE clause with DBA (currently keyed by divcode)
+            UPDATE PO_Para
+            SET    PRSMSStatusFlg = 'Y'
+            WHERE  divcode = @divcode;
+
+            -- CD-10: Phone lookup (inside imode=4 only — moved from outer scope)
+            DECLARE @phno varchar(20) = NULL;
+            -- TODO: Confirm phone source table and column name with DBA
+            -- Example:
+            -- SELECT @phno = [phone_column] FROM [phone_table] WHERE [key_condition];
+
+            -- SMS INSERT — Remarks=1/3/4/5 per FSD v1.4 OI-09 / QA directive 29-May-2026
+            -- Guard: PO_PARA.PRSMSSendFlg='Y' (CEO referenced FinalApproval_SMSEnabled which
+            -- does not exist in live DB; PRSMSSendFlg is the PR SMS send control flag)
+            -- Column names verified from live SpinRiseSaranya DDL (1 Jun 2026)
+            IF @FinalLevel_Remarks IN (1, 3, 4, 5)
+               AND EXISTS (
+                   SELECT 1 FROM PO_Para
+                   WHERE divcode = @divcode
+                     AND ISNULL(PRSMSSendFlg, 'N') = 'Y'
+               )
+            BEGIN
+                INSERT INTO Al_SMSMessage (
+                    Divcode, SmsMobileNo, SmsMsg,
+                    EntryDate, EntryUserID, NoofTry, SendDate, Sendflg
+                )
+                VALUES (
+                    @divcode,
+                    @phno,
+                    CASE @FinalLevel_Remarks
+                        WHEN 1 THEN 'PR No.' + CAST(@Prno AS varchar(10)) + ' has been set to PL Discuss'
+                        WHEN 3 THEN 'PR No.' + CAST(@Prno AS varchar(10)) + ' is on Hold'
+                        WHEN 4 THEN 'PR No.' + CAST(@Prno AS varchar(10)) + ' has been Declined'
+                        WHEN 5 THEN 'PR No.' + CAST(@Prno AS varchar(10)) + ' has been Postponed'
+                    END,
+                    GETDATE(), @FinalAppUser, 0, NULL, 'P'
+                );
+            END
+
+            -- Audit log
+            INSERT INTO LogDet_po (
+                divcode, prno, prdate, prsno,
+                prstatus, Trans_UserId, Trans_date,
+                Trans_Name, Trans_Mod, Activity
+            )
+            VALUES (
+                @divcode, @Prno, @Prdate, @Prsno,
+                'D', @FinalAppUser, GETDATE(),
+                'Final Level PR Approval', 'FinalApp',
+                CASE @FinalLevel_Remarks
+                    WHEN 1 THEN 'PL_DISCUSS'
+                    WHEN 2 THEN 'APPROVED'
+                    WHEN 3 THEN 'HOLD'
+                    WHEN 4 THEN 'DECLINED'
+                    WHEN 5 THEN 'POSTPONED'
+                END
+            );
+
+            COMMIT TRANSACTION;
+            SET @Result = 0;
+
+        END TRY
+        BEGIN CATCH
+            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+            SET @Result = 2;
+            THROW;
+        END CATCH
+    END
+
+END;
+GO
+GO
+GO
+
+-- ============================================================
+-- SP: ksp_po_GetFinalApprovalCompanies
+-- Purpose: Company dropdown for Final Level PR Approval
+-- TODO: Confirm pp_database column names with DBA
+-- ============================================================
+CREATE OR ALTER PROCEDURE [dbo].[ksp_po_GetFinalApprovalCompanies]
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Confirmed columns: Database_No, Database_Name
+    SELECT
+        d.Database_Name AS dbname,
+        d.Database_Name AS companyName
+    FROM dbo.pp_database d
+    ORDER BY d.Database_No;
+END;
+
+GO
+
+-- ============================================================
+-- SP: ksp_po_GetFinalApprovalDivisions
+-- Purpose: Division dropdown for Final Level PR Approval
+-- TODO: Confirm pp_divmas column names with DBA
+-- ============================================================
+CREATE OR ALTER PROCEDURE [dbo].[ksp_po_GetFinalApprovalDivisions]
+    @DbName varchar(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Confirmed columns: DIVCODE, DIVNAME (from ksp_Auth_GetActiveDivisions)
+    -- No company/dbname filter on pp_divmas — returns all divisions
+    SELECT
+        RTRIM(d.DIVCODE) AS divcode,
+        RTRIM(d.DIVNAME) AS divisionName,
+        RTRIM(d.DIVCODE) AS abbr
+    FROM dbo.pp_divmas d
+    ORDER BY d.DIVCODE;
+END;
+
+GO
+
+-- ============================================================
+-- SP: ksp_Auth_GetCompanies
+-- Purpose: Populate Company dropdown on Login page
+-- Source: PP_Compmas — columns: compcode, compname
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_Auth_GetCompanies
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        RTRIM(c.compcode) AS compCode,
+        RTRIM(c.compname) AS compName
+    FROM dbo.compmas c
+    ORDER BY c.compcode;
+
+END;
+
+GO
+
+-- Sasi: add Division_Flag to pp_divmas (safe to re-run)
+IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'pp_divmas' AND COLUMN_NAME = 'Division_Flag')
+BEGIN
+    ALTER TABLE pp_divmas ADD Division_Flag char(1)
+END
 GO

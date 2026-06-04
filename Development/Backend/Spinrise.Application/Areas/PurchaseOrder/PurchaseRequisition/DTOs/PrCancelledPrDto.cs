@@ -8,5 +8,6 @@ public record PrCancelledPrDto(
     string   RequestedBy,
     string   CancelledOn,
     string   PrevStatus,
-    byte[]?  RowVersion
+    byte[]?  RowVersion,
+    string?  CancelReason
 );

@@ -24,7 +24,7 @@ export default function PurchaseRequisitionPage() {
   const [searchParams] = useSearchParams()
 
   const {
-    headerForm, depCode, reqName, iType, authUser, divCode,
+    headerForm, depCode, reqName, iType, authUser, divCode, processingDate,
     items, setItems,
     savedPrNo, savedPr, prStatus,
     deleting, pageBusy, navLoading,
@@ -39,7 +39,9 @@ export default function PurchaseRequisitionPage() {
     navigateRecord, loadRecord, loadLastRecord, initNewMode,
   } = usePRFormCore()
 
-  const { yfDate, ylDate } = getFYBounds()
+  const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
+  const systemYfDate  = getFYBounds().yfDate
+  const isPreviousFY  = !!processingDate && processingDate < systemYfDate
 
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = useState(false)
   const pendingActionRef   = useRef<(() => void) | null>(null)
@@ -185,11 +187,11 @@ export default function PurchaseRequisitionPage() {
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   const shortcutRef = useRef({
     guardDirty, initNewMode, navigateRecord, handleCancel, handleAdd,
-    mode, savedPrNo, pageBusy, handleDeleteClick, isDeleteMode, setPickerMode, setIsDeleteMode,
+    mode, savedPrNo, pageBusy, handleDeleteClick, isDeleteMode, setPickerMode, setIsDeleteMode, isPreviousFY,
   })
   shortcutRef.current = {
     guardDirty, initNewMode, navigateRecord, handleCancel, handleAdd,
-    mode, savedPrNo, pageBusy, handleDeleteClick, isDeleteMode, setPickerMode, setIsDeleteMode,
+    mode, savedPrNo, pageBusy, handleDeleteClick, isDeleteMode, setPickerMode, setIsDeleteMode, isPreviousFY,
   }
 
   useEffect(() => {
@@ -200,7 +202,7 @@ export default function PurchaseRequisitionPage() {
 
       if (e.key === 'F3') {
         e.preventDefault()
-        void s.handleAdd()
+        if (!s.isPreviousFY) void s.handleAdd()
         return
       }
       if (e.altKey && e.key === 'x') {
@@ -211,16 +213,16 @@ export default function PurchaseRequisitionPage() {
       if (e.ctrlKey && !e.shiftKey && !e.altKey) {
         switch (e.key) {
           case 'ArrowLeft':
-            if (!inInput) { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('PREV') }) }
+            if (!inInput && !s.pageBusy && s.mode === 'view') { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('PREV') }) }
             break
           case 'ArrowRight':
-            if (!inInput) { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('NEXT') }) }
+            if (!inInput && !s.pageBusy && s.mode === 'view') { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('NEXT') }) }
             break
           case 'Home':
-            if (!inInput) { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('FIRST') }) }
+            if (!inInput && !s.pageBusy && s.mode === 'view') { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('FIRST') }) }
             break
           case 'End':
-            if (!inInput) { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('LAST') }) }
+            if (!inInput && !s.pageBusy && s.mode === 'view') { e.preventDefault(); s.guardDirty(() => { s.setIsDeleteMode(false); void s.navigateRecord('LAST') }) }
             break
           case 'd':
             e.preventDefault()
@@ -269,7 +271,8 @@ export default function PurchaseRequisitionPage() {
           variant="primary"
           icon={<PlusOutlined style={{ fontSize: 11 }} />}
           label="New" kbd="F3"
-          disabled={isEditing || isDeleteMode || pageBusy || pickerMode !== null || !permissions.canAdd}
+          disabled={isEditing || isDeleteMode || pageBusy || pickerMode !== null || !permissions.canAdd || isPreviousFY}
+          title={isPreviousFY ? 'Cannot create a new PR in a previous financial year' : undefined}
           onClick={() => void handleAdd()}
         />
         <TbBtn
@@ -431,6 +434,7 @@ export default function PurchaseRequisitionPage() {
         savedPrNo={savedPrNo}
         isNewMode={mode === 'new'}
         hideApprovalStatus={mode === 'edit' || isDeleteMode}
+        cancelReason={savedPr?.cancelReason}
       />
 
       {/* ── Unsaved-changes confirmation ── */}

@@ -25,7 +25,8 @@ BEGIN
             ISNULL(a.reqname, '')                 AS RequestedBy,
             CONVERT(varchar(12), a.canceldt, 106) AS CancelledOn,
             ISNULL(a.pre_cancel_status, '')        AS PrevStatus,
-            a.row_version                          AS RowVersion
+            a.row_version                          AS RowVersion,
+            RTRIM(ISNULL(a.CANREASON, ''))         AS CancelReason
         FROM  PO_PRH a
         INNER JOIN In_dep c ON c.depcode  = a.depcode
                             AND c.divcode  = a.divcode
