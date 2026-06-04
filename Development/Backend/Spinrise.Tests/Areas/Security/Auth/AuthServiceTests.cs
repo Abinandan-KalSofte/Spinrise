@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Spinrise.Application.Areas.Security.Auth.DTOs;
 using Spinrise.Application.Areas.Security.Auth.Interfaces;
@@ -8,15 +9,16 @@ namespace Spinrise.Tests.Areas.Security.Auth;
 
 public class AuthServiceTests
 {
-    private readonly Mock<IAuthUserStore> _userStore = new();
-    private readonly Mock<IJwtTokenService> _jwtService = new();
-    private readonly Mock<IRefreshTokenStore> _tokenStore = new();
+    private readonly Mock<IAuthUserStore>        _userStore = new();
+    private readonly Mock<IJwtTokenService>      _jwtService = new();
+    private readonly Mock<IRefreshTokenStore>    _tokenStore = new();
+    private readonly Mock<ILogger<AuthService>>  _logger    = new();
     private readonly AuthService _sut;
 
     private readonly AuthUserDto _testUser = new()
     {
         Id = 1, UserId = "testuser", UserName = "Test User",
-        Email = "testuser", Role = "User", DivCode = "01"
+        Email = "testuser", Role = "User", DivCode = "01", DbName = "JAT"
     };
 
     private readonly JwtTokenResult _testRefreshResult = new()
@@ -27,7 +29,7 @@ public class AuthServiceTests
 
     public AuthServiceTests()
     {
-        _sut = new AuthService(_userStore.Object, _jwtService.Object, _tokenStore.Object);
+        _sut = new AuthService(_userStore.Object, _jwtService.Object, _tokenStore.Object, _logger.Object);
     }
 
     // ── Login ─────────────────────────────────────────────────
@@ -36,8 +38,8 @@ public class AuthServiceTests
     public async Task LoginAsync_ValidCredentials_ReturnsAuthResponse()
     {
         // Arrange
-        var request = new LoginRequestDto { DivCode = "01", UserName = "testuser", Password = "pass" };
-        _userStore.Setup(x => x.ValidateCredentialsAsync("testuser", "01", "pass"))
+        var request = new LoginRequestDto { DivCode = "01", UserName = "testuser", Password = "pass", DbName = "JAT" };
+        _userStore.Setup(x => x.ValidateCredentialsAsync("testuser", "01", "pass", "JAT"))
                   .ReturnsAsync(_testUser);
         _jwtService.Setup(x => x.GenerateAccessToken(_testUser)).Returns("access-token");
         _jwtService.Setup(x => x.GenerateRefreshToken(_testUser)).Returns(_testRefreshResult);
@@ -58,8 +60,8 @@ public class AuthServiceTests
     public async Task LoginAsync_InvalidCredentials_ReturnsNull()
     {
         // Arrange
-        var request = new LoginRequestDto { DivCode = "01", UserName = "bad", Password = "wrong" };
-        _userStore.Setup(x => x.ValidateCredentialsAsync("bad", "01", "wrong"))
+        var request = new LoginRequestDto { DivCode = "01", UserName = "bad", Password = "wrong", DbName = "JAT" };
+        _userStore.Setup(x => x.ValidateCredentialsAsync("bad", "01", "wrong", "JAT"))
                   .ReturnsAsync((AuthUserDto?)null);
 
         // Act
@@ -85,7 +87,7 @@ public class AuthServiceTests
         _jwtService.Setup(x => x.ValidateRefreshToken("old-refresh")).Returns(validation);
         _tokenStore.Setup(x => x.IsActiveAsync("token-id-123")).ReturnsAsync(true);
         _tokenStore.Setup(x => x.RevokeAsync("token-id-123")).Returns(Task.CompletedTask);
-        _userStore.Setup(x => x.GetByUserIdAsync("testuser", "01")).ReturnsAsync(_testUser);
+        _userStore.Setup(x => x.GetByUserIdAsync("testuser", "01", "JAT")).ReturnsAsync(_testUser);
         _jwtService.Setup(x => x.GenerateAccessToken(_testUser)).Returns("new-access");
         _jwtService.Setup(x => x.GenerateRefreshToken(_testUser)).Returns(new JwtTokenResult
         {

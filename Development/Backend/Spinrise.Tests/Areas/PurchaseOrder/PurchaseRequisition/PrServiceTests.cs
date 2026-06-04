@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.DTOs;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.Interfaces;
@@ -8,7 +9,8 @@ namespace Spinrise.Tests.Areas.PurchaseOrder.PurchaseRequisition;
 
 public class PrServiceTests
 {
-    private readonly Mock<IPrRepository> _repo = new();
+    private readonly Mock<IPrRepository>          _repo   = new();
+    private readonly Mock<ILogger<PrService>>     _logger = new();
     private readonly PrService _sut;
 
     private static readonly DateOnly FDate = new(2025, 4, 1);
@@ -46,7 +48,7 @@ public class PrServiceTests
 
     public PrServiceTests()
     {
-        _sut = new PrService(_repo.Object);
+        _sut = new PrService(_repo.Object, _logger.Object);
     }
 
     // ── Passthrough delegations ────────────────────────────────────────────────
@@ -247,7 +249,7 @@ public class PrServiceTests
         var act = () => _sut.ModifyAsync(DivCode, request, UserId, null, null, FDate, LDate);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*ExistingPrNo*");
+            .WithMessage("*PR number and date*");
     }
 
     [Fact]
@@ -258,7 +260,7 @@ public class PrServiceTests
         var act = () => _sut.ModifyAsync(DivCode, request, UserId, null, null, FDate, LDate);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*ExistingPrDate*");
+            .WithMessage("*PR number and date*");
     }
 
     [Fact]
