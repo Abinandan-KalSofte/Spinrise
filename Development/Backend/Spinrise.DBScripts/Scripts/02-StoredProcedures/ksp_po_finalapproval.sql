@@ -65,7 +65,10 @@ BEGIN
                     WHEN l.FirstAppQty  > 0 THEN l.FirstAppQty
                     ELSE l.qtyreqd
                 END)                                    AS qtyApproved,
-            ISNULL(TRY_CAST(l.FinalLevel_Remarks AS int), 2) AS disposition,
+            CASE WHEN ISNULL(TRY_CAST(l.FinalLevel_Remarks AS int), 0) = 0
+                 THEN 2
+                 ELSE TRY_CAST(l.FinalLevel_Remarks AS int)
+            END                                         AS disposition,
             l.LPO_RATE                                  AS lpoRate,
             CASE
                 WHEN l.LPO_DATE IS NOT NULL

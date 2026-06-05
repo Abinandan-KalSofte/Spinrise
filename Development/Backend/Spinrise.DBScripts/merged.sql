@@ -389,10 +389,10 @@ BEGIN
     ORDER BY ph.porddt DESC;
 
     SELECT
-        @CurrentStock AS CurrentStock,
-        @LpoRate      AS LpoRate,
-        @LpoDate      AS LpoDate,
-        NULL          AS AvgRate;
+        @CurrentStock                    AS CurrentStock,
+        CAST(@LpoRate  AS NUMERIC(13,4)) AS LpoRate,
+        CAST(@LpoDate  AS DATE)          AS LpoDate,
+        CAST(NULL      AS NUMERIC(13,4)) AS AvgRate;
 END;
 GO
 
@@ -425,7 +425,9 @@ BEGIN
             NULL AS DivCode, NULL AS PrNo,   NULL AS PrDate,
             NULL AS DepCode, NULL AS DepName, NULL AS ReqName, NULL AS ReqEmpName,
             NULL AS Section, NULL AS IType,   NULL AS IDesc,   NULL AS RefNo,
-            NULL AS PoGrp,   NULL AS AppFlg,  NULL AS PrStatus,
+            NULL AS PoGrp,   NULL AS AppFlg,
+            NULL AS CancelFlag, NULL AS CancelReason, NULL AS AmendNo,
+            NULL AS PrStatus,
             NULL AS CreatedBy, NULL AS CreatedDt, NULL AS UserId
         WHERE 1 = 0;
 
@@ -456,6 +458,9 @@ BEGIN
         RTRIM(ISNULL(NULLIF(RTRIM(h.refno), '0'), ''))          AS RefNo,
         RTRIM(ISNULL(h.PO_GRP,  ''))                            AS PoGrp,
         ISNULL(h.APPFLG, 'N')                                   AS AppFlg,
+        ISNULL(h.cancelflag, '')                                AS CancelFlag,
+        RTRIM(ISNULL(h.CANREASON, ''))                          AS CancelReason,
+        ISNULL(h.amendno, 0)                                    AS AmendNo,
         CASE
             WHEN ISNULL(h.cancelflag, '') <> ''
                 THEN 'ORDER CANCELLED'
@@ -2598,14 +2603,17 @@ BEGIN
                 - ISNULL(b.enq_qty, 0)                    AS Balance,
             RTRIM(ISNULL(e.MAC_NO, ''))                   AS SccCode,
             RTRIM(ISNULL(e.DESCRIPTION, ISNULL(e.MAC_NO, ''))) AS SccName,
-            -- Convert raw PRSTATUS char to readable label matching the HTML prototype badges
-            CASE RTRIM(ISNULL(b.PRSTATUS, ''))
-                WHEN 'F' THEN 'First Approved'
-                WHEN 'E' THEN 'Enquired'
-                WHEN 'C' THEN 'Received'
-                WHEN 'X' THEN 'Cancelled'
-                WHEN 'Z' THEN 'Force Closed'
-                WHEN 'O' THEN
+            -- Approval status: check higher-level flags first, then fall back to PRSTATUS char
+            CASE
+                WHEN ISNULL(b.DirectApp, 'N') = 'Y'          THEN 'Final Approved'
+                WHEN ISNULL(b.ThirdApp,  'N') = 'Y'          THEN 'Third Approved'
+                WHEN ISNULL(b.SecondApp, 'N') = 'Y'          THEN 'Second Approved'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'F'     THEN 'First Approved'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'E'     THEN 'Enquired'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'C'     THEN 'Received'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'X'     THEN 'Cancelled'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'Z'     THEN 'Force Closed'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'O'     THEN
                     CASE WHEN ISNULL(b.QTYORD, 0) > 0 THEN 'Ordered' ELSE 'Order Cancelled' END
                 ELSE 'Requested'
             END                                           AS PrevStatus
@@ -3156,33 +3164,30 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- IN_SCC: SCCCODE numeric(6,0), SCCNAME varchar(40), Divcode varchar(2), DEPCODE varchar(5)
-    -- PR_EMP: ename varchar(30), empno decimal(5,0)  — NOT empname
-    -- PO_PRH.REQNAME varchar(10) stores empno as string; use TRY_CAST for the join
     SELECT
-        h.divcode                               AS DivCode,
-        h.prno                                  AS PrNo,
-        h.prdate                                AS PrDate,
-        h.depcode                               AS DepCode,
-        d.DEPNAME                               AS DepName,
-        h.refno                                 AS RefNo,
-        h.SECTION                               AS Section,
-        h.SubCost                               AS SubCost,
-        s.SCCNAME                               AS SccName,
-        h.APP1                                  AS App1,
-        h.APP2                                  AS App2,
-        h.APP3                                  AS App3,
-        h.APPFLG                                AS AppFlg,
-        h.APP1DATE                              AS App1Date,
-        ISNULL(e.ename, h.REQNAME)              AS ReqName
+        h.divcode                                   AS DivCode,
+        h.prno                                      AS PrNo,
+        h.prdate                                    AS PrDate,
+        h.depcode                                   AS DepCode,
+        ISNULL(d.DEPNAME, '')                       AS DepName,
+        h.refno                                     AS RefNo,
+        h.SECTION                                   AS Section,
+        CAST(h.SubCost AS VARCHAR(20))              AS SubCost,
+        s.SCCNAME                                   AS SccName,
+        h.APP1                                      AS App1,
+        h.APP2                                      AS App2,
+        h.APP3                                      AS App3,
+        h.APPFLG                                    AS AppFlg,
+        CAST(h.APP1DATE AS DATETIME)                AS App1Date,
+        ISNULL(e.ename, h.REQNAME)                  AS ReqName
     FROM PO_PRH h
-    LEFT JOIN IN_DEP  d ON d.DEPCODE  = h.depcode
-                       AND d.divcode  = h.divcode
-    LEFT JOIN IN_SCC  s ON s.SCCCODE  = h.SubCost
-                       AND s.Divcode  = h.divcode
-                       AND s.DEPCODE  = h.depcode
-    LEFT JOIN PR_EMP  e ON TRY_CAST(h.REQNAME AS decimal(5,0)) = e.empno
-                       AND e.divcode  = h.divcode
+    LEFT JOIN IN_DEP  d ON d.DEPCODE = h.depcode
+                       AND d.divcode = h.divcode
+    LEFT JOIN IN_SCC  s ON s.SCCCODE = h.SubCost
+                       AND s.Divcode = h.divcode
+                       AND s.DEPCODE = h.depcode
+    LEFT JOIN PR_EMP  e ON TRY_CAST(h.REQNAME AS DECIMAL(5,0)) = e.empno
+                       AND e.divcode = h.divcode
     WHERE h.divcode = @DivCode
       AND h.prno    = @PrNo
       AND h.prdate  = @PrDate;
@@ -3725,7 +3730,10 @@ BEGIN
                     WHEN l.FirstAppQty  > 0 THEN l.FirstAppQty
                     ELSE l.qtyreqd
                 END)                                    AS qtyApproved,
-            ISNULL(TRY_CAST(l.FinalLevel_Remarks AS int), 2) AS disposition,
+            CASE WHEN ISNULL(TRY_CAST(l.FinalLevel_Remarks AS int), 0) = 0
+                 THEN 2
+                 ELSE TRY_CAST(l.FinalLevel_Remarks AS int)
+            END                                         AS disposition,
             l.LPO_RATE                                  AS lpoRate,
             CASE
                 WHEN l.LPO_DATE IS NOT NULL
