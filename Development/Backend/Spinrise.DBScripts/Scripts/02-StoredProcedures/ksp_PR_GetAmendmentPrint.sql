@@ -103,11 +103,12 @@ BEGIN
     LEFT JOIN dbo.PO_PRL p  ON  p.divcode              = l.divcode
                             AND p.prno                 = l.prno
                             AND CAST(p.prdate AS DATE) = CAST(l.prdate AS DATE)
-                            AND p.prsno                = l.prsno
+                            AND p.itemcode             = l.itemcode
     WHERE  l.divcode              = @DivCode
       AND  l.prno                 = @PrNo
       AND  CAST(l.prdate AS DATE) = @PrDate
-    ORDER BY l.prsno;
+      AND  l.amendno              = @AmendNo
+    ORDER BY l.amendslno;
 
     -- Log print event to PO_PRINT_LOG (FSD §4 BR — all prints logged; reprint_flag='Y' if not first print)
     IF OBJECT_ID('dbo.PO_PRINT_LOG', 'U') IS NOT NULL AND @UserId IS NOT NULL

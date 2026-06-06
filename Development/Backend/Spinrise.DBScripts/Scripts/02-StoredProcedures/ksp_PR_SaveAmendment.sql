@@ -174,16 +174,29 @@ BEGIN
                   AND CAST(prdate AS DATE) = @PrDate AND amendno = @ResolvedAmendNo) <= 1
                 RAISERROR('Cannot delete the last line of an amendment.', 16, 1);
 
-            -- Dependency check: block if the corresponding PO_PRL line is protected
+            -- PO_APRL.prsno is globally sequential and differs from PO_PRL.prsno after the first amendment.
+            -- Look up itemcode from PO_APRL to find the matching PO_PRL live line for the status check.
+            DECLARE @DelItemCode VARCHAR(10);
+            SELECT @DelItemCode = itemcode
+            FROM   dbo.PO_APRL
+            WHERE  divcode              = @DivCode
+              AND  prno                 = @PrNo
+              AND  CAST(prdate AS DATE) = @PrDate
+              AND  amendno              = @ResolvedAmendNo
+              AND  prsno                = @PrSno;
+
+            IF @DelItemCode IS NULL
+                RAISERROR('Line not found in amendment %d.', 16, 1, @ResolvedAmendNo);
+
             IF EXISTS (
                 SELECT 1 FROM dbo.PO_PRL
                 WHERE  divcode              = @DivCode
                   AND  prno                 = @PrNo
                   AND  CAST(prdate AS DATE) = @PrDate
-                  AND  prsno                = @PrSno
+                  AND  itemcode             = @DelItemCode
                   AND  ISNULL(prstatus, '') IN ('O', 'E', 'C', 'Z', 'X')
             )
-                RAISERROR('Line %d cannot be deleted — its status is beyond amendment scope.', 16, 1, @PrSno);
+                RAISERROR('Line for item %s cannot be deleted — its status is beyond amendment scope.', 16, 1, @DelItemCode);
 
             DELETE FROM dbo.PO_APRL
             WHERE  divcode              = @DivCode
@@ -290,77 +303,39 @@ BEGIN
                 WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate;
             END
 
-            -- PK on PO_APRL has no amendno — clear all rows for this PR so section 12 can re-insert cleanly
+            -- Clear only this amendment's rows; other amendments' history is preserved
             DELETE FROM dbo.PO_APRL
             WHERE  divcode              = @DivCode
               AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate;
+              AND  CAST(prdate AS DATE) = @PrDate
+              AND  amendno              = @ResolvedAmendNo;
         END
 
-        -- ── 12. Upsert amendment lines snapshot (ADD and MODIFY) ─────────────
-        -- PO_APRL PK = (divcode, prno, prdate, prsno) — no amendno column.
-        -- ADD:    update existing prsno rows in-place; insert new prsno rows; delete removed prsno rows.
-        -- MODIFY: section 11 pre-cleared all rows → this section re-inserts fresh (step 12c only fires).
+        -- ── 12. Append amendment lines snapshot (ADD and MODIFY) ──────────────
+        -- PO_APRL is an append-only history log (FSD §4 Architecture Note).
+        -- ADD:    no prior rows for this amendno — INSERT all submitted lines as a fresh snapshot.
+        -- MODIFY: Step 11 cleared this amendno's rows — re-INSERT the revised snapshot.
+        -- prsno  = MAX(PO_APRL.prsno) + ROW_NUMBER() — globally sequential per PR across all amendments.
+        -- amendslno = ROW_NUMBER() — line position within this amendment (1, 2, 3...).
+        -- Old amendments' rows are never touched.
 
-        -- 12a. Delete prsno rows removed from this amendment
-        DELETE FROM dbo.PO_APRL
+        DECLARE @MaxAprlSno INT;
+        SELECT @MaxAprlSno = ISNULL(MAX(prsno), 0)
+        FROM   dbo.PO_APRL WITH (UPDLOCK)
         WHERE  divcode              = @DivCode
           AND  prno                 = @PrNo
-          AND  CAST(prdate AS DATE) = @PrDate
-          AND  prsno NOT IN (
-              SELECT j.PrSno
-              FROM   OPENJSON(@LinesJson) WITH (PrSno INT '$.PrSno') j
-          );
+          AND  CAST(prdate AS DATE) = @PrDate;
 
-        -- 12b. Update existing prsno rows (fires in ADD mode when prior amendment already wrote them)
-        UPDATE t
-        SET    t.amendno              = @ResolvedAmendNo,
-               t.amenddate           = @AmendDate,
-               t.itemcode            = RTRIM(j.ItemCode),
-               t.macno               = NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
-               t.qtyind              = j.QtyInd,
-               t.reqddate            = TRY_CONVERT(DATE, NULLIF(j.ReqdDate, '')),
-               t.RATE                = j.Rate,
-               t.RATE_SOURCE         = ISNULL(NULLIF(RTRIM(j.RateSource), ''), 'ORIGINAL'),
-               t.RATE_JUSTIFICATION  = NULLIF(RTRIM(ISNULL(j.RateJustification, '')), ''),
-               t.curstock            = ISNULL(j.CurStock, 0),
-               t.CCCODE              = NULLIF(j.CcCode, 0),
-               t.CATCODE             = NULLIF(RTRIM(ISNULL(j.CatCode, '')), ''),
-               t.BGRPCODE            = NULLIF(RTRIM(ISNULL(j.BgrpCode, '')), ''),
-               t.PLACE               = NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
-               t.APPCOST             = NULLIF(j.AppCost, 0),
-               t.remarks             = NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), ''),
-               t.amdflg              = 'Y'
-        FROM   dbo.PO_APRL t
-        INNER JOIN OPENJSON(@LinesJson)
-        WITH (
-            PrSno              INT             '$.PrSno',
-            ItemCode           VARCHAR(10)     '$.ItemCode',
-            MacNo              VARCHAR(5)      '$.MacNo',
-            QtyInd             NUMERIC(12,3)   '$.QtyInd',
-            ReqdDate           VARCHAR(10)     '$.ReqdDate',
-            Rate               NUMERIC(13,4)   '$.Rate',
-            RateSource         VARCHAR(20)     '$.RateSource',
-            RateJustification  VARCHAR(200)    '$.RateJustification',
-            CurStock           NUMERIC(12,3)   '$.CurStock',
-            CcCode             NUMERIC(4,0)    '$.CcCode',
-            CatCode            VARCHAR(1)      '$.CatCode',
-            BgrpCode           VARCHAR(4)      '$.BgrpCode',
-            Place              VARCHAR(40)     '$.Place',
-            AppCost            NUMERIC(11,2)   '$.AppCost',
-            Remarks            VARCHAR(50)     '$.Remarks'
-        ) j ON t.divcode = @DivCode AND t.prno = @PrNo AND CAST(t.prdate AS DATE) = @PrDate AND t.prsno = j.PrSno
-        WHERE  RTRIM(ISNULL(j.ItemCode, '')) <> '';
-
-        -- 12c. Insert new prsno rows (not yet in PO_APRL)
         INSERT INTO dbo.PO_APRL
-            (divcode, prno, prdate, amendno, amenddate, prsno,
+            (divcode, prno, prdate, amendno, amenddate, prsno, amendslno,
              itemcode, macno, qtyind, reqddate, RATE,
              RATE_SOURCE, RATE_JUSTIFICATION,
              curstock, CCCODE, CATCODE, BGRPCODE,
              PLACE, APPCOST, remarks, amdflg)
         SELECT
-            @DivCode, @PrNo, @PrDate, @ResolvedAmendNo, @AmendDate, j.PrSno,
+            @DivCode, @PrNo, @PrDate, @ResolvedAmendNo, @AmendDate,
+            @MaxAprlSno + ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
+            ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
             RTRIM(j.ItemCode),
             NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
             j.QtyInd,
@@ -378,7 +353,6 @@ BEGIN
             'Y'
         FROM OPENJSON(@LinesJson)
         WITH (
-            PrSno              INT             '$.PrSno',
             ItemCode           VARCHAR(10)     '$.ItemCode',
             MacNo              VARCHAR(5)      '$.MacNo',
             QtyInd             NUMERIC(12,3)   '$.QtyInd',
@@ -394,14 +368,7 @@ BEGIN
             AppCost            NUMERIC(11,2)   '$.AppCost',
             Remarks            VARCHAR(50)     '$.Remarks'
         ) j
-        WHERE  RTRIM(ISNULL(j.ItemCode, '')) <> ''
-          AND  NOT EXISTS (
-              SELECT 1 FROM dbo.PO_APRL
-              WHERE  divcode              = @DivCode
-                AND  prno                 = @PrNo
-                AND  CAST(prdate AS DATE) = @PrDate
-                AND  prsno                = j.PrSno
-          );
+        WHERE  RTRIM(ISNULL(j.ItemCode, '')) <> '';
 
         -- ── 13. ADD: delta-update PO_PRH and PO_PRL (CR-M01-AM-001) ──────────
         IF @Mode = 'ADD'
