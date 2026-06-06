@@ -57,47 +57,45 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             new { DivCode = divCode, PrNo = prNo, PrDate = prDate },
             commandType: CommandType.StoredProcedure);
 
-        var hdr = await multi.ReadFirstOrDefaultAsync<AmendHeaderRow>();
+        var hdr = await multi.ReadFirstOrDefaultAsync<AmendHeaderForNewRow>();
         if (hdr is null) return null;
 
         var lines = (await multi.ReadAsync<PrAmendmentLineDto>()).ToList();
 
-        return BuildHeaderDto(hdr, lines);
+        return BuildHeaderDtoForNew(hdr, lines);
     }
 
     public async Task<int> SaveAsync(
-        string mode, string divCode, decimal prNo, DateOnly prDate,
+        string divCode, decimal prNo, DateOnly prDate,
         SaveAmendmentRequest request, string userId, DateOnly fDate, DateOnly lDate,
-        string? hostName, string? ipAddress, int? amendNo = null)
+        string? hostName, string? ipAddress)
     {
         byte[]? rowVersionBytes = null;
         if (!string.IsNullOrWhiteSpace(request.RowVersion))
             rowVersionBytes = Convert.FromBase64String(request.RowVersion);
 
-        var linesJson = mode != "DELETE"
-            ? JsonSerializer.Serialize(request.Lines.Select(l => new
-              {
-                  l.PrSno,
-                  l.ItemCode,
-                  l.MacNo,
-                  l.QtyInd,
-                  l.ReqdDate,
-                  l.Rate,
-                  l.RateSource,
-                  l.RateJustification,
-                  l.CurStock,
-                  l.CcCode,
-                  l.CatCode,
-                  l.BgrpCode,
-                  l.Place,
-                  l.AppCost,
-                  l.Remarks,
-                  // PATH A concurrency: convert base64 rowVersion → 0x-prefixed hex for SP CONVERT(VARBINARY,.,1)
-                  RowVersion = !string.IsNullOrWhiteSpace(l.RowVersion)
-                      ? "0x" + Convert.ToHexString(Convert.FromBase64String(l.RowVersion))
-                      : (string?)null,
-              }))
-            : null;
+        var linesJson = JsonSerializer.Serialize(request.Lines.Select(l => new
+        {
+            l.PrSno,
+            l.ItemCode,
+            l.MacNo,
+            l.QtyInd,
+            l.ReqdDate,
+            l.Rate,
+            l.RateSource,
+            l.RateJustification,
+            l.CurStock,
+            l.CcCode,
+            l.CatCode,
+            l.BgrpCode,
+            l.Place,
+            l.AppCost,
+            l.Remarks,
+            // PATH A concurrency: convert base64 rowVersion → 0x-prefixed hex for SP CONVERT(VARBINARY,.,1)
+            RowVersion = !string.IsNullOrWhiteSpace(l.RowVersion)
+                ? "0x" + Convert.ToHexString(Convert.FromBase64String(l.RowVersion))
+                : (string?)null,
+        }));
 
         var pDate = DateOnly.TryParse(request.PDate, out var parsedPDate)
             ? parsedPDate
@@ -107,7 +105,7 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             StoredProcedures.PrAmendment.Save,
             new
             {
-                Mode             = mode,
+                Mode             = "ADD",
                 DivCode          = divCode,
                 PrNo             = prNo,
                 PrDate           = prDate,
@@ -120,50 +118,22 @@ public class PrAmendmentRepository : IPrAmendmentRepository
                 FDate            = fDate,
                 LDate            = lDate,
                 PDate            = pDate,
-                AmendNo          = mode == "ADD" ? (int?)null : amendNo,
+                AmendNo          = (int?)null,
                 RowVersion       = rowVersionBytes,
                 LinesJson        = linesJson,
+                IType            = string.IsNullOrWhiteSpace(request.IType) ? null : request.IType.Trim(),
             },
             commandType: CommandType.StoredProcedure);
 
-        return result.AmendNo;
-    }
-
-    public async Task<int> DeleteLineAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo, int prSno,
-        byte[] rowVersionBytes, DateOnly pDate, string userId, string? hostName, string? ipAddress)
-    {
-        var result = await _uow.Connection.QueryFirstAsync<SaveResultRow>(
-            StoredProcedures.PrAmendment.Save,
-            new
-            {
-                Mode        = "DELETE_LINE",
-                DivCode     = divCode,
-                PrNo        = prNo,
-                PrDate      = prDate,
-                AmendDate   = pDate,
-                AmendmentReason = string.Empty,
-                UserId      = userId,
-                HostName    = hostName,
-                IpAddress   = ipAddress,
-                FDate       = prDate,
-                LDate       = prDate,
-                PDate       = pDate,
-                AmendNo     = amendNo,
-                RowVersion  = rowVersionBytes,
-                LinesJson   = (string?)null,
-                PrSno       = prSno,
-            },
-            commandType: CommandType.StoredProcedure);
         return result.AmendNo;
     }
 
     public async Task<PrAmendmentPrintDto?> GetPrintDataAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo)
+        string divCode, decimal prNo, DateOnly prDate, int amendNo, string userId)
     {
         using var multi = await _uow.Connection.QueryMultipleAsync(
             StoredProcedures.PrAmendment.GetPrint,
-            new { DivCode = divCode, PrNo = prNo, PrDate = prDate, AmendNo = amendNo },
+            new { DivCode = divCode, PrNo = prNo, PrDate = prDate, AmendNo = amendNo, UserId = userId },
             commandType: CommandType.StoredProcedure);
 
         var hdr = await multi.ReadFirstOrDefaultAsync<AmendPrintHeaderRow>();
@@ -230,51 +200,107 @@ public class PrAmendmentRepository : IPrAmendmentRepository
         );
     }
 
+    private static PrAmendmentHeaderDto BuildHeaderDtoForNew(AmendHeaderForNewRow hdr, List<PrAmendmentLineDto> lines)
+    {
+        return new PrAmendmentHeaderDto(
+            DivCode:         hdr.DivCode          ?? string.Empty,
+            PrNo:            hdr.PrNo,
+            PrDate:          hdr.PrDate           ?? string.Empty,
+            AmendNo:         hdr.AmendNo,
+            AmendDate:       hdr.AmendDate         ?? string.Empty,
+            AmendmentReason: hdr.AmendmentReason   ?? string.Empty,
+            RefNo:           hdr.RefNo             ?? string.Empty,
+            CreatedBy:       hdr.CreatedBy         ?? string.Empty,
+            CreatedDt:       hdr.CreatedDt         ?? string.Empty,
+            RowVersion:      hdr.RowVersion         ?? string.Empty,
+            DepCode:         hdr.DepCode           ?? string.Empty,
+            DepName:         hdr.DepName           ?? string.Empty,
+            ReqName:         hdr.ReqName           ?? string.Empty,
+            ReqEmpName:      hdr.ReqEmpName        ?? string.Empty,
+            Section:         hdr.Section           ?? string.Empty,
+            IType:           hdr.IType             ?? string.Empty,
+            IDesc:           hdr.IDesc             ?? string.Empty,
+            AppFlg:          hdr.AppFlg            ?? string.Empty,
+            CancelFlag:      hdr.CancelFlag        ?? string.Empty,
+            Lines:           lines
+        );
+    }
+
     // Raw row types — match SP column names exactly
     private sealed record SaveResultRow(int AmendNo);
 
-    private sealed record AmendHeaderRow(
-        string?  DivCode,
-        decimal  PrNo,
-        string?  PrDate,
-        int      AmendNo,
-        string?  AmendDate,
-        string?  AmendmentReason,
-        string?  RefNo,
-        string?  CreatedBy,
-        string?  CreatedDt,
-        byte[]?  RowVersion,
-        string?  DepCode,
-        string?  DepName,
-        string?  ReqName,
-        string?  ReqEmpName,
-        string?  Section,
-        string?  IType,
-        string?  IDesc,
-        string?  AppFlg,
-        string?  CancelFlag);
+    // Property classes — Dapper maps by name, so SP column order and additions never cause constructor errors.
+    private sealed class AmendHeaderRow
+    {
+        public string?  DivCode          { get; init; }
+        public decimal  PrNo             { get; init; }
+        public string?  PrDate           { get; init; }
+        public int      AmendNo          { get; init; }
+        public string?  AmendDate        { get; init; }
+        public string?  AmendmentReason  { get; init; }
+        public string?  RefNo            { get; init; }
+        public string?  CreatedBy        { get; init; }
+        public string?  CreatedDt        { get; init; }
+        public byte[]?  RowVersion       { get; init; }
+        public string?  DepCode          { get; init; }
+        public string?  DepName          { get; init; }
+        public string?  ReqName          { get; init; }
+        public string?  ReqEmpName       { get; init; }
+        public string?  Section          { get; init; }
+        public string?  IType            { get; init; }
+        public string?  IDesc            { get; init; }
+        public string?  AppFlg           { get; init; }
+        public string?  CancelFlag       { get; init; }
+    }
 
-    private sealed record AmendPrintHeaderRow(
-        string?  DivCode,
-        decimal  PrNo,
-        string?  PrDate,
-        int      AmendNo,
-        string?  AmendDate,
-        string?  AmendmentReason,
-        string?  RefNo,
-        string?  CreatedBy,
-        string?  DepCode,
-        string?  DepName,
-        string?  ReqName,
-        byte[]?  DivLogo,
-        string?  DivName,
-        string?  DivPrintName,
-        string?  DivUnitName,
-        string?  DivAddress1,
-        string?  DivAddress2,
-        string?  DivAddress3,
-        string?  DivPinCode,
-        string?  DivState,
-        string?  DivPhone,
-        string?  DivEmail);
+    // ForNew SP returns RowVersion as '' (string) + ExistingAmendCount
+    private sealed class AmendHeaderForNewRow
+    {
+        public string?  DivCode          { get; init; }
+        public decimal  PrNo             { get; init; }
+        public string?  PrDate           { get; init; }
+        public int      AmendNo          { get; init; }
+        public string?  AmendDate        { get; init; }
+        public string?  AmendmentReason  { get; init; }
+        public string?  RefNo            { get; init; }
+        public string?  CreatedBy        { get; init; }
+        public string?  CreatedDt        { get; init; }
+        public string?  RowVersion       { get; init; }
+        public string?  DepCode          { get; init; }
+        public string?  DepName          { get; init; }
+        public string?  ReqName          { get; init; }
+        public string?  ReqEmpName       { get; init; }
+        public string?  Section          { get; init; }
+        public string?  IType            { get; init; }
+        public string?  IDesc            { get; init; }
+        public string?  AppFlg           { get; init; }
+        public string?  CancelFlag       { get; init; }
+        public int      ExistingAmendCount { get; init; }
+    }
+
+    private sealed class AmendPrintHeaderRow
+    {
+        public string?  DivCode          { get; init; }
+        public decimal  PrNo             { get; init; }
+        public string?  PrDate           { get; init; }
+        public int      AmendNo          { get; init; }
+        public string?  AmendDate        { get; init; }
+        public string?  AmendmentReason  { get; init; }
+        public string?  RefNo            { get; init; }
+        public string?  CreatedBy        { get; init; }
+        public string?  DepCode          { get; init; }
+        public string?  DepName          { get; init; }
+        public string?  ReqName          { get; init; }
+        public byte[]?  DivLogo          { get; init; }
+        public string?  DivName          { get; init; }
+        public string?  DivPrintName     { get; init; }
+        public string?  DivUnitName      { get; init; }
+        public string?  DivAddress1      { get; init; }
+        public string?  DivAddress2      { get; init; }
+        public string?  DivAddress3      { get; init; }
+        public string?  DivPinCode       { get; init; }
+        public string?  DivState         { get; init; }
+        public string?  DivPhone         { get; init; }
+        public string?  DivEmail         { get; init; }
+    }
 }

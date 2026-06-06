@@ -4,10 +4,13 @@ import { usePrAmendmentForm } from '../hooks/usePrAmendmentForm'
 import { PrAmendmentHeader } from '../components/amendment/PrAmendmentHeader'
 import { PrAmendmentLineGrid } from '../components/amendment/PrAmendmentLineGrid'
 import * as amendApi from '../api/prAmendmentApi'
-import type { AmendmentSummary, PrSummary } from '../types'
+import * as prApi from '../api/prApi'
+import { useAuthStore } from '@/features/auth/store/useAuthStore'
+import type { AmendmentSummary, PrSummary, PrTypeOption } from '../types'
 import PrAmendmentListModal from '../components/amendment/PrAmendmentListModal'
 import PrPickerForAmendModal from '../components/amendment/PrPickerForAmendModal'
 import { getFYBounds } from '@/shared/lib/dateUtils'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 // ── Style tokens ──────────────────────────────────────────────────────────────
 function tbBtn(extra?: React.CSSProperties): React.CSSProperties {
@@ -33,6 +36,7 @@ const NAV_BTN: React.CSSProperties = {
 const SEP: React.CSSProperties = { width: 1, height: 20, background: '#e2e2e2', margin: '0 4px' }
 
 export default function PrAmendmentPage() {
+  usePageTitle('PR Amendment')
   const { message } = App.useApp()
 
   const {
@@ -42,38 +46,51 @@ export default function PrAmendmentPage() {
     navList, navIdx,
     processingDate,
     loadForNew, loadById, loadLastAmendment,
-    enterNew, enterModify, enterDelete, enterFind,
+    enterNew, enterFind,
     navFirst, navPrev, navNext, navLast,
-    doSave, doDelete, doDeleteLine, resetForm,
+    doSave, resetForm,
   } = usePrAmendmentForm()
 
   const [prPickerOpen,   setPrPickerOpen]   = useState(false)
   const [amendListOpen,  setAmendListOpen]  = useState(false)
-  const [amendListMode,  setAmendListMode]  = useState<'modify' | 'delete' | 'view'>('view')
+  const [amendListMode,  setAmendListMode]  = useState<'view'>('view')
   const [printLoading,   setPrintLoading]   = useState(false)
   const [printBlobUrl,   setPrintBlobUrl]   = useState<string | null>(null)
   const [printOpen,      setPrintOpen]      = useState(false)
   const [printFilename,  setPrintFilename]  = useState('')
 
+  // PR Type options + PurTypeFlg (fetched once on mount)
+  const divCode = useAuthStore((s) => s.user?.divCode ?? '')
+  const [prTypes,    setPrTypes]    = useState<PrTypeOption[]>([])
+  const [purTypeFlg, setPurTypeFlg] = useState(0)
+
   // Editable header fields
   const [refNo,          setRefNo]          = useState('')
   const [amendReason,    setAmendReason]    = useState('')
+  const [iType,          setIType]          = useState<string>('')
   const [reasonError,    setReasonError]    = useState(false)
-  const [deleteSubMode,  setDeleteSubMode]  = useState<'complete' | 'line' | null>(null)
-
   const { yfDate: fyStart, ylDate: fyEnd } = getFYBounds(
     processingDate ? new Date(processingDate) : undefined,
   )
+
+  // Fetch PR Types and PurTypeFlg once on mount
+  useEffect(() => {
+    if (!divCode) return
+    void prApi.getPrTypes().then(setPrTypes).catch(() => {/* non-fatal */})
+    void prApi.getParameters(divCode).then((p) => setPurTypeFlg(p.purTypeFlg)).catch(() => {/* non-fatal */})
+  }, [divCode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync header fields when a record loads
   useEffect(() => {
     if (header) {
       setRefNo(header.refNo ?? '')
       setAmendReason(header.amendmentReason ?? '')
+      setIType(header.iType ?? '')
       setReasonError(false)
     } else if (mode === 'new') {
       setRefNo('')
       setAmendReason('')
+      setIType('')
       setReasonError(false)
     }
   }, [header, mode])
@@ -83,15 +100,10 @@ export default function PrAmendmentPage() {
   // ── Computed states ───────────────────────────────────────────────────────
   const isView  = mode === 'view'
   const isNew   = mode === 'new'
-  const isMod   = mode === 'modify'
-  const isDel   = mode === 'delete'
   const isNone  = mode === 'none'
-  const hasRec  = navList.length > 0
-  const editing = isNew || isMod || isDel
+  const editing = isNew
 
   const canNew    = (isView || isNone) && !saving
-  const canModify = (isView || isNone) && hasRec && !saving
-  const canDelete = (isView || isNone) && hasRec && !saving
   const canFind   = (isView || isNone) && !saving
   const canSave   = editing && !saving
   const canCancel = editing && !saving
@@ -104,18 +116,6 @@ export default function PrAmendmentPage() {
     setPrPickerOpen(true)
   }, [enterNew])
 
-  const handleModify = useCallback(() => {
-    enterModify()
-    setAmendListMode('modify')
-    setAmendListOpen(true)
-  }, [enterModify])
-
-  const handleDelete = useCallback(() => {
-    enterDelete()
-    setAmendListMode('delete')
-    setAmendListOpen(true)
-  }, [enterDelete])
-
   const handleFind = useCallback(() => {
     enterFind()
     setAmendListMode('view')
@@ -123,44 +123,42 @@ export default function PrAmendmentPage() {
   }, [enterFind])
 
   const handleCancel = useCallback(() => {
-    setDeleteSubMode(null)
-    if ((isMod || isDel) && header && header.amendNo > 0) {
-      void loadById(header.prNo, header.prDate, header.amendNo, 'view')
-    } else if (navList.length > 0) {
+    if (navList.length > 0) {
       const idx = navIdx >= 0 && navIdx < navList.length ? navIdx : 0
       const rec = navList[idx]
       void loadById(rec.prNo, rec.prDate, rec.amendNo, 'view')
     } else {
       resetForm()
     }
-  }, [isMod, isDel, header, navList, navIdx, loadById, resetForm])
+  }, [navList, navIdx, loadById, resetForm])
 
   const handleSave = useCallback(async () => {
-    if (isDel && deleteSubMode === 'complete') {
-      const lbl = header ? `AMD-${String(header.amendNo).padStart(4, '0')}` : 'this amendment'
-      Modal.confirm({
-        icon: null,
-        title: 'Confirm Delete',
-        content: `This will permanently delete Amendment ${lbl} and all its line items. This cannot be undone.`,
-        okText: 'Confirm Delete',
-        okButtonProps: { danger: true },
-        onOk: async () => { setDeleteSubMode(null); await doDelete() },
-      })
-    } else if (isDel && deleteSubMode === 'line') {
-      message.info('Click a line in the grid to delete it.')
-    } else if (isDel) {
-      message.warning('Please choose Delete Amendment or Delete Line below.')
-    } else {
-      if (!amendReason.trim()) { setReasonError(true); message.error('Amendment Reason is required.'); return }
-      setReasonError(false)
-      await doSave(refNo, amendReason)
-    }
-  }, [isDel, header, amendReason, refNo, doSave, doDelete, message])
+    if (!amendReason.trim()) { setReasonError(true); message.error('Amendment Reason is required.'); return }
+    if (purTypeFlg === 1 && !iType.trim()) { message.error('PR Type is required.'); return }
+    setReasonError(false)
+    await doSave(refNo, amendReason, iType || null)
+  }, [amendReason, refNo, iType, purTypeFlg, doSave, message])
 
   const handlePrSelected = useCallback(async (pr: PrSummary) => {
     setPrPickerOpen(false)
+    try {
+      const existing = await amendApi.getAmendmentList(divCode, fyStart, fyEnd, pr.prNo)
+      if (existing.length > 0) {
+        Modal.confirm({
+          icon: null,
+          title: 'Prior Amendments Found',
+          content: `This PR has already been amended ${existing.length} time${existing.length === 1 ? '' : 's'}. Do you want to proceed?`,
+          okText: 'Proceed',
+          cancelText: 'Cancel',
+          onOk: () => void loadForNew(pr.prNo, pr.prDate),
+        })
+        return
+      }
+    } catch {
+      // Non-fatal — proceed without the check
+    }
     await loadForNew(pr.prNo, pr.prDate)
-  }, [loadForNew])
+  }, [divCode, fyStart, fyEnd, loadForNew])
 
   const handleAmendSelected = useCallback(async (amend: AmendmentSummary) => {
     setAmendListOpen(false)
@@ -235,7 +233,7 @@ export default function PrAmendmentPage() {
     : 'No amendment selected'
 
   const emptySub = mode === 'none'
-    ? 'Click <strong>New</strong> (F3) to create a new amendment, or <strong>Modify</strong> / <strong>Delete</strong> to load an existing one.'
+    ? 'Click <strong>New</strong> (F3) to create a new amendment, or <strong>Find</strong> to view an existing one.'
     : mode === 'new'
       ? 'Select a PR from the popup to create a new amendment.'
       : `Select an amendment from the popup to ${mode} it.`
@@ -275,29 +273,6 @@ export default function PrAmendmentPage() {
           + <span>New</span><kbd style={KBD}>F3</kbd>
         </button>
 
-        {/* Modify */}
-        <button
-          style={tbBtn(!canModify
-            ? { opacity: .4, cursor: 'not-allowed' }
-            : isMod ? { background: '#E6F1FB', color: '#185FA5', borderColor: '#a8c8ea', fontWeight: 600 } : {}
-          )}
-          disabled={!canModify} onClick={handleModify}
-        >
-          ✎ <span>Modify</span>
-        </button>
-
-        {/* Delete */}
-        <button
-          style={tbBtn(!canDelete
-            ? { color: '#A32D2D', borderColor: '#A32D2D', opacity: .4, cursor: 'not-allowed' }
-            : isDel
-              ? { background: '#FCEBEB', color: '#A32D2D', borderColor: '#A32D2D', fontWeight: 600 }
-              : { color: '#A32D2D', borderColor: '#A32D2D' }
-          )}
-          disabled={!canDelete} onClick={handleDelete}
-        >
-          🗑 <span>Delete</span>
-        </button>
 
         {/* Find */}
         <button
@@ -335,10 +310,8 @@ export default function PrAmendmentPage() {
         <button
           style={tbBtn(
             !canSave
-              ? { opacity: .4, cursor: 'not-allowed', ...(isDel ? { background: '#A32D2D', color: '#fff', borderColor: '#A32D2D' } : { background: '#185FA5', color: '#fff', borderColor: '#185FA5' }) }
-              : isDel
-                ? { background: '#A32D2D', color: '#fff', borderColor: '#A32D2D' }
-                : { background: '#185FA5', color: '#fff', borderColor: '#185FA5' },
+              ? { opacity: .4, cursor: 'not-allowed', background: '#185FA5', color: '#fff', borderColor: '#185FA5' }
+              : { background: '#185FA5', color: '#fff', borderColor: '#185FA5' },
           )}
           disabled={!canSave} onClick={() => void handleSave()}
         >
@@ -362,39 +335,6 @@ export default function PrAmendmentPage() {
         </button>
       </div>
 
-      {/* ── Delete Banner ─────────────────────────────────────────────────────── */}
-      {isDel && header && (
-        <div style={{
-          background: '#FCEBEB', borderBottom: '2px solid #A32D2D',
-          padding: '8px 16px', flexShrink: 0,
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-        }}>
-          <span style={{ fontSize: 12, color: '#A32D2D', fontWeight: 600 }}>
-            ⚠ Delete mode — AMD-{String(header.amendNo).padStart(4, '0')}
-          </span>
-          <span style={{ fontSize: 11, color: '#A32D2D' }}>Choose deletion type:</span>
-          {(['complete', 'line'] as const).map((opt) => (
-            <button
-              key={opt}
-              onClick={() => setDeleteSubMode(opt)}
-              style={{
-                fontSize: 11, fontWeight: 600, padding: '3px 12px', borderRadius: 6, cursor: 'pointer',
-                border: `1px solid #A32D2D`,
-                background: deleteSubMode === opt ? '#A32D2D' : '#fff',
-                color:      deleteSubMode === opt ? '#fff'    : '#A32D2D',
-              }}
-            >
-              {opt === 'complete' ? 'Delete Amendment' : 'Delete Line'}
-            </button>
-          ))}
-          {deleteSubMode === 'line' && (
-            <span style={{ fontSize: 11, color: '#555', fontStyle: 'italic' }}>
-              Click a line in the grid to delete it.
-            </span>
-          )}
-        </div>
-      )}
-
       {/* ── Content ───────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
@@ -407,8 +347,12 @@ export default function PrAmendmentPage() {
             amendReason={amendReason}
             reasonError={reasonError}
             processingDate={processingDate}
+            prTypes={prTypes}
+            purTypeFlg={purTypeFlg}
+            iType={iType}
             onRefNoChange={setRefNo}
             onAmendReasonChange={(v) => { setAmendReason(v); if (v.trim()) setReasonError(false) }}
+            onITypeChange={setIType}
             onFindPR={() => { if (mode === 'new') setPrPickerOpen(true) }}
           />
         </Spin>
@@ -448,22 +392,12 @@ export default function PrAmendmentPage() {
             <>
               <PrAmendmentLineGrid
                 lines={lines}
-                isReadOnly={isView || isDel}
+                isReadOnly={isView}
                 depCode={header?.depCode ?? ''}
                 depName={header?.depName ?? ''}
                 amendDate={header?.amendDate}
+                prDate={header?.prDate}
                 onChange={setLines}
-                onLineDelete={deleteSubMode === 'line' ? (prSno) => {
-                  const lineItem = lines.find((l) => l.prSno === prSno)
-                  Modal.confirm({
-                    icon: null,
-                    title: 'Delete Line',
-                    content: `Delete line ${lineItem?.itemCode ?? prSno} (${lineItem?.itemName ?? ''}) from this amendment?`,
-                    okText: 'Delete Line',
-                    okButtonProps: { danger: true },
-                    onOk: async () => { await doDeleteLine(prSno) },
-                  })
-                } : undefined}
               />
               {/* Footer summary */}
               <div style={{ background: '#fff', borderTop: '1px solid #e2e2e2', display: 'flex', flexShrink: 0 }}>

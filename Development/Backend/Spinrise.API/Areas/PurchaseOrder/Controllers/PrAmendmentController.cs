@@ -80,65 +80,6 @@ public class PrAmendmentController : BaseApiController
         return OkResponse(new { AmendNo = amendNo }, $"Amendment No. {amendNo} created successfully.");
     }
 
-    // ── Modify ─────────────────────────────────────────────────────────────────
-
-    [HttpPut("{prNo}/{prDate}/{amendNo:int}")]
-    public async Task<IActionResult> Modify(
-        decimal  prNo,
-        DateOnly prDate,
-        int      amendNo,
-        [FromQuery] string divCode,
-        [FromQuery] DateOnly fDate,
-        [FromQuery] DateOnly lDate,
-        [FromBody]  SaveAmendmentRequest request)
-    {
-        var userId    = User.FindFirstValue(SpinriseClaims.UserId) ?? string.Empty;
-        var hostName  = HttpContext.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-
-        await _service.ModifyAsync(divCode, amendNo, request, userId, fDate, lDate, hostName, ipAddress);
-        return OkResponse("Amendment updated successfully.");
-    }
-
-    // ── Delete ─────────────────────────────────────────────────────────────────
-
-    [HttpDelete("{prNo}/{prDate}/{amendNo:int}")]
-    public async Task<IActionResult> Delete(
-        decimal  prNo,
-        DateOnly prDate,
-        int      amendNo,
-        [FromQuery] string divCode,
-        [FromQuery] string rowVersion)
-    {
-        var userId    = User.FindFirstValue(SpinriseClaims.UserId) ?? string.Empty;
-        var hostName  = HttpContext.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-
-        await _service.DeleteAsync(divCode, prNo, prDate, amendNo, rowVersion, userId, hostName, ipAddress);
-        return OkResponse("Amendment deleted successfully.");
-    }
-
-    // ── Delete Line (deltype=2 — single line from saved amendment) ────────────
-
-    [HttpDelete("{prNo}/{prDate}/{amendNo:int}/lines/{prSno:int}")]
-    public async Task<IActionResult> DeleteLine(
-        decimal  prNo,
-        DateOnly prDate,
-        int      amendNo,
-        int      prSno,
-        [FromQuery] string  divCode,
-        [FromQuery] string  rowVersion,
-        [FromQuery] DateOnly pDate)
-    {
-        var userId    = User.FindFirstValue(SpinriseClaims.UserId) ?? string.Empty;
-        var hostName  = HttpContext.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-
-        await _service.DeleteLineAsync(divCode, prNo, prDate, amendNo, prSno,
-            rowVersion, pDate, userId, hostName, ipAddress);
-        return OkResponse("Amendment line deleted successfully.");
-    }
-
     // ── Print ──────────────────────────────────────────────────────────────────
 
     [HttpGet("{prNo}/{prDate}/{amendNo:int}/print")]
@@ -148,7 +89,8 @@ public class PrAmendmentController : BaseApiController
         int      amendNo,
         [FromQuery] string divCode)
     {
-        var data = await _service.GetPrintDataAsync(divCode, prNo, prDate, amendNo);
+        var userId = User.FindFirstValue(SpinriseClaims.UserId) ?? string.Empty;
+        var data   = await _service.GetPrintDataAsync(divCode, prNo, prDate, amendNo, userId);
         if (data is null) return NotFoundResponse("No records to print.");
 
         var pdfBytes = PrAmendmentPrintDocument.Generate(data);

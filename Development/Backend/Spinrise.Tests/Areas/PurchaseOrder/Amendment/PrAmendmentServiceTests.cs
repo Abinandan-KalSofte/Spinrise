@@ -50,9 +50,9 @@ public class PrAmendmentServiceTests
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("*Amendment Reason*");
         _repo.Verify(r => r.SaveAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<DateOnly>(),
+            It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<DateOnly>(),
             It.IsAny<SaveAmendmentRequest>(), It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(),
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+            It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -109,83 +109,14 @@ public class PrAmendmentServiceTests
     public async Task AddAsync_ValidRequest_CallsRepoAndReturnsAmendNo()
     {
         var request = MakeRequest();
-        _repo.Setup(r => r.SaveAsync("ADD", DivCode, 12345m, PrDate,
-            request, UserId, FDate, LDate, null, null, null))
+        _repo.Setup(r => r.SaveAsync(DivCode, 12345m, PrDate,
+            request, UserId, FDate, LDate, null, null))
              .ReturnsAsync(1);
 
         var result = await _sut.AddAsync(DivCode, request, UserId, FDate, LDate, null, null);
 
         result.Should().Be(1);
-        _repo.Verify(r => r.SaveAsync("ADD", DivCode, 12345m, PrDate,
-            request, UserId, FDate, LDate, null, null, null), Times.Once);
-    }
-
-    // ── ModifyAsync — validation failure ─────────────────────────────────────
-
-    [Fact]
-    public async Task ModifyAsync_EmptyAmendmentReason_ThrowsArgumentException()
-    {
-        var request = MakeRequest(reason: "");
-        var act = () => _sut.ModifyAsync(DivCode, amendNo: 1, request, UserId, FDate, LDate, null, null);
-
-        await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*Amendment Reason*");
-        _repo.Verify(r => r.SaveAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<DateOnly>(),
-            It.IsAny<SaveAmendmentRequest>(), It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<DateOnly>(),
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
-    }
-
-    // ── ModifyAsync — happy path ──────────────────────────────────────────────
-
-    [Fact]
-    public async Task ModifyAsync_ValidRequest_CallsRepoWithModifyMode()
-    {
-        var request = MakeRequest();
-        _repo.Setup(r => r.SaveAsync("MODIFY", DivCode, 12345m, PrDate,
-            request, UserId, FDate, LDate, null, null, 2))
-             .ReturnsAsync(2);
-
-        var result = await _sut.ModifyAsync(DivCode, amendNo: 2, request, UserId, FDate, LDate, null, null);
-
-        result.Should().Be(2);
-        _repo.Verify(r => r.SaveAsync("MODIFY", DivCode, 12345m, PrDate,
-            request, UserId, FDate, LDate, null, null, 2), Times.Once);
-    }
-
-    // ── DeleteAsync — happy path ──────────────────────────────────────────────
-
-    [Fact]
-    public async Task DeleteAsync_ValidRequest_CallsRepoWithDeleteMode()
-    {
-        _repo.Setup(r => r.SaveAsync("DELETE", DivCode, 12345m, PrDate,
-            It.IsAny<SaveAmendmentRequest>(), UserId, PrDate, PrDate, null, null, 1))
-             .ReturnsAsync(1);
-
-        var result = await _sut.DeleteAsync(DivCode, 12345m, PrDate, amendNo: 1,
-            rowVersion: "AAAAAAAAAA==", UserId, null, null);
-
-        result.Should().Be(1);
-        _repo.Verify(r => r.SaveAsync("DELETE", DivCode, 12345m, PrDate,
-            It.IsAny<SaveAmendmentRequest>(), UserId, PrDate, PrDate, null, null, 1), Times.Once);
-    }
-
-    // ── DeleteLineAsync — happy path ──────────────────────────────────────────
-
-    [Fact]
-    public async Task DeleteLineAsync_ValidRequest_CallsRepoDeleteLine()
-    {
-        var rowVersionBase64 = Convert.ToBase64String([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]);
-        var expectedBytes    = Convert.FromBase64String(rowVersionBase64);
-
-        _repo.Setup(r => r.DeleteLineAsync(DivCode, 12345m, PrDate, 1, 2,
-            It.Is<byte[]>(b => b.SequenceEqual(expectedBytes)),
-            FDate, UserId, null, null))
-             .ReturnsAsync(1);
-
-        var result = await _sut.DeleteLineAsync(DivCode, 12345m, PrDate, amendNo: 1, prSno: 2,
-            rowVersionBase64, FDate, UserId, null, null);
-
-        result.Should().Be(1);
+        _repo.Verify(r => r.SaveAsync(DivCode, 12345m, PrDate,
+            request, UserId, FDate, LDate, null, null), Times.Once);
     }
 }

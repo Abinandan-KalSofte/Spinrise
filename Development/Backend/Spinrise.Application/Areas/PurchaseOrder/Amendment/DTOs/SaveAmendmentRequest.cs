@@ -9,7 +9,8 @@ public class SaveAmendmentRequest
     [Required] public string PrDate           { get; set; } = string.Empty;
     [Required] public string AmendmentReason  { get; set; } = string.Empty;
     public string? RefNo                      { get; set; }
-    public string? RowVersion                 { get; set; }   // base64; required on MODIFY/DELETE
+    public string? IType                      { get; set; }   // editable PR Type; null = inherit from PR
+    public string? RowVersion                 { get; set; }   // base64; used for PATH A line-level concurrency
     [Required] public string PDate            { get; set; } = string.Empty;   // processing date; enforces BR-AMD-01
     public List<SaveAmendmentLineRequest> Lines { get; set; } = [];
 }

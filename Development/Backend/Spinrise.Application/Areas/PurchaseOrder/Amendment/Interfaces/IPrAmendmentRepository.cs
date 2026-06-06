@@ -15,14 +15,10 @@ public interface IPrAmendmentRepository
         string divCode, decimal prNo, DateOnly prDate);
 
     Task<int> SaveAsync(
-        string mode, string divCode, decimal prNo, DateOnly prDate,
+        string divCode, decimal prNo, DateOnly prDate,
         SaveAmendmentRequest request, string userId, DateOnly fDate, DateOnly lDate,
-        string? hostName, string? ipAddress, int? amendNo = null);
-
-    Task<int> DeleteLineAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo, int prSno,
-        byte[] rowVersionBytes, DateOnly pDate, string userId, string? hostName, string? ipAddress);
+        string? hostName, string? ipAddress);
 
     Task<PrAmendmentPrintDto?> GetPrintDataAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo);
+        string divCode, decimal prNo, DateOnly prDate, int amendNo, string userId);
 }

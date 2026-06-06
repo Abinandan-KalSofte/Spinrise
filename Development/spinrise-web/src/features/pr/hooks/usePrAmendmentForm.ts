@@ -10,7 +10,7 @@ import type {
 
 export type DeleteLineMode = 'complete' | 'line' | null
 
-export type AmendMode = 'none' | 'new' | 'view' | 'modify' | 'delete'
+export type AmendMode = 'none' | 'new' | 'view'
 
 
 
@@ -124,18 +124,6 @@ export function usePrAmendmentForm() {
     setMode('new')
   }, [])
 
-  const enterModify = useCallback(() => {
-    setHeader(null)
-    setLines([])
-    setMode('modify')
-  }, [])
-
-  const enterDelete = useCallback(() => {
-    setHeader(null)
-    setLines([])
-    setMode('delete')
-  }, [])
-
   const enterFind = useCallback(() => {
     setHeader(null)
     setLines([])
@@ -167,7 +155,7 @@ export function usePrAmendmentForm() {
   const navLast  = useCallback(() => void navTo(navListRef.current.length - 1), [navTo])
 
   // ── Save (Add or Modify) ──────────────────────────────────────────────────
-  const doSave = useCallback(async (refNo: string, amendReason: string): Promise<boolean> => {
+  const doSave = useCallback(async (refNo: string, amendReason: string, iType: string | null): Promise<boolean> => {
     const hdr = header
     if (!hdr) return false
 
@@ -186,7 +174,41 @@ export function usePrAmendmentForm() {
     }
     const qtyEmpty = lines.find((l) => !l.qtyInd || l.qtyInd <= 0)
     if (qtyEmpty) {
-      message.error(`Qty must be > 0 for item ${qtyEmpty.itemCode}.`)
+      message.error(`Qty must be greater than 0 for item ${qtyEmpty.itemCode}.`)
+      return false
+    }
+    const belowMin = lines.find((l) =>
+      (l.minLevel ?? 0) > 0 && l.qtyInd > 0 && l.qtyInd < (l.minLevel ?? 0)
+    )
+    if (belowMin) {
+      message.error(`Qty for ${belowMin.itemCode} is below the minimum order level (min: ${belowMin.minLevel}).`)
+      return false
+    }
+    const aboveMax = lines.find((l) =>
+      (l.maxLevel ?? 0) > 0 && l.qtyInd > 0 && l.qtyInd > (l.maxLevel ?? 0)
+    )
+    if (aboveMax) {
+      message.error(`Qty for ${aboveMax.itemCode} exceeds the maximum order level (max: ${aboveMax.maxLevel}).`)
+      return false
+    }
+    const rateOverMax = lines.find((l) => (l.rate ?? 0) > 999_999_999)
+    if (rateOverMax) {
+      message.error(`Rate for ${rateOverMax.itemCode} exceeds the maximum allowed value.`)
+      return false
+    }
+    const costOverMax = lines.find((l) => l.appCost > 99_999_999_999)
+    if (costOverMax) {
+      message.error(`Approx. value for ${costOverMax.itemCode} exceeds the maximum allowed value.`)
+      return false
+    }
+    const prDayjs = hdr.prDate
+      ? (hdr.prDate.includes('/') ? hdr.prDate.split('/').reverse().join('-') : hdr.prDate)
+      : null
+    const badDate = prDayjs
+      ? lines.find((l) => l.reqdDate && l.reqdDate < prDayjs)
+      : null
+    if (badDate) {
+      message.error(`Required Date for item ${badDate.itemCode} cannot be before the PR Date.`)
       return false
     }
 
@@ -201,6 +223,7 @@ export function usePrAmendmentForm() {
       amendDate:       processingDate ?? todayIso,
       amendmentReason: amendReason.trim(),
       refNo:           refNo.trim() || null,
+      iType:           iType || null,
       rowVersion:      hdr.rowVersion || null,
       pDate:           processingDate ?? todayIso,
       lines: resolvedLines.map((l) => ({
@@ -225,21 +248,14 @@ export function usePrAmendmentForm() {
 
     setSaving(true)
     try {
-      if (mode === 'new') {
-        const result = await api.addAmendment(divCode, yfDate, ylDate, request)
-        message.success(`Amendment No. ${result.amendNo} created.`)
-        const list = await refreshNavList()
-        const newIdx = list.findIndex(
-          (n) => n.amendNo === result.amendNo && String(n.prNo) === String(hdr.prNo),
-        )
-        if (newIdx >= 0) setNavIdxSync(newIdx)
-        await loadById(hdr.prNo, hdr.prDate, result.amendNo, 'view')
-      } else {
-        await api.modifyAmendment(divCode, hdr.prNo, hdr.prDate, hdr.amendNo, yfDate, ylDate, request)
-        message.success('Amendment updated.')
-        await refreshNavList()
-        await loadById(hdr.prNo, hdr.prDate, hdr.amendNo, 'view')
-      }
+      const result = await api.addAmendment(divCode, yfDate, ylDate, request)
+      message.success(`Amendment No. ${result.amendNo} created.`)
+      const list = await refreshNavList()
+      const newIdx = list.findIndex(
+        (n) => n.amendNo === result.amendNo && String(n.prNo) === String(hdr.prNo),
+      )
+      if (newIdx >= 0) setNavIdxSync(newIdx)
+      await loadById(hdr.prNo, hdr.prDate, result.amendNo, 'view')
       return true
     } catch (e: unknown) {
       message.error((e as Error).message ?? 'Save failed.')
@@ -247,64 +263,7 @@ export function usePrAmendmentForm() {
     } finally {
       setSaving(false)
     }
-  }, [header, lines, mode, divCode, yfDate, ylDate, loadById, refreshNavList, setNavIdxSync, message])
-
-  // ── Delete ────────────────────────────────────────────────────────────────
-  const doDelete = useCallback(async (): Promise<boolean> => {
-    const hdr = header
-    if (!hdr?.rowVersion) {
-      message.error('Cannot delete: record version missing.')
-      return false
-    }
-    setSaving(true)
-    try {
-      await api.deleteAmendment(divCode, hdr.prNo, hdr.prDate, hdr.amendNo, hdr.rowVersion)
-      message.success('Amendment deleted.')
-      const list = await refreshNavList()
-      if (list.length > 0) {
-        const idx = Math.min(Math.max(navIdxRef.current, 0), list.length - 1)
-        const rec = list[idx]
-        const data = await api.getAmendmentById(divCode, rec.prNo, rec.prDate, rec.amendNo)
-        setHeader(data)
-        setLines(mapLines(data.lines))
-        setNavIdxSync(idx)
-        setMode('view')
-      } else {
-        setHeader(null)
-        setLines([])
-        setNavIdxSync(-1)
-        setMode('none')
-      }
-      return true
-    } catch (e: unknown) {
-      message.error((e as Error).message ?? 'Delete failed.')
-      return false
-    } finally {
-      setSaving(false)
-    }
-  }, [header, divCode, refreshNavList, setNavIdxSync, message]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Delete single line from saved amendment (deltype=2) ──────────────────
-  const doDeleteLine = useCallback(async (prSno: number): Promise<boolean> => {
-    const hdr = header
-    if (!hdr) return false
-    const todayIso = new Date().toISOString().split('T')[0]
-    setSaving(true)
-    try {
-      await api.deleteAmendmentLine(
-        divCode, hdr.prNo, hdr.prDate, hdr.amendNo, prSno,
-        hdr.rowVersion, processingDate ?? todayIso,
-      )
-      message.success('Line deleted from amendment.')
-      await loadById(hdr.prNo, hdr.prDate, hdr.amendNo, 'view')
-      return true
-    } catch (e: unknown) {
-      message.error((e as Error).message ?? 'Line delete failed.')
-      return false
-    } finally {
-      setSaving(false)
-    }
-  }, [header, divCode, processingDate, loadById, message])
+  }, [header, lines, divCode, yfDate, ylDate, loadById, refreshNavList, setNavIdxSync, message])
 
   // ── Reset to blank ────────────────────────────────────────────────────────
   const resetForm = useCallback(() => {
@@ -321,8 +280,8 @@ export function usePrAmendmentForm() {
     divCode, processingDate,
     yfDate, ylDate,
     loadForNew, loadById, loadLastAmendment,
-    enterNew, enterModify, enterDelete, enterFind,
+    enterNew, enterFind,
     navFirst, navPrev, navNext, navLast,
-    doSave, doDelete, doDeleteLine, resetForm,
+    doSave, resetForm,
   }
 }

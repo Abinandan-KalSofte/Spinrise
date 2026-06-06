@@ -34,65 +34,17 @@ public class PrAmendmentService : IPrAmendmentService
         string? hostName, string? ipAddress)
     {
         ValidateRequest(request);
-        var amendNo = await _repo.SaveAsync("ADD", divCode,
+        var amendNo = await _repo.SaveAsync(divCode,
             decimal.Parse(request.PrNo), ParsePrDate(request.PrDate),
-            request, userId, fDate, lDate, hostName, ipAddress, amendNo: null);
+            request, userId, fDate, lDate, hostName, ipAddress);
         _logger.LogInformation("Amendment Add | Div: {DivCode} | PR: {PrNo} | AmendNo: {AmendNo} | User: {UserId}",
             divCode, request.PrNo, amendNo, userId);
         return amendNo;
     }
 
-    public async Task<int> ModifyAsync(
-        string divCode, int amendNo, SaveAmendmentRequest request,
-        string userId, DateOnly fDate, DateOnly lDate,
-        string? hostName, string? ipAddress)
-    {
-        ValidateRequest(request);
-        var result = await _repo.SaveAsync("MODIFY", divCode,
-            decimal.Parse(request.PrNo), ParsePrDate(request.PrDate),
-            request, userId, fDate, lDate, hostName, ipAddress, amendNo: amendNo);
-        _logger.LogInformation("Amendment Modify | Div: {DivCode} | PR: {PrNo} | AmendNo: {AmendNo} | User: {UserId}",
-            divCode, request.PrNo, result, userId);
-        return result;
-    }
-
-    public async Task<int> DeleteAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo,
-        string rowVersion, string userId, string? hostName, string? ipAddress)
-    {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var req = new SaveAmendmentRequest
-        {
-            PrNo            = prNo.ToString(),
-            PrDate          = prDate.ToString("yyyy-MM-dd"),
-            AmendDate       = today.ToString("yyyy-MM-dd"),
-            PDate           = today.ToString("yyyy-MM-dd"),   // BR-AMD-01 not checked for DELETE but required by SP
-            RowVersion      = rowVersion,
-            AmendmentReason = string.Empty,
-        };
-        req.Lines.Clear();
-        var result = await _repo.SaveAsync("DELETE", divCode, prNo, prDate,
-            req, userId, prDate, prDate, hostName, ipAddress, amendNo: amendNo);
-        _logger.LogInformation("Amendment Delete | Div: {DivCode} | PR: {PrNo} | AmendNo: {AmendNo} | User: {UserId}",
-            divCode, prNo, amendNo, userId);
-        return result;
-    }
-
-    public async Task<int> DeleteLineAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo, int prSno,
-        string rowVersion, DateOnly pDate, string userId, string? hostName, string? ipAddress)
-    {
-        var rowVersionBytes = Convert.FromBase64String(rowVersion);
-        var result = await _repo.DeleteLineAsync(divCode, prNo, prDate, amendNo, prSno,
-            rowVersionBytes, pDate, userId, hostName, ipAddress);
-        _logger.LogInformation("Amendment DeleteLine | Div: {DivCode} | PR: {PrNo} | Sno: {PrSno} | User: {UserId}",
-            divCode, prNo, prSno, userId);
-        return result;
-    }
-
     public Task<PrAmendmentPrintDto?> GetPrintDataAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo)
-        => _repo.GetPrintDataAsync(divCode, prNo, prDate, amendNo);
+        string divCode, decimal prNo, DateOnly prDate, int amendNo, string userId)
+        => _repo.GetPrintDataAsync(divCode, prNo, prDate, amendNo, userId);
 
     // Accepts both ISO (YYYY-MM-DD) and display (DD/MM/YYYY) formats.
     private static DateOnly ParsePrDate(string raw)

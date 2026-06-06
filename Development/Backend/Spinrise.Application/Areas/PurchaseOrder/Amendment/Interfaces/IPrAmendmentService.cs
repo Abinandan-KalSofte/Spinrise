@@ -19,19 +19,6 @@ public interface IPrAmendmentService
         string userId, DateOnly fDate, DateOnly lDate,
         string? hostName, string? ipAddress);
 
-    Task<int> ModifyAsync(
-        string divCode, int amendNo, SaveAmendmentRequest request,
-        string userId, DateOnly fDate, DateOnly lDate,
-        string? hostName, string? ipAddress);
-
-    Task<int> DeleteAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo,
-        string rowVersion, string userId, string? hostName, string? ipAddress);
-
-    Task<int> DeleteLineAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo, int prSno,
-        string rowVersion, DateOnly pDate, string userId, string? hostName, string? ipAddress);
-
     Task<PrAmendmentPrintDto?> GetPrintDataAsync(
-        string divCode, decimal prNo, DateOnly prDate, int amendNo);
+        string divCode, decimal prNo, DateOnly prDate, int amendNo, string userId);
 }

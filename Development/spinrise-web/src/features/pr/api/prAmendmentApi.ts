@@ -59,43 +59,6 @@ export const addAmendment = (
   return apiHelpers.post<{ amendNo: number }>(`${BASE}?${params}`, request)
 }
 
-export const modifyAmendment = (
-  divCode: string,
-  prNo: number,
-  prDate: string,
-  amendNo: number,
-  fDate: string,
-  lDate: string,
-  request: SaveAmendmentRequest,
-) => {
-  const params = new URLSearchParams({ divCode, fDate, lDate })
-  return apiHelpers.put<void>(`${BASE}/${prNo}/${toIsoDate(prDate)}/${amendNo}?${params}`, request)
-}
-
-export const deleteAmendment = (
-  divCode: string,
-  prNo: number,
-  prDate: string,
-  amendNo: number,
-  rowVersion: string,
-) => {
-  const params = new URLSearchParams({ divCode, rowVersion })
-  return apiHelpers.del<void>(`${BASE}/${prNo}/${toIsoDate(prDate)}/${amendNo}?${params}`)
-}
-
-export const deleteAmendmentLine = (
-  divCode: string,
-  prNo: number,
-  prDate: string,
-  amendNo: number,
-  prSno: number,
-  rowVersion: string,
-  pDate: string,
-) => {
-  const params = new URLSearchParams({ divCode, rowVersion, pDate })
-  return apiHelpers.del<void>(`${BASE}/${prNo}/${toIsoDate(prDate)}/${amendNo}/lines/${prSno}?${params}`)
-}
-
 export const printAmendment = (
   divCode: string,
   prNo: number,
