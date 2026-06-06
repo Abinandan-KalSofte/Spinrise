@@ -40,7 +40,9 @@ CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_SaveAmendment]
     @AmendNo            INT             = NULL,
     @RowVersion         VARBINARY(8)    = NULL,
     @LinesJson          NVARCHAR(MAX)   = NULL,
-    @PrSno              INT             = NULL  -- used by DELETE_LINE mode only
+    @PrSno              INT             = NULL, -- used by DELETE_LINE mode only
+    @IType              CHAR(1)         = NULL, -- editable PR Type; overrides PO_PRH snapshot
+    @Result             INT             = 0 OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -154,6 +156,7 @@ BEGIN
                  'PR Amendment', 'D', @HostName, @IpAddress,
                  @UserId, GETDATE(), 4);
 
+            SET @Result = 0;
             COMMIT TRANSACTION;
             SELECT @ResolvedAmendNo AS AmendNo;
             RETURN;
@@ -198,6 +201,7 @@ BEGIN
                  'PR Amendment', 'DELETE_LINE', @HostName, @IpAddress,
                  @UserId, GETDATE(), 4);
 
+            SET @Result = 0;
             COMMIT TRANSACTION;
             SELECT @ResolvedAmendNo AS AmendNo;
             RETURN;
@@ -207,7 +211,6 @@ BEGIN
         DECLARE @DepCode    VARCHAR(3);
         DECLARE @ReqName    VARCHAR(25);
         DECLARE @Section    VARCHAR(20);
-        DECLARE @IType      CHAR(1);
         DECLARE @PlaceOfIss VARCHAR(30);
 
         IF @Mode = 'ADD'
@@ -219,24 +222,29 @@ BEGIN
                   AND  CAST(prdate AS DATE) = @PrDate
             )
             BEGIN
+                DECLARE @CapturedIType CHAR(1);
                 SELECT @DepCode = depcode, @ReqName = REQNAME,
-                       @Section = SECTION, @IType = ITYPE, @PlaceOfIss = PLACEOFISS
+                       @Section = SECTION, @CapturedIType = ITYPE, @PlaceOfIss = PLACEOFISS
                 FROM   dbo.PO_PRH
                 WHERE  divcode              = @DivCode
                   AND  prno                 = @PrNo
                   AND  CAST(prdate AS DATE) = @PrDate;
+                -- User-supplied @IType overrides the PO_PRH snapshot
+                SET @IType = ISNULL(@IType, @CapturedIType);
             END
             ELSE
             BEGIN
                 -- Legacy fallback: PO_PRH absent (pre-CR save) — read from latest PO_APRH
+                DECLARE @CapturedIType2 CHAR(1);
                 SELECT TOP 1
                        @DepCode = depcode, @ReqName = REQNAME,
-                       @Section = SECTION, @IType = ITYPE, @PlaceOfIss = PLACEOFISS
+                       @Section = SECTION, @CapturedIType2 = ITYPE, @PlaceOfIss = PLACEOFISS
                 FROM   dbo.PO_APRH
                 WHERE  divcode              = @DivCode
                   AND  prno                 = @PrNo
                   AND  CAST(prdate AS DATE) = @PrDate
                 ORDER BY amendno DESC;
+                SET @IType = ISNULL(@IType, @CapturedIType2);
             END
         END
 
@@ -263,22 +271,88 @@ BEGIN
         ELSE
         BEGIN
             UPDATE dbo.PO_APRH
-            SET    amendreason = NULLIF(RTRIM(@AmendmentReason), ''),
-                   refno       = NULLIF(RTRIM(ISNULL(@RefNo, '')), '')
+            SET    amenddate   = @AmendDate,
+                   amendreason = NULLIF(RTRIM(@AmendmentReason), ''),
+                   refno       = NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
+                   ITYPE       = ISNULL(@IType, ITYPE)
             WHERE  divcode              = @DivCode
               AND  prno                 = @PrNo
               AND  CAST(prdate AS DATE) = @PrDate
               AND  amendno              = @ResolvedAmendNo;
 
+            -- Propagate PR Type change to live PR header if user changed it
+            IF @IType IS NOT NULL AND EXISTS (
+                SELECT 1 FROM dbo.PO_PRH
+                WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate
+            )
+            BEGIN
+                UPDATE dbo.PO_PRH SET ITYPE = @IType
+                WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate;
+            END
+
+            -- PK on PO_APRL has no amendno — clear all rows for this PR so section 12 can re-insert cleanly
             DELETE FROM dbo.PO_APRL
             WHERE  divcode              = @DivCode
               AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  amendno              = @ResolvedAmendNo;
+              AND  CAST(prdate AS DATE) = @PrDate;
         END
 
-        -- ── 12. Insert amendment lines snapshot (ADD and MODIFY) ─────────────
-        --        amdflg = 'Y' flags all snapshot lines (BR from markdown §9)
+        -- ── 12. Upsert amendment lines snapshot (ADD and MODIFY) ─────────────
+        -- PO_APRL PK = (divcode, prno, prdate, prsno) — no amendno column.
+        -- ADD:    update existing prsno rows in-place; insert new prsno rows; delete removed prsno rows.
+        -- MODIFY: section 11 pre-cleared all rows → this section re-inserts fresh (step 12c only fires).
+
+        -- 12a. Delete prsno rows removed from this amendment
+        DELETE FROM dbo.PO_APRL
+        WHERE  divcode              = @DivCode
+          AND  prno                 = @PrNo
+          AND  CAST(prdate AS DATE) = @PrDate
+          AND  prsno NOT IN (
+              SELECT j.PrSno
+              FROM   OPENJSON(@LinesJson) WITH (PrSno INT '$.PrSno') j
+          );
+
+        -- 12b. Update existing prsno rows (fires in ADD mode when prior amendment already wrote them)
+        UPDATE t
+        SET    t.amendno              = @ResolvedAmendNo,
+               t.amenddate           = @AmendDate,
+               t.itemcode            = RTRIM(j.ItemCode),
+               t.macno               = NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
+               t.qtyind              = j.QtyInd,
+               t.reqddate            = TRY_CONVERT(DATE, NULLIF(j.ReqdDate, '')),
+               t.RATE                = j.Rate,
+               t.RATE_SOURCE         = ISNULL(NULLIF(RTRIM(j.RateSource), ''), 'ORIGINAL'),
+               t.RATE_JUSTIFICATION  = NULLIF(RTRIM(ISNULL(j.RateJustification, '')), ''),
+               t.curstock            = ISNULL(j.CurStock, 0),
+               t.CCCODE              = NULLIF(j.CcCode, 0),
+               t.CATCODE             = NULLIF(RTRIM(ISNULL(j.CatCode, '')), ''),
+               t.BGRPCODE            = NULLIF(RTRIM(ISNULL(j.BgrpCode, '')), ''),
+               t.PLACE               = NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
+               t.APPCOST             = NULLIF(j.AppCost, 0),
+               t.remarks             = NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), ''),
+               t.amdflg              = 'Y'
+        FROM   dbo.PO_APRL t
+        INNER JOIN OPENJSON(@LinesJson)
+        WITH (
+            PrSno              INT             '$.PrSno',
+            ItemCode           VARCHAR(10)     '$.ItemCode',
+            MacNo              VARCHAR(5)      '$.MacNo',
+            QtyInd             NUMERIC(12,3)   '$.QtyInd',
+            ReqdDate           VARCHAR(10)     '$.ReqdDate',
+            Rate               NUMERIC(13,4)   '$.Rate',
+            RateSource         VARCHAR(20)     '$.RateSource',
+            RateJustification  VARCHAR(200)    '$.RateJustification',
+            CurStock           NUMERIC(12,3)   '$.CurStock',
+            CcCode             NUMERIC(4,0)    '$.CcCode',
+            CatCode            VARCHAR(1)      '$.CatCode',
+            BgrpCode           VARCHAR(4)      '$.BgrpCode',
+            Place              VARCHAR(40)     '$.Place',
+            AppCost            NUMERIC(11,2)   '$.AppCost',
+            Remarks            VARCHAR(50)     '$.Remarks'
+        ) j ON t.divcode = @DivCode AND t.prno = @PrNo AND CAST(t.prdate AS DATE) = @PrDate AND t.prsno = j.PrSno
+        WHERE  RTRIM(ISNULL(j.ItemCode, '')) <> '';
+
+        -- 12c. Insert new prsno rows (not yet in PO_APRL)
         INSERT INTO dbo.PO_APRL
             (divcode, prno, prdate, amendno, amenddate, prsno,
              itemcode, macno, qtyind, reqddate, RATE,
@@ -286,12 +360,7 @@ BEGIN
              curstock, CCCODE, CATCODE, BGRPCODE,
              PLACE, APPCOST, remarks, amdflg)
         SELECT
-            @DivCode,
-            @PrNo,
-            @PrDate,
-            @ResolvedAmendNo,
-            @AmendDate,
-            j.PrSno,
+            @DivCode, @PrNo, @PrDate, @ResolvedAmendNo, @AmendDate, j.PrSno,
             RTRIM(j.ItemCode),
             NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
             j.QtyInd,
@@ -325,16 +394,24 @@ BEGIN
             AppCost            NUMERIC(11,2)   '$.AppCost',
             Remarks            VARCHAR(50)     '$.Remarks'
         ) j
-        WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
+        WHERE  RTRIM(ISNULL(j.ItemCode, '')) <> ''
+          AND  NOT EXISTS (
+              SELECT 1 FROM dbo.PO_APRL
+              WHERE  divcode              = @DivCode
+                AND  prno                 = @PrNo
+                AND  CAST(prdate AS DATE) = @PrDate
+                AND  prsno                = j.PrSno
+          );
 
         -- ── 13. ADD: delta-update PO_PRH and PO_PRL (CR-M01-AM-001) ──────────
         IF @Mode = 'ADD'
         BEGIN
-            -- Update PO_PRH refno
+            -- Update PO_PRH refno and ITYPE (user may change PR Type during amendment)
             IF EXISTS (SELECT 1 FROM dbo.PO_PRH WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate)
             BEGIN
                 UPDATE dbo.PO_PRH
-                SET    refno = NULLIF(RTRIM(ISNULL(@RefNo, '')), '')
+                SET    refno = NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
+                       ITYPE = ISNULL(@IType, ITYPE)
                 WHERE  divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate;
             END
 
@@ -355,7 +432,7 @@ BEGIN
                 Place             VARCHAR(40),
                 AppCost           NUMERIC(11,2),
                 Remarks           VARCHAR(50),
-                RowVersion        CHAR(18)
+                RowVersion        VARBINARY(8)
             );
 
             INSERT INTO @LineWork
@@ -375,7 +452,7 @@ BEGIN
                 NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
                 NULLIF(j.AppCost, 0),
                 NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), ''),
-                j.RowVersion
+                CONVERT(VARBINARY(8), j.RowVersion, 1)
             FROM OPENJSON(@LinesJson)
             WITH (
                 PrSno              INT             '$.PrSno',
@@ -401,9 +478,9 @@ BEGIN
             IF EXISTS (
                 SELECT 1 FROM @LineWork
                 WHERE  ReqdDate IS NOT NULL
-                  AND  TRY_CONVERT(DATE, NULLIF(ReqdDate, '')) < @PDate
+                  AND  TRY_CONVERT(DATE, NULLIF(ReqdDate, '')) < @PrDate
             )
-                RAISERROR('Required Date cannot be earlier than the current processing date.', 16, 1);
+                RAISERROR('Required Date cannot be earlier than the PR date.', 16, 1);
 
             -- Qty < ordered qty validation (cannot reduce below already-approved quantity)
             IF EXISTS (
@@ -441,6 +518,10 @@ BEGIN
                 RAISERROR('Line %d cannot be deleted — status ''%s'' is beyond amendment scope.', 16, 1, @BlockedSno, @BlockedStat);
             END
 
+            -- NF-01: Guard — zero submitted lines would wipe all PO_PRL rows
+            IF (SELECT COUNT(*) FROM @LineWork) = 0
+                RAISERROR('At least one line must be submitted in an amendment.', 16, 1);
+
             -- PATH C: DELETE lines removed by the user
             DELETE FROM dbo.PO_PRL
             WHERE  divcode              = @DivCode
@@ -458,7 +539,7 @@ BEGIN
                 AND CAST(p.prdate AS DATE) = @PrDate
                 AND p.prsno                = lw.PrSno;
 
-            -- amdflg NOT set here — only PATH B (new inserts) gets amdflg = 'Y'
+            -- PATH A: amdflg='Y' marks line as amended (FSD §4 PATH A explicit requirement)
             UPDATE p
             SET    p.qtyind   = lw.QtyInd,
                    p.RATE     = lw.Rate,
@@ -467,7 +548,8 @@ BEGIN
                    p.remarks  = lw.Remarks,
                    p.macno    = lw.MacNo,
                    p.PLACE    = lw.Place,
-                   p.CCCODE   = lw.CcCode
+                   p.CCCODE   = lw.CcCode,
+                   p.amdflg   = 'Y'
                    -- FirstApp, SecondApp, ThirdApp, PRSTATUS, DirectApp preserved
             FROM   dbo.PO_PRL p
             INNER JOIN @LineWork lw
@@ -475,7 +557,7 @@ BEGIN
                 AND p.prno                 = @PrNo
                 AND CAST(p.prdate AS DATE) = @PrDate
                 AND p.prsno                = lw.PrSno
-                AND p.row_version          = CONVERT(VARBINARY(8), lw.RowVersion, 1);
+                AND p.row_version          = lw.RowVersion;
 
             IF @@ROWCOUNT <> @PathAExpected
                 RAISERROR('One or more lines were modified by another user. Please reload and try again.', 16, 1);
@@ -510,7 +592,152 @@ BEGIN
             );
         END
 
-        -- ── 14. Audit log ──────────────────────────────────────────────────────
+        -- ── 14. MODIFY: delta-update PO_PRL (FSD §4 Architecture Note — must update live tables) ──
+        IF @Mode = 'MODIFY' AND @LinesJson IS NOT NULL
+        BEGIN
+            -- Parse lines (no RowVersion needed — concurrency protected at PO_APRH level)
+            DECLARE @ModLineWork TABLE (
+                PrSno             INT,
+                ItemCode          VARCHAR(10),
+                MacNo             VARCHAR(5),
+                QtyInd            NUMERIC(12,3),
+                ReqdDate          VARCHAR(10),
+                Rate              NUMERIC(13,4),
+                CcCode            NUMERIC(4,0),
+                CatCode           VARCHAR(1),
+                BgrpCode          VARCHAR(4),
+                Place             VARCHAR(40),
+                AppCost           NUMERIC(11,2),
+                Remarks           VARCHAR(50)
+            );
+
+            INSERT INTO @ModLineWork
+            SELECT
+                j.PrSno,
+                RTRIM(j.ItemCode),
+                NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
+                j.QtyInd,
+                j.ReqdDate,
+                j.Rate,
+                NULLIF(j.CcCode, 0),
+                NULLIF(RTRIM(ISNULL(j.CatCode, '')), ''),
+                NULLIF(RTRIM(ISNULL(j.BgrpCode, '')), ''),
+                NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
+                NULLIF(j.AppCost, 0),
+                NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), '')
+            FROM OPENJSON(@LinesJson)
+            WITH (
+                PrSno     INT             '$.PrSno',
+                ItemCode  VARCHAR(10)     '$.ItemCode',
+                MacNo     VARCHAR(5)      '$.MacNo',
+                QtyInd    NUMERIC(12,3)   '$.QtyInd',
+                ReqdDate  VARCHAR(10)     '$.ReqdDate',
+                Rate      NUMERIC(13,4)   '$.Rate',
+                CcCode    NUMERIC(4,0)    '$.CcCode',
+                CatCode   VARCHAR(1)      '$.CatCode',
+                BgrpCode  VARCHAR(4)      '$.BgrpCode',
+                Place     VARCHAR(40)     '$.Place',
+                AppCost   NUMERIC(11,2)   '$.AppCost',
+                Remarks   VARCHAR(50)     '$.Remarks'
+            ) j
+            WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
+
+            -- ReqdDate >= PrDate validation
+            IF EXISTS (
+                SELECT 1 FROM @ModLineWork
+                WHERE  ReqdDate IS NOT NULL
+                  AND  TRY_CONVERT(DATE, NULLIF(ReqdDate, '')) < @PrDate
+            )
+                RAISERROR('Required Date cannot be earlier than the PR date.', 16, 1);
+
+            -- Qty < qtyreqd validation
+            IF EXISTS (
+                SELECT 1 FROM @ModLineWork lw
+                INNER JOIN dbo.PO_PRL p
+                    ON  p.divcode              = @DivCode
+                    AND p.prno                 = @PrNo
+                    AND CAST(p.prdate AS DATE) = @PrDate
+                    AND p.prsno                = lw.PrSno
+                WHERE lw.QtyInd < ISNULL(p.qtyreqd, 0)
+            )
+                RAISERROR('Amended quantity cannot be less than the already-approved quantity.', 16, 1);
+
+            -- PATH C guard
+            IF EXISTS (
+                SELECT 1 FROM dbo.PO_PRL p
+                WHERE  p.divcode              = @DivCode
+                  AND  p.prno                 = @PrNo
+                  AND  CAST(p.prdate AS DATE) = @PrDate
+                  AND  p.prsno NOT IN (SELECT PrSno FROM @ModLineWork)
+                  AND  ISNULL(p.prstatus, '') IN ('O', 'E', 'C', 'Z', 'X')
+            )
+                RAISERROR('One or more lines cannot be removed — their status is beyond amendment scope.', 16, 1);
+
+            -- PATH C: DELETE removed lines from PO_PRL
+            DELETE FROM dbo.PO_PRL
+            WHERE  divcode              = @DivCode
+              AND  prno                 = @PrNo
+              AND  CAST(prdate AS DATE) = @PrDate
+              AND  prsno NOT IN (SELECT PrSno FROM @ModLineWork);
+
+            -- PATH A: UPDATE existing PO_PRL lines (amdflg='Y'; approval flags preserved)
+            UPDATE p
+            SET    p.qtyind   = lw.QtyInd,
+                   p.RATE     = lw.Rate,
+                   p.reqddate = TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
+                   p.APPCOST  = lw.AppCost,
+                   p.remarks  = lw.Remarks,
+                   p.macno    = lw.MacNo,
+                   p.PLACE    = lw.Place,
+                   p.CCCODE   = lw.CcCode,
+                   p.amdflg   = 'Y'
+            FROM   dbo.PO_PRL p
+            INNER JOIN @ModLineWork lw
+                ON  p.divcode              = @DivCode
+                AND p.prno                 = @PrNo
+                AND CAST(p.prdate AS DATE) = @PrDate
+                AND p.prsno                = lw.PrSno;
+
+            -- PATH B: INSERT new lines (not yet in PO_PRL)
+            DECLARE @ModMaxPrSno INT;
+            SELECT @ModMaxPrSno = ISNULL(MAX(prsno), 0)
+            FROM   dbo.PO_PRL WITH (UPDLOCK)
+            WHERE  divcode              = @DivCode
+              AND  prno                 = @PrNo
+              AND  CAST(prdate AS DATE) = @PrDate;
+
+            -- Capture @DepCode for new inserts from PO_APRH (PO_PRH may not exist)
+            DECLARE @ModDepCode VARCHAR(3);
+            SELECT TOP 1 @ModDepCode = ISNULL(depcode, '')
+            FROM   dbo.PO_APRH
+            WHERE  divcode              = @DivCode
+              AND  prno                 = @PrNo
+              AND  CAST(prdate AS DATE) = @PrDate
+            ORDER BY amendno DESC;
+
+            INSERT INTO dbo.PO_PRL
+                (divcode, prno, prdate, prsno,
+                 itemcode, macno, qtyind, reqddate, RATE,
+                 CCCODE, CATCODE, BGRPCODE, PLACE, APPCOST, remarks,
+                 amdflg, Depcode,
+                 FirstApp, SecondApp, ThirdApp, prstatus, DirectApp)
+            SELECT
+                @DivCode, @PrNo, @PrDate,
+                @ModMaxPrSno + ROW_NUMBER() OVER (ORDER BY lw.PrSno),
+                lw.ItemCode, lw.MacNo, lw.QtyInd,
+                TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
+                lw.Rate, lw.CcCode, lw.CatCode, lw.BgrpCode,
+                lw.Place, lw.AppCost, lw.Remarks,
+                'Y', @ModDepCode,
+                NULL, NULL, NULL, NULL, NULL
+            FROM @ModLineWork lw
+            WHERE lw.PrSno NOT IN (
+                SELECT prsno FROM dbo.PO_PRL
+                WHERE  divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate
+            );
+        END
+
+        -- ── 15. Audit log ──────────────────────────────────────────────────────
         INSERT INTO dbo.LogDet_po
             (divcode, prno, prdate, prsno, itemcode, macno, quantity, RATE,
              Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
@@ -526,12 +753,14 @@ BEGIN
           AND  CAST(l.prdate AS DATE) = @PrDate
           AND  l.amendno              = @ResolvedAmendNo;
 
+        SET @Result = 0;
         COMMIT TRANSACTION;
         SELECT @ResolvedAmendNo AS AmendNo;
 
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        SET @Result = CASE WHEN ERROR_SEVERITY() = 16 THEN 1 ELSE -1 END;
         DECLARE @Msg NVARCHAR(4000) = ERROR_MESSAGE();
         DECLARE @Sev INT            = ERROR_SEVERITY();
         RAISERROR(@Msg, @Sev, 1);

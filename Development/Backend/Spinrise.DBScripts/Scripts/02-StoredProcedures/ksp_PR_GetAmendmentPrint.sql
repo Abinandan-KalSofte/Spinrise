@@ -11,7 +11,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_GetAmendmentPrint]
     @DivCode    VARCHAR(10),
     @PrNo       NUMERIC(6,0),
     @PrDate     DATE,
-    @AmendNo    INT
+    @AmendNo    INT,
+    @UserId     VARCHAR(50) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -92,11 +93,12 @@ BEGIN
         ISNULL(l.APPCOST, 0)                                            AS appCost,
         ISNULL(l.remarks, '')                                           AS remarks
     FROM   dbo.PO_APRL l
-    -- PO_APRH for depcode (PO_PRH deleted after first amendment)
-    JOIN   dbo.PO_APRH ah   ON  ah.divcode              = l.divcode
-                            AND ah.prno                 = l.prno
-                            AND CAST(ah.prdate AS DATE) = CAST(l.prdate AS DATE)
-                            AND ah.amendno              = l.amendno
+    -- PO_APRH anchored to @AmendNo for depcode; do not join on l.amendno
+    -- (PO_APRL has no amendno in PK — newer amendments overwrite existing rows)
+    JOIN   dbo.PO_APRH ah   ON  ah.divcode              = @DivCode
+                            AND ah.prno                 = @PrNo
+                            AND CAST(ah.prdate AS DATE) = @PrDate
+                            AND ah.amendno              = @AmendNo
     JOIN   dbo.IN_ITEM i    ON  i.itemcode  = l.itemcode
     LEFT JOIN dbo.PO_PRL p  ON  p.divcode              = l.divcode
                             AND p.prno                 = l.prno
@@ -105,7 +107,25 @@ BEGIN
     WHERE  l.divcode              = @DivCode
       AND  l.prno                 = @PrNo
       AND  CAST(l.prdate AS DATE) = @PrDate
-      AND  l.amendno              = @AmendNo
     ORDER BY l.prsno;
+
+    -- Log print event to PO_PRINT_LOG (FSD §4 BR — all prints logged; reprint_flag='Y' if not first print)
+    IF OBJECT_ID('dbo.PO_PRINT_LOG', 'U') IS NOT NULL AND @UserId IS NOT NULL
+    BEGIN
+        DECLARE @ReprintFlag CHAR(1) = 'N';
+        IF EXISTS (
+            SELECT 1 FROM dbo.PO_PRINT_LOG
+            WHERE divcode = @DivCode AND prno = @PrNo AND amendno = @AmendNo
+        )
+            SET @ReprintFlag = 'Y';
+
+        INSERT INTO dbo.PO_PRINT_LOG (divcode, prno, amendno, amenddate, printed_by, printed_on, reprint_flag)
+        SELECT @DivCode, @PrNo, @AmendNo, CAST(a.amenddate AS DATE), @UserId, GETDATE(), @ReprintFlag
+        FROM   dbo.PO_APRH a
+        WHERE  a.divcode              = @DivCode
+          AND  a.prno                 = @PrNo
+          AND  CAST(a.prdate AS DATE) = @PrDate
+          AND  a.amendno              = @AmendNo;
+    END
 END;
 GO

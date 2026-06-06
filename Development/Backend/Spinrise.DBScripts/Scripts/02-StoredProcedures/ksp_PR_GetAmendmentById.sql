@@ -60,6 +60,10 @@ BEGIN
       AND  a.amendno              = @AmendNo;
 
     -- Result set 2: Amendment lines
+    -- PO_APRL PK = (divcode, prno, prdate, prsno) — no amendno in key.
+    -- Each prsno has exactly one row; amendno tracks which amendment last wrote it.
+    -- Do NOT filter by l.amendno: a newer amendment overwrites existing rows,
+    -- so filtering by the viewed amendno would return zero rows after any subsequent save.
     SELECT
         l.prsno,
         l.itemcode,
@@ -89,11 +93,11 @@ BEGIN
         ISNULL(l.prstatus, '')                  AS lineStatus
     FROM   dbo.PO_APRL l
     JOIN   dbo.IN_ITEM i    ON i.itemcode  = l.itemcode
-    -- PO_APRH needed for depcode (used by machine lookup; PO_PRH may be deleted)
-    JOIN   dbo.PO_APRH ah   ON ah.divcode              = l.divcode
-                            AND ah.prno                = l.prno
-                            AND CAST(ah.prdate AS DATE) = CAST(l.prdate AS DATE)
-                            AND ah.amendno             = l.amendno
+    -- Anchor PO_APRH join to @AmendNo (not l.amendno) for depcode used in machine lookup
+    JOIN   dbo.PO_APRH ah   ON ah.divcode              = @DivCode
+                            AND ah.prno                = @PrNo
+                            AND CAST(ah.prdate AS DATE) = @PrDate
+                            AND ah.amendno             = @AmendNo
     LEFT JOIN dbo.PO_PRL p  ON  p.divcode              = l.divcode
                             AND p.prno                 = l.prno
                             AND CAST(p.prdate AS DATE) = CAST(l.prdate AS DATE)
@@ -103,7 +107,6 @@ BEGIN
     WHERE  l.divcode              = @DivCode
       AND  l.prno                 = @PrNo
       AND  CAST(l.prdate AS DATE) = @PrDate
-      AND  l.amendno              = @AmendNo
     ORDER BY l.prsno;
 END;
 GO
