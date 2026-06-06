@@ -2538,7 +2538,7 @@ BEGIN
                 NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
                 NULLIF(j.AppCost, 0),
                 NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), ''),
-                CONVERT(VARBINARY(8), j.RowVersion, 1)
+                TRY_CONVERT(VARBINARY(8), j.RowVersion, 1)
             FROM OPENJSON(@LinesJson)
             WITH (
                 PrSno              INT             '$.PrSno',
@@ -2556,7 +2556,7 @@ BEGIN
                 Place              VARCHAR(40)     '$.Place',
                 AppCost            NUMERIC(11,2)   '$.AppCost',
                 Remarks            VARCHAR(50)     '$.Remarks',
-                RowVersion         CHAR(18)        '$.RowVersion'
+                RowVersion         VARCHAR(20)     '$.RowVersion'
             ) j
             WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
 

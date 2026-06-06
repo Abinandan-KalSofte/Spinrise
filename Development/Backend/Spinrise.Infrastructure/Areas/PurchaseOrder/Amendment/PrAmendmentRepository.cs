@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using Dapper;
+using Microsoft.Data.SqlClient;
 using Spinrise.Application.Areas.PurchaseOrder.Amendment.DTOs;
 using Spinrise.Application.Areas.PurchaseOrder.Amendment.Interfaces;
 using Spinrise.Infrastructure.Data;
@@ -91,7 +92,7 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             l.Place,
             l.AppCost,
             l.Remarks,
-            // PATH A concurrency: convert base64 rowVersion → 0x-prefixed hex for SP CONVERT(VARBINARY,.,1)
+            // PATH A concurrency: convert base64 rowVersion → 0x-prefixed hex for SP TRY_CONVERT(VARBINARY,.,1)
             RowVersion = !string.IsNullOrWhiteSpace(l.RowVersion)
                 ? "0x" + Convert.ToHexString(Convert.FromBase64String(l.RowVersion))
                 : (string?)null,
@@ -101,31 +102,41 @@ public class PrAmendmentRepository : IPrAmendmentRepository
             ? parsedPDate
             : DateOnly.FromDateTime(DateTime.Today);
 
-        var result = await _uow.Connection.QueryFirstAsync<SaveResultRow>(
-            StoredProcedures.PrAmendment.Save,
-            new
-            {
-                Mode             = "ADD",
-                DivCode          = divCode,
-                PrNo             = prNo,
-                PrDate           = prDate,
-                AmendDate        = DateOnly.TryParse(request.AmendDate, out var parsedAmendDate) ? parsedAmendDate : prDate,
-                AmendmentReason  = request.AmendmentReason,
-                RefNo            = request.RefNo,
-                UserId           = userId,
-                HostName         = hostName,
-                IpAddress        = ipAddress,
-                FDate            = fDate,
-                LDate            = lDate,
-                PDate            = pDate,
-                AmendNo          = (int?)null,
-                RowVersion       = rowVersionBytes,
-                LinesJson        = linesJson,
-                IType            = string.IsNullOrWhiteSpace(request.IType) ? null : request.IType.Trim(),
-            },
-            commandType: CommandType.StoredProcedure);
+        var p = new DynamicParameters();
+        p.Add("Mode",            "ADD");
+        p.Add("DivCode",         divCode);
+        p.Add("PrNo",            prNo);
+        p.Add("PrDate",          prDate);
+        p.Add("AmendDate",       DateOnly.TryParse(request.AmendDate, out var parsedAmendDate) ? parsedAmendDate : prDate);
+        p.Add("AmendmentReason", request.AmendmentReason);
+        p.Add("RefNo",           request.RefNo);
+        p.Add("UserId",          userId);
+        p.Add("HostName",        hostName);
+        p.Add("IpAddress",       ipAddress);
+        p.Add("FDate",           fDate);
+        p.Add("LDate",           lDate);
+        p.Add("PDate",           pDate);
+        p.Add("AmendNo",         (int?)null);
+        p.Add("RowVersion",      rowVersionBytes, DbType.Binary, size: 8);
+        p.Add("LinesJson",       linesJson);
+        p.Add("IType",           string.IsNullOrWhiteSpace(request.IType) ? null : request.IType.Trim());
+        p.Add("Result",          dbType: DbType.Int32, direction: ParameterDirection.Output);
 
-        return result.AmendNo;
+        try
+        {
+            var result = await _uow.Connection.QueryFirstAsync<SaveResultRow>(
+                StoredProcedures.PrAmendment.Save, p,
+                commandType: CommandType.StoredProcedure);
+            return result.AmendNo;
+        }
+        catch (SqlException ex)
+        {
+            // @Result = 1 → business rule violation (severity 16 RAISERROR) → 400
+            // @Result = -1 → infrastructure/system error → re-throw (500 via middleware)
+            if (p.Get<int>("Result") == 1)
+                throw new InvalidOperationException(ex.Message);
+            throw;
+        }
     }
 
     public async Task<PrAmendmentPrintDto?> GetPrintDataAsync(
