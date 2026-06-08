@@ -15,8 +15,9 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PR_GetList
     @DepCode       VARCHAR(3)  = NULL,
     @ReqName       VARCHAR(10) = NULL,
     @PoGrp         VARCHAR(5)  = NULL,
-    @PageNumber    INT         = 1,
-    @PageSize      INT         = 50
+    @PageNumber    INT          = 1,
+    @PageSize      INT          = 50,
+    @Search        VARCHAR(100) = NULL   -- free-text: matches prno, dept name, employee name
 )
 AS
 BEGIN
@@ -112,6 +113,12 @@ BEGIN
       AND (@DepCode  IS NULL OR h.depcode  = @DepCode)
       AND (@ReqName  IS NULL OR h.REQNAME  = @ReqName)
       AND (@PoGrp    IS NULL OR h.PO_GRP   = @PoGrp)
+      AND (@Search   IS NULL OR
+           CAST(h.prno AS VARCHAR(20)) LIKE '%' + @Search + '%' OR
+           d.depname                   LIKE '%' + @Search + '%' OR
+           EXISTS (SELECT 1 FROM dbo.PR_EMP e3
+                   WHERE CAST(e3.empno AS VARCHAR(10)) = h.REQNAME
+                     AND e3.ename LIKE '%' + @Search + '%'))
     ORDER BY h.prdate DESC, h.prno DESC
     OFFSET (@PageNumber - 1) * @PageSize ROWS
     FETCH NEXT @PageSize ROWS ONLY;

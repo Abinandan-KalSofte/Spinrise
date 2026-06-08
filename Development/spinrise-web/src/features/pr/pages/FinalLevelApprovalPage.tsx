@@ -9,8 +9,10 @@ import { PRDocBand, TbBtn, TbSep } from '../components/pr-form/PRToolbar'
 import FinalApprovalFilterBar from '../components/final-approval/FinalApprovalFilterBar'
 import FinalApprovalGrid      from '../components/final-approval/FinalApprovalGrid'
 import FinalApprovalFooter    from '../components/final-approval/FinalApprovalFooter'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 export default function FinalLevelApprovalPage() {
+  usePageTitle('Final Level PR Approval')
   const { message } = App.useApp()
   const user    = useAuthStore((s) => s.user)
   const divCode = user?.divCode ?? ''

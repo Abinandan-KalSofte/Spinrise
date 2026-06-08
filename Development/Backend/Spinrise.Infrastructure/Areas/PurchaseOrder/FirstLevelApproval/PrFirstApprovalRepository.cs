@@ -45,8 +45,8 @@ public class PrFirstApprovalRepository : IPrFirstApprovalRepository
 
         if (row is null) return (null, false);
 
-        string? userLevel     = row.UserLevel?.ToString("0");
-        string? appUserLevel1 = row.AppUserLevel1?.ToString("0");
+        string userLevel     = row.UserLevel.ToString("0");
+        string appUserLevel1 = row.AppUserLevel1.ToString("0");
 
         var isFirstLevel = !string.IsNullOrWhiteSpace(appUserLevel1)
                         && string.Equals(userLevel, appUserLevel1, StringComparison.OrdinalIgnoreCase);
@@ -192,43 +192,54 @@ public class PrFirstApprovalRepository : IPrFirstApprovalRepository
         );
     }
 
-    // Raw row types — match SP column names exactly; Dapper maps directly
-    private sealed record PoParaRow(
-        string?   DivCode,
-        decimal?  AppUserLevel1,
-        decimal?  AppUserLevel2,
-        decimal?  AppUserLevel3,
-        string?   AppUserLabel1,
-        string?   AppUserLabel2,
-        string?   AppUserLabel3,
-        DateTime  YFDate,
-        DateTime  YLDate);
+    // Property classes — Dapper maps by name, so SP column order and additions never cause constructor errors.
+    private sealed class PoParaRow
+    {
+        public string?   DivCode        { get; init; }
+        public decimal?  AppUserLevel1  { get; init; }
+        public decimal?  AppUserLevel2  { get; init; }
+        public decimal?  AppUserLevel3  { get; init; }
+        public string?   AppUserLabel1  { get; init; }
+        public string?   AppUserLabel2  { get; init; }
+        public string?   AppUserLabel3  { get; init; }
+        public DateTime  YFDate         { get; init; }
+        public DateTime  YLDate         { get; init; }
+    }
 
-    private sealed record CheckLevelRow(
-        decimal?  UserLevel,
-        decimal?  AppUserLevel1);
+    private sealed class CheckLevelRow
+    {
+        public decimal   UserLevel      { get; init; }
+        public decimal   AppUserLevel1  { get; init; }
+        public decimal   AppUserLevel2  { get; init; }
+        public decimal   AppUserLevel3  { get; init; }
+        public string?   AppUserLabel1  { get; init; }
+        public string?   AppUserLabel2  { get; init; }
+        public string?   AppUserLabel3  { get; init; }
+    }
 
-    private sealed record ReportHeaderRow(
-        byte[]?   DivLogo,
-        string?   DivName,
-        string?   DivPrintName,
-        string?   DivUnitName,
-        string?   DivAddress1,
-        string?   DivAddress2,
-        string?   DivAddress3,
-        string?   DivPinCode,
-        string?   DivState,
-        string?   DivPhone,
-        string?   DivEmail,
-        decimal   PrNo,
-        DateTime  PrDate,
-        string?   DepCode,
-        string?   DepName,
-        string?   RefNo,
-        string?   Section,
-        DateTime? App1Date,
-        string?   ReqName,
-        string?   ApproverName,
-        string?   CreatedBy,
-        string?   CreatedDt);
+    private sealed class ReportHeaderRow
+    {
+        public byte[]?   DivLogo        { get; init; }
+        public string?   DivName        { get; init; }
+        public string?   DivPrintName   { get; init; }
+        public string?   DivUnitName    { get; init; }
+        public string?   DivAddress1    { get; init; }
+        public string?   DivAddress2    { get; init; }
+        public string?   DivAddress3    { get; init; }
+        public string?   DivPinCode     { get; init; }
+        public string?   DivState       { get; init; }
+        public string?   DivPhone       { get; init; }
+        public string?   DivEmail       { get; init; }
+        public decimal   PrNo           { get; init; }
+        public DateTime  PrDate         { get; init; }
+        public string?   DepCode        { get; init; }
+        public string?   DepName        { get; init; }
+        public string?   RefNo          { get; init; }
+        public string?   Section        { get; init; }
+        public DateTime? App1Date       { get; init; }
+        public string?   ReqName        { get; init; }
+        public string?   ApproverName   { get; init; }
+        public string?   CreatedBy      { get; init; }
+        public string?   CreatedDt      { get; init; }
+    }
 }

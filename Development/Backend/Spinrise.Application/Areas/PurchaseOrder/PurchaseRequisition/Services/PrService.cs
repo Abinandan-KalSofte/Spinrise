@@ -43,8 +43,8 @@ public class PrService : IPrService
         _repo.GetByIdAsync(divCode, prNo, prDate);
 
     public Task<IEnumerable<PrSummaryDto>> GetListAsync(string divCode, DateOnly fDate, DateOnly lDate, string mode,
-        string? depCode, string? reqName, string? poGrp, int page, int pageSize) =>
-        _repo.GetListAsync(divCode, fDate, lDate, mode, depCode, reqName, poGrp, page, pageSize);
+        string? depCode, string? reqName, string? poGrp, string? search, int page, int pageSize) =>
+        _repo.GetListAsync(divCode, fDate, lDate, mode, depCode, reqName, poGrp, search, page, pageSize);
 
     public async Task<decimal> AddAsync(string divCode, SavePrRequest request, string userId,
         string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate)

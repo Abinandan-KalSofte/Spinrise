@@ -137,9 +137,9 @@ public class PrRepository : IPrRepository
             RefNo:        header.RefNo       ?? string.Empty,
             PoGrp:        header.PoGrp       ?? string.Empty,
             AppFlg:       header.AppFlg      ?? "N",
-            CancelFlag:   null,
-            CancelReason: null,
-            AmendNo:      0m,
+            CancelFlag:   header.CancelFlag,
+            CancelReason: header.CancelReason,
+            AmendNo:      header.AmendNo,
             PrStatus:     header.PrStatus    ?? "REQUESTED",
             CreatedBy:    header.CreatedBy   ?? string.Empty,
             CreatedDt:    header.CreatedDt   ?? string.Empty,
@@ -149,7 +149,7 @@ public class PrRepository : IPrRepository
     }
 
     public async Task<IEnumerable<PrSummaryDto>> GetListAsync(string divCode, DateOnly fDate, DateOnly lDate,
-        string mode, string? depCode, string? reqName, string? poGrp, int page, int pageSize)
+        string mode, string? depCode, string? reqName, string? poGrp, string? search, int page, int pageSize)
     {
         return await _uow.Connection.QueryAsync<PrSummaryDto>(
             StoredProcedures.Pr.GetList,
@@ -157,7 +157,7 @@ public class PrRepository : IPrRepository
             {
                 DivCode = divCode, FDate = fDate, LDate = lDate,
                 Mode = mode, DepCode = depCode, ReqName = reqName,
-                PoGrp = poGrp, PageNumber = page, PageSize = pageSize
+                PoGrp = poGrp, Search = search, PageNumber = page, PageSize = pageSize
             },
             commandType: CommandType.StoredProcedure);
     }
@@ -253,40 +253,49 @@ public class PrRepository : IPrRepository
     private record PrSaveResult(decimal PrNo);
     private record UserPermissionsRaw(int CanAdd, int CanModify, int CanDelete);
 
-    // Raw row types for SP result sets that have no matching DTO constructor
-    private sealed record ItemMasterRow(
-        string?  ItemCode,
-        string?  ItemName,
-        string?  Uom,
-        decimal  MinLevel,
-        decimal  MaxLevel,
-        byte[]?  ItemImage,
-        string?  ImagePath);
+    // Property classes — Dapper maps by name, so SP column order and additions never cause constructor errors.
+    private sealed class ItemMasterRow
+    {
+        public string?  ItemCode  { get; init; }
+        public string?  ItemName  { get; init; }
+        public string?  Uom       { get; init; }
+        public decimal  MinLevel  { get; init; }
+        public decimal  MaxLevel  { get; init; }
+        public byte[]?  ItemImage { get; init; }
+        public string?  ImagePath { get; init; }
+    }
 
-    private sealed record ItemRatesRow(
-        decimal   CurrentStock,
-        decimal?  LpoRate,
-        DateTime? LpoDate,
-        decimal?  AvgRate);
+    private sealed class ItemRatesRow
+    {
+        public decimal   CurrentStock { get; init; }
+        public decimal?  LpoRate      { get; init; }
+        public DateTime? LpoDate      { get; init; }
+        public decimal?  AvgRate      { get; init; }
+    }
 
-    private sealed record PrHeaderRow(
-        string?   DivCode,
-        decimal   PrNo,
-        DateTime? PrDate,
-        string?   DepCode,
-        string?   DepName,
-        string?   ReqName,
-        string?   ReqEmpName,
-        string?   Section,
-        string?   IType,
-        string?   IDesc,
-        string?   RefNo,
-        string?   PoGrp,
-        string?   AppFlg,
-        string?   PrStatus,
-        string?   CreatedBy,
-        string?   CreatedDt,
-        string?   UserId);
+    private sealed class PrHeaderRow
+    {
+        public string?   DivCode       { get; init; }
+        public decimal   PrNo          { get; init; }
+        public DateTime? PrDate        { get; init; }
+        public string?   DepCode       { get; init; }
+        public string?   DepName       { get; init; }
+        public string?   ReqName       { get; init; }
+        public string?   ReqEmpName    { get; init; }
+        public string?   Section       { get; init; }
+        public string?   IType         { get; init; }
+        public string?   IDesc         { get; init; }
+        public string?   RefNo         { get; init; }
+        public string?   PoGrp         { get; init; }
+        public string?   AppFlg        { get; init; }
+        public string?   CancelFlag    { get; init; }
+        public string?   CancelReason  { get; init; }
+        public decimal   AmendNo       { get; init; }
+        public string?   PrStatus      { get; init; }
+        public string?   CreatedBy     { get; init; }
+        public string?   CreatedDt     { get; init; }
+        public string?   UserId        { get; init; }
+    }
 
     public async Task<PrPrintDto?> GetPrintDataAsync(string divCode, decimal prNo, DateOnly prDate)
     {

@@ -157,4 +157,58 @@ public class PrFirstApprovalServiceTests
 
         _repo.Verify(r => r.DeleteAsync(DivCode, request, UserId, UserName, null, null, ModuleNo), Times.Once);
     }
+
+    // ── Regression: DEF-FA-03 (partial approval must not set full PRSTATUS='F') ──
+    // The fix lives in ksp_PR_SaveFirstApproval.sql (NOT EXISTS subquery at line ~100).
+    // This test verifies the service does not block or short-circuit partial-approval saves —
+    // the service must always delegate to the repo so the SP can apply the correct guard.
+    [Fact]
+    [Trait("Module", "M01")]
+    [Trait("Operation", "SaveFirstApproval")]
+    [Trait("Layer", "Service")]
+    [Trait("Type", "Regression")]
+    [Trait("DefectRef", "DEF-FA-03")]
+    public async Task SaveAsync_PartialApprovalQty_ServiceDelegatesToRepoWithoutGuard()
+    {
+        _repo.Setup(r => r.CheckUserApprovalLevelAsync(DivCode, UserId))
+             .ReturnsAsync(("L1", true));
+        _repo.Setup(r => r.SaveAsync(DivCode, It.IsAny<SaveFirstApprovalRequest>(),
+            UserId, UserName, null, null, ModuleNo))
+             .Returns(Task.CompletedTask);
+
+        // Partial approval: firstAppQty (3) < qtyReqd (10) — service must NOT block this
+        var request = new SaveFirstApprovalRequest(1m, DateTime.Today, DateTime.Today,
+            [MakeLine(qtyReqd: 10m, firstAppQty: 3m)]);
+
+        var act = () => _sut.SaveAsync(DivCode, request, UserId, UserName, null, null, ModuleNo);
+
+        await act.Should().NotThrowAsync(
+            "partial approvals are valid; the SP decides PRSTATUS — service must not interfere");
+        _repo.Verify(r => r.SaveAsync(DivCode, request, UserId, UserName, null, null, ModuleNo), Times.Once);
+    }
+
+    // ── Regression: DEF-FA-08 (QTYREQD must revert when approval is deleted) ──
+    // The fix is in the SP (ksp_PR_SaveFirstApproval delete path).
+    // Service-layer test: delete call must always reach the repo without being blocked.
+    [Fact]
+    [Trait("Module", "M01")]
+    [Trait("Operation", "DeleteFirstApproval")]
+    [Trait("Layer", "Service")]
+    [Trait("Type", "Regression")]
+    [Trait("DefectRef", "DEF-FA-08")]
+    public async Task DeleteAsync_ApprovedPr_ReachesRepoSoSpCanRevertQtyReqd()
+    {
+        _repo.Setup(r => r.CheckUserApprovalLevelAsync(DivCode, UserId))
+             .ReturnsAsync(("L1", true));
+        _repo.Setup(r => r.DeleteAsync(DivCode, It.IsAny<DeleteFirstApprovalRequest>(),
+            UserId, UserName, null, null, ModuleNo))
+             .Returns(Task.CompletedTask);
+
+        var request = new DeleteFirstApprovalRequest(1m, DateTime.Today);
+
+        await _sut.DeleteAsync(DivCode, request, UserId, UserName, null, null, ModuleNo);
+
+        _repo.Verify(r => r.DeleteAsync(DivCode, request, UserId, UserName, null, null, ModuleNo), Times.Once,
+            "repo delete must be called so the SP can revert QTYREQD — DEF-FA-08");
+    }
 }

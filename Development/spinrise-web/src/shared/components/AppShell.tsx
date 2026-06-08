@@ -37,7 +37,7 @@ const NAV_ITEMS: MenuItem[] = [
   mk('/dashboard', 'Dashboard', <DashboardOutlined />),
   mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined />, [
     mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)'), <FileTextOutlined />),
-    //mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment '),        <FileTextOutlined />),
+    mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment '),        <FileTextOutlined />),
     mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure '),      <FileTextOutlined />),
     mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'),           <FileTextOutlined />),
     mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval'),   <FileTextOutlined />),

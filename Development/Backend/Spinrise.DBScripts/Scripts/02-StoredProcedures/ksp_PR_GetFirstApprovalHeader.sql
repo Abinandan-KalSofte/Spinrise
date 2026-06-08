@@ -20,7 +20,7 @@ BEGIN
         h.APP2                                      AS App2,
         h.APP3                                      AS App3,
         h.APPFLG                                    AS AppFlg,
-        h.APP1DATE                                  AS App1Date,
+        CAST(h.APP1DATE AS DATETIME)                AS App1Date,
         ISNULL(e.ename, h.REQNAME)                  AS ReqName
     FROM PO_PRH h
     LEFT JOIN IN_DEP  d ON d.DEPCODE = h.depcode

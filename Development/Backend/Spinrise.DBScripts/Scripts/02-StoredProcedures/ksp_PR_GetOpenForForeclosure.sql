@@ -24,14 +24,17 @@ BEGIN
                 - ISNULL(b.enq_qty, 0)                    AS Balance,
             RTRIM(ISNULL(e.MAC_NO, ''))                   AS SccCode,
             RTRIM(ISNULL(e.DESCRIPTION, ISNULL(e.MAC_NO, ''))) AS SccName,
-            -- Convert raw PRSTATUS char to readable label matching the HTML prototype badges
-            CASE RTRIM(ISNULL(b.PRSTATUS, ''))
-                WHEN 'F' THEN 'First Approved'
-                WHEN 'E' THEN 'Enquired'
-                WHEN 'C' THEN 'Received'
-                WHEN 'X' THEN 'Cancelled'
-                WHEN 'Z' THEN 'Force Closed'
-                WHEN 'O' THEN
+            -- Approval status: check higher-level flags first, then fall back to PRSTATUS char
+            CASE
+                WHEN ISNULL(b.DirectApp, 'N') = 'Y'          THEN 'Final Approved'
+                WHEN ISNULL(b.ThirdApp,  'N') = 'Y'          THEN 'Third Approved'
+                WHEN ISNULL(b.SecondApp, 'N') = 'Y'          THEN 'Second Approved'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'F'     THEN 'First Approved'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'E'     THEN 'Enquired'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'C'     THEN 'Received'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'X'     THEN 'Cancelled'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'Z'     THEN 'Force Closed'
+                WHEN RTRIM(ISNULL(b.PRSTATUS, '')) = 'O'     THEN
                     CASE WHEN ISNULL(b.QTYORD, 0) > 0 THEN 'Ordered' ELSE 'Order Cancelled' END
                 ELSE 'Requested'
             END                                           AS PrevStatus

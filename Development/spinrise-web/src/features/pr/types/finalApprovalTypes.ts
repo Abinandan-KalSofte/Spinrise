@@ -26,6 +26,7 @@ export interface FinalApprovalLine {
   qtyRequired:    number        // 3dp — read-only
   qtyApproved:    number        // 3dp — editable
   disposition:    DispositionCode
+  rate:           number        // 4dp — PR line rate from PO_PRL.RATE
   lpoRate:        number        // 4dp
   lpoDate:        string | null // DD/MM/YYYY or null
   approxCost:     number | null // 2dp

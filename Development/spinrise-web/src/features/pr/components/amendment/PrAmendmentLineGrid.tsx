@@ -110,18 +110,30 @@ interface EditRowProps {
   onDelete:      () => void
   onOpenMachine: () => void
   onOpenCC:      () => void
-  amendDate?:    string  // DD/MM/YYYY — from PO_APRH.amenddate
+  amendDate?:    string  // DD/MM/YYYY — from PO_APRH.amenddate (kept for legacy)
+  prDate?:       string  // YYYY-MM-DD or DD/MM/YYYY — Required Date must be >= PR Date (FSD Q1 decision)
 }
 
 const EditRow = memo(({
-  row, idx, isLast, onUpdate, onDelete, onOpenMachine, onOpenCC, amendDate,
+  row, idx, isLast, onUpdate, onDelete, onOpenMachine, onOpenCC, prDate,
 }: EditRowProps) => {
-  const qtyError  = !row.qtyInd || row.qtyInd <= 0
+  const qtyError =
+    !row.qtyInd || row.qtyInd <= 0 ||
+    ((row.minLevel ?? 0) > 0 && row.qtyInd > 0 && row.qtyInd < (row.minLevel ?? 0)) ||
+    ((row.maxLevel ?? 0) > 0 && row.qtyInd > 0 && row.qtyInd > (row.maxLevel ?? 0))
+  const qtyTooltip = !row.qtyInd || row.qtyInd <= 0
+    ? 'Qty must be greater than 0'
+    : (row.maxLevel ?? 0) > 0 && row.qtyInd > (row.maxLevel ?? 0)
+      ? `Exceeds maximum order level (max: ${row.maxLevel})`
+      : `Below minimum order level (min: ${row.minLevel ?? 0})`
   const rateError = (row.rate ?? 0) > MAX_RATE
   const costError = row.appCost > MAX_APPCOST
-  const amendDayjs    = amendDate ? dayjs(amendDate, 'DD/MM/YYYY') : null
-  const reqdDateError = !!row.reqdDate && !!amendDayjs &&
-    dayjs(row.reqdDate).isBefore(amendDayjs, 'day')
+  // Parse prDate (accept both YYYY-MM-DD and DD/MM/YYYY)
+  const prDayjs = prDate
+    ? (prDate.includes('/') ? dayjs(prDate, 'DD/MM/YYYY') : dayjs(prDate))
+    : null
+  const reqdDateError = !!row.reqdDate && !!prDayjs &&
+    dayjs(row.reqdDate).isBefore(prDayjs, 'day')
 
   return (
     <>
@@ -135,15 +147,17 @@ const EditRow = memo(({
       </td>
       {/* Qty Required — editable */}
       <td style={TD({ width: 100 })}>
-        <InputNumber
-          size="small"
-          value={row.qtyInd}
-          min={0}
-          precision={3}
-          style={{ width: '100%', height: 26 }}
-          status={qtyError ? 'error' : undefined}
-          onChange={(v) => onUpdate('qtyInd', v ?? 0)}
-        />
+        <Tooltip title={qtyTooltip} open={qtyError} color="#ff4d4f">
+          <InputNumber
+            size="small"
+            value={row.qtyInd}
+            min={0}
+            precision={3}
+            style={{ width: '100%', height: 26 }}
+            status={qtyError ? 'error' : undefined}
+            onChange={(v) => onUpdate('qtyInd', v ?? 0)}
+          />
+        </Tooltip>
       </td>
       {/* Rate — editable + optional justification */}
       <td style={TD({ width: 88 })}>
@@ -178,10 +192,10 @@ const EditRow = memo(({
       <td style={TD({ width: 88, textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: '#888', padding: '0 8px' })}>{numFmt(row.qtyApproved, 3)}</td>
       <td style={TD({ width: 88, textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: '#888', padding: '0 8px' })}>{numFmt(row.qtyOrdered, 3)}</td>
       <td style={TD({ width: 88, textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: '#888', padding: '0 8px' })}>{numFmt(row.qtyReceived, 3)}</td>
-      {/* Required Date — editable; must be >= Amendment Date (FSD §3) */}
+      {/* Required Date — editable; must be >= PR Date (FSD §3 Q1 decision) */}
       <td style={TD({ width: 112 })}>
         <Tooltip
-          title="Required Date cannot be before Amendment Date"
+          title="Required Date cannot be before the PR Date"
           color="#ff4d4f"
           open={reqdDateError ? true : false}
         >
@@ -191,7 +205,7 @@ const EditRow = memo(({
             format="DD/MM/YYYY"
             style={{ width: '100%', height: 26 }}
             status={reqdDateError ? 'error' : undefined}
-            disabledDate={(d) => amendDayjs ? d.isBefore(amendDayjs, 'day') : false}
+            disabledDate={(d) => prDayjs ? d.isBefore(prDayjs, 'day') : false}
             onChange={(d) => onUpdate('reqdDate', d ? d.format('YYYY-MM-DD') : null)}
           />
         </Tooltip>
@@ -266,12 +280,13 @@ interface Props {
   depCode:        string
   depName?:       string
   amendDate?:     string
+  prDate?:        string  // PR Date — Required Date must be >= this (YYYY-MM-DD or DD/MM/YYYY)
   onChange:       (updated: AmendmentLineLocal[]) => void
   onLineDelete?:  (prSno: number) => void   // deltype=2 line-level delete
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function PrAmendmentLineGrid({ lines, isReadOnly, depCode, depName, amendDate, onChange, onLineDelete }: Props) {
+export function PrAmendmentLineGrid({ lines, isReadOnly, depCode, depName, amendDate, prDate, onChange, onLineDelete }: Props) {
   const divCode = useAuthStore((s) => s.user?.divCode ?? '')
 
   const linesRef = useRef<AmendmentLineLocal[]>(lines)
@@ -476,6 +491,7 @@ export function PrAmendmentLineGrid({ lines, isReadOnly, depCode, depName, amend
                       onOpenMachine={() => setMachinePickerKey(row.key)}
                       onOpenCC={() => setCcPickerKey(row.key)}
                       amendDate={amendDate}
+                      prDate={prDate}
                     />
                   )
                 }

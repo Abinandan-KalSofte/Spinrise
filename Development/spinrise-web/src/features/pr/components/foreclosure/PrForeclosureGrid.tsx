@@ -9,6 +9,9 @@ import PrViewModal from './PrViewModal'
 const STATUS_BADGE: Record<string, { color: string; bg: string; border: string }> = {
   'Requested':       { color: '#185FA5', bg: '#E6F1FB', border: '#bfdbfe' },
   'First Approved':  { color: '#166534', bg: '#dcfce7', border: '#86efac' },
+  'Second Approved': { color: '#15803d', bg: '#bbf7d0', border: '#4ade80' },
+  'Third Approved':  { color: '#065f46', bg: '#a7f3d0', border: '#34d399' },
+  'Final Approved':  { color: '#fff',    bg: '#15803d', border: '#166534' },
   'Enquired':        { color: '#185FA5', bg: '#E6F1FB', border: '#bfdbfe' },
   'Ordered':         { color: '#7c3aed', bg: '#f3e8ff', border: '#ddd6fe' },
   'Order Cancelled': { color: '#A32D2D', bg: '#FCEBEB', border: '#fca5a5' },

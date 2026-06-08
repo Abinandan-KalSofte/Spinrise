@@ -35,36 +35,40 @@ export default function FinalApprovalFilterBar({ onShow, loading }: Props) {
       />
 
       <label style={{ fontSize: 12, fontWeight: 500, color: '#555' }}>Division</label>
-      <Select
-        style={{ width: 160 }}
-        size="small"
-        disabled={companyAll}
-        value={filter.divCode}
-        onChange={(v) => setFilter({ divCode: v })}
-        options={[
-          { label: 'All Divisions', value: '0' },
-          ...divisions.map((d) => ({ label: d.divisionName, value: d.divCode })),
-        ]}
-      />
+      <div style={{ flex: 1 }}>
+        <Select
+          style={{ width: '100%' }}
+          size="small"
+          disabled={companyAll}
+          value={filter.divCode}
+          onChange={(v) => setFilter({ divCode: v })}
+          options={[
+            { label: 'All Divisions', value: '0' },
+            ...divisions.map((d) => ({ label: d.divisionName, value: d.divCode })),
+          ]}
+        />
+      </div>
 
-      <Checkbox
-        checked={filter.bypassAll}
-        onChange={(e) => setFilter({ bypassAll: e.target.checked })}
-        style={{ fontSize: 12 }}
-      >
-        Bypass All
-      </Checkbox>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+        <Checkbox
+          checked={filter.bypassAll}
+          onChange={(e) => setFilter({ bypassAll: e.target.checked })}
+          style={{ fontSize: 12 }}
+        >
+          Bypass All
+        </Checkbox>
 
-      <Button
-        type="primary"
-        size="small"
-        icon={<SearchOutlined />}
-        loading={loading}
-        disabled={companyAll}
-        onClick={onShow}
-      >
-        Show
-      </Button>
+        <Button
+          type="primary"
+          size="small"
+          icon={<SearchOutlined />}
+          loading={loading}
+          disabled={companyAll}
+          onClick={onShow}
+        >
+          Show
+        </Button>
+      </div>
     </div>
   )
 }

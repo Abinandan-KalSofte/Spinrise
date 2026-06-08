@@ -300,6 +300,7 @@ export interface SaveAmendmentRequest {
   amendDate:        string
   amendmentReason:  string
   refNo:            string | null
+  iType:            string | null   // editable PR Type; null = inherit from PR
   rowVersion:       string | null
   pDate:            string    // processing date; enforces BR-AMD-01 at SP level
   lines:            SaveAmendmentLineRequest[]

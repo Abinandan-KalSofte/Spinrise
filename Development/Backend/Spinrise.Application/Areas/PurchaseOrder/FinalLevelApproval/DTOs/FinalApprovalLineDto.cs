@@ -14,6 +14,7 @@ public record FinalApprovalLineDto(
     decimal QtyRequired,     // 3dp
     decimal QtyApproved,     // 3dp
     int     Disposition,     // 1-5
+    decimal Rate,            // 4dp — PR line rate (PO_PRL.RATE)
     decimal LpoRate,         // 4dp
     string? LpoDate,         // DD/MM/YYYY or null
     decimal? ApproxCost,     // 2dp or null

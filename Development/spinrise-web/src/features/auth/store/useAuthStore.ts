@@ -3,14 +3,16 @@ import { devtools, persist } from 'zustand/middleware'
 import type { AuthTokens, AuthUser, UserRole } from '../types'
 
 interface AuthState {
-  user:             AuthUser | null
-  tokens:           AuthTokens | null
-  isAuthenticated:  boolean
-  processingDate:   string | null
-  setAuthSession:   (payload: { user: AuthUser; tokens: AuthTokens }) => void
-  setProcessingDate:(date: string) => void
-  clearAuthSession: () => void
-  hasRole:          (role: UserRole) => boolean
+  user:              AuthUser | null
+  tokens:            AuthTokens | null
+  isAuthenticated:   boolean
+  processingDate:    string | null
+  sessionExpired:    boolean
+  setAuthSession:    (payload: { user: AuthUser; tokens: AuthTokens }) => void
+  setProcessingDate: (date: string) => void
+  setSessionExpired: (value: boolean) => void
+  clearAuthSession:  () => void
+  hasRole:           (role: UserRole) => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -21,12 +23,16 @@ export const useAuthStore = create<AuthState>()(
         tokens:          null,
         isAuthenticated: false,
         processingDate:  null,
+        sessionExpired:  false,
 
         setAuthSession: ({ user, tokens }) =>
-          set({ user, tokens, isAuthenticated: true }, false, 'auth/setAuthSession'),
+          set({ user, tokens, isAuthenticated: true, sessionExpired: false }, false, 'auth/setAuthSession'),
 
         setProcessingDate: (date) =>
           set({ processingDate: date }, false, 'auth/setProcessingDate'),
+
+        setSessionExpired: (value) =>
+          set({ sessionExpired: value }, false, 'auth/setSessionExpired'),
 
         clearAuthSession: () =>
           set(

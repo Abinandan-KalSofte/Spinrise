@@ -92,9 +92,9 @@ BEGIN
     ORDER BY ph.porddt DESC;
 
     SELECT
-        @CurrentStock AS CurrentStock,
-        @LpoRate      AS LpoRate,
-        @LpoDate      AS LpoDate,
-        NULL          AS AvgRate;
+        @CurrentStock                    AS CurrentStock,
+        CAST(@LpoRate  AS NUMERIC(13,4)) AS LpoRate,
+        CAST(@LpoDate  AS DATE)          AS LpoDate,
+        CAST(NULL      AS NUMERIC(13,4)) AS AvgRate;
 END;
 GO

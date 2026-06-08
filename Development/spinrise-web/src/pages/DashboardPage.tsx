@@ -1,8 +1,10 @@
 import { Card, Typography } from 'antd'
 import { FileTextOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 export default function DashboardPage() {
+  usePageTitle('Dashboard')
   const navigate = useNavigate()
 
   return (

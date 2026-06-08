@@ -1,257 +1,366 @@
 -- ============================================================
 -- SP: ksp_po_finalapproval
--- Purpose: Final Level PR Approval — Grid load (imode 2/3) and Save (imode 4)
--- FSD: v1.4  |  Mockdown: SPINRISE_M01_FinalLevel_PR_Approval_Mockdown.md §4-§8
--- Author: Mohan Babu  |  Date: [implementation date]
+-- Purpose: Final Level PR Approval — Grid (imode 2/3), Save (imode 4)
+-- Original author: Menaga.M (modified 15 Jul 2013)
+-- Compatibility hotfix: 06 Jun 2026
+--   Single SP supports both Legacy VB6/ASP.NET and Spinrise V2 simultaneously.
+--   No changes required in VB6, ASP.NET, or Spinrise C# backend code.
+-- Approved by: Sasi (FirstApp='Y' and SecondApp='Y' unconditional in imode=4)
 -- DB: JAT (172.16.16.52\sql2016)
 -- ============================================================
--- CD Fixes applied vs VB6 AS-IS:
---   CD-07: @logindate removed — SP uses GETDATE() internally
---   CD-08: @FinalLevel_Remarks is int; stored as CAST(int -> varchar)
---   CD-09: All PRINT statements removed
---   CD-10: Phone lookup (@phno) inside imode=4 block only
---   CD-11: Al_SMSMessage INSERT for Disposition=5 includes SendDate + NoofTry
---   CD-12: CAST(@Prdate AS DATE) used; @@ROWCOUNT checked
--- OI-09: FirstApp NOT written by this SP.
---        SecondApp='Y' written ONLY when @Bypass=1.
--- OBS-2: imode=1 does NOT exist.
---        Company=ALL -> imode=2, divcode='0'.
+-- COMPATIBILITY DESIGN:
+--   Parameters : All original VB6 params restored (exact order + types).
+--                V2 params (@dbname, @row_version, @Result) appended with NULL
+--                defaults — VB6 callers omit them safely.
+--   @FinalLevel_Remarks : Restored to varchar(20). SQL Server implicitly converts
+--                         Spinrise int values on assignment.
+--   SELECT (imode 2/3) : VB6 original columns in original order.
+--                        V2 Spinrise columns appended at end — Dapper maps by name.
+--   imode=4 UPDATE : Original VB6 logic restored (FirstApp/SecondApp/ThirdApp='Y').
+--                    row_version guard applied only when @row_version IS NOT NULL.
+--                    @Result OUTPUT has NULL default — VB6 omits it, Spinrise reads it.
 -- ============================================================
 CREATE OR ALTER PROCEDURE [dbo].[ksp_po_finalapproval]
-    @imode              int,
-    @divcode            varchar(2),
-    @dbname             varchar(20)     = NULL,
-    @Prno               numeric(6,0)    = NULL,
-    @Prdate             datetime        = NULL,
-    @Prsno              numeric(5,0)    = NULL,
-    @FinalAppUser       varchar(35)     = NULL,
-    @FinalAppQty        numeric(12,3)   = NULL,
-    @FinalLevel_Remarks int             = NULL,   -- CD-08: int (not varchar)
-    @Bypass             int             = 1,
-    @row_version        binary(8)       = NULL,
-    @Result             int             OUTPUT    -- 0=success, 2=business, 3=conflict, 4=not found
+(
+    -- Original VB6 parameters — exact original order and types
+    @imode              int             = null,
+    @divcode            varchar(2)      = null,
+    @FinalAppUser       varchar(35)     = null,
+    @FinalAppQty        numeric(12,3)   = null,
+    @FinalLevel_Remarks varchar(20)     = null,
+    @prno               numeric(6)      = null,
+    @prdate             datetime        = null,
+    @prsno              numeric(5)      = null,
+    @logindate          datetime        = null,
+    @Bypass             int             = null,
+    -- Spinrise V2 parameters — NULL defaults so VB6 callers safely omit them
+    @dbname             varchar(20)     = null,
+    @row_version        binary(8)       = null,
+    @Result             int             = null OUTPUT
+)
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- ── imode 2/3 — SELECT pending grid rows ──────────────────────────────────
-    -- imode=2: all divisions (Company=ALL or Division=ALL) — no division filter
-    -- imode=3: specific division
+    DECLARE @phno        VARCHAR(50),
+            @FinFromDate DATETIME,
+            @ToFinYear   DATETIME;
+
+    -- Financial year lookup (restored from original)
+    SELECT @FinFromDate = py.AYFDATE,
+           @ToFinYear   = GETDATE()
+    FROM   PP_YEAR py
+    WHERE  py.AYFDATE <= GETDATE()
+      AND  py.AYLDATE  >= GETDATE();
+
+    -- Phone lookup for SMS (restored to top-level from original)
+    SET @phno = (
+        SELECT DISTINCT TOP 1 ISNULL(CONVERT(varchar(50), phone), '')
+        FROM (
+            SELECT DISTINCT phone, ae.EmpNo FROM Al_Emp  ae WHERE phone <> ''
+            UNION ALL
+            SELECT DISTINCT phone, ae.EmpNo FROM PR_EMP  ae WHERE phone <> ''
+        ) A
+        WHERE A.EmpNo IN (
+            SELECT pe.empno
+            FROM   PO_PRH  pp
+            INNER JOIN PR_EMP pe ON pe.divcode = pp.divcode
+                                AND pp.REQNAME = CONVERT(varchar(10), pe.empno)
+            WHERE  pp.prno   = @prno
+              AND  pp.prdate = @prdate
+        )
+    );
+
+    -- ── imode 2/3 — SELECT grid rows ─────────────────────────────────────────
+    -- imode=2 : all divisions (no divcode filter)
+    -- imode=3 : single division (adds hd.divcode = @divcode to WHERE)
+    -- @Bypass=1   : items where FirstApp is set (any first-approved)
+    -- @Bypass=0/null : items where FirstApp + SecondApp + ThirdApp are all set
     IF @imode IN (2, 3)
     BEGIN
         SELECT
-            l.divcode,
-            h.prno,
-            CONVERT(varchar(10), h.prdate, 103)         AS prdate,
-            l.prsno,
-            d.DEPNAME                                   AS department,
-            l.itemcode                                  AS itemCode,
-            i.ITEMNAME                                  AS itemName,
-            i.UOM                                       AS uom,
-            -- TODO: Replace with stock functions once confirmed to exist in JAT DB.
-            --       KSP_PRItemStock_FUN and KSP_PRItemStock_WITH_DIV not found in JAT.
-            --       Using PO_PRL.curstock as fallback (confirmed column, schema §PO_PRL).
-            ISNULL(l.curstock, 0)                       AS currentStock,
+            -- ── VB6 original columns in original order ──────────────────────
+            DB_NAME()                                                   AS CName,
+            div.divcode,
+            div.abbr,
+            div.divname,
+            hd.Prno,
+            hd.Prdate,
+            dt.prsno,
+            dt.itemcode,
+            itm.itemname,
+            itm.uom,
+            dep.Depname,
+            ISNULL(S.SccName, '')                                       AS SccName,
+            hd.depcode,
+            ISNULL(hd.SubCost, 0)                                      AS SubCost,
+            dt.qtyind,
             CASE
-                WHEN l.ThirdAppQty  > 0 THEN l.ThirdAppQty
-                WHEN l.SecondAppQty > 0 THEN l.SecondAppQty
-                WHEN l.FirstAppQty  > 0 THEN l.FirstAppQty
-                ELSE l.qtyreqd
-            END                                         AS qtyRequired,
-            ISNULL(l.FinalAppQty,
+                WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                 AND ISNULL(dt.FirstAppQty,  0) = 0
+                 AND ISNULL(dt.SecondAppQty, 0) = 0 THEN dt.qtyreqd
+                WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                 AND ISNULL(dt.SecondAppQty, 0) = 0
+                 AND dt.FirstAppQty > 0           THEN dt.FirstAppQty
+                WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                 AND dt.SecondAppQty > 0
+                 AND dt.FirstAppQty  > 0          THEN dt.SecondAppQty
+                WHEN dt.ThirdAppQty  > 0
+                 AND dt.SecondAppQty > 0
+                 AND dt.FirstAppQty  > 0          THEN dt.ThirdAppQty
+                ELSE dt.qtyreqd
+            END                                                         AS QTYREQD,
+            dt.LPO_RATE                                                 AS rat,
+            CONVERT(varchar, dt.LPO_DATE, 103)                         AS val,
+            dt.remarks,
+            hd.refno,
+            dt.FirstApp,
+            dt.SecondApp,
+            dt.ThirdApp,
+            -- Curstock: imode=2 uses KSP_PRItemStock_FUN (cross-div, GETDATE())
+            --           imode=3 uses KSP_PRItemStock_FUN_WITH_DIV (hd.Prdate)
+            CASE
+                WHEN @imode = 2
+                THEN (SELECT dbo.KSP_PRItemStock_FUN(
+                        @divcode,
+                        REPLACE(CONVERT(VARCHAR(15), GETDATE(),      102), '.', '-'),
+                        dt.itemcode,
+                        REPLACE(CONVERT(VARCHAR(15), @FinFromDate,   102), '.', '-'),
+                        REPLACE(CONVERT(VARCHAR(15), @ToFinYear,     102), '.', '-')
+                     ))
+                ELSE (SELECT dbo.KSP_PRItemStock_FUN_WITH_DIV(
+                        @divcode,
+                        REPLACE(CONVERT(VARCHAR(15), hd.Prdate,      102), '.', '-'),
+                        dt.itemcode,
+                        REPLACE(CONVERT(VARCHAR(15), @FinFromDate,   102), '.', '-'),
+                        REPLACE(CONVERT(VARCHAR(15), @ToFinYear,     102), '.', '-')
+                     ))
+            END                                                         AS Curstock,
+            dt.DepCode                                                  AS Dep,
+            dt.FinalLevel_Remarks                                       AS Fremark,
+            CONVERT(varchar, hd.Prdate, 103)                            AS Prdate1,
+            CASE ISNULL(dt.APPCOST, 0)
+                WHEN 0    THEN NULL
+                WHEN 0.00 THEN NULL
+                ELSE dt.APPCOST
+            END                                                         AS value,
+            ISNULL(dt.remarks, '')                                      AS remarks,
+            CASE ISNULL(dt.APPCOST, 0)
+                WHEN 0    THEN NULL
+                WHEN 0.00 THEN NULL
+                ELSE dt.APPCOST
+            END                                                         AS NetAmount,
+
+            -- ── Spinrise V2 columns appended (Dapper maps by column name) ───
+            dep.Depname                                                 AS department,
+            CASE
+                WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                 AND ISNULL(dt.FirstAppQty,  0) = 0
+                 AND ISNULL(dt.SecondAppQty, 0) = 0 THEN dt.qtyreqd
+                WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                 AND ISNULL(dt.SecondAppQty, 0) = 0
+                 AND dt.FirstAppQty > 0           THEN dt.FirstAppQty
+                WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                 AND dt.SecondAppQty > 0
+                 AND dt.FirstAppQty  > 0          THEN dt.SecondAppQty
+                WHEN dt.ThirdAppQty  > 0
+                 AND dt.SecondAppQty > 0
+                 AND dt.FirstAppQty  > 0          THEN dt.ThirdAppQty
+                ELSE dt.qtyreqd
+            END                                                         AS qtyRequired,
+            ISNULL(dt.FinalAppQty,
                 CASE
-                    WHEN l.ThirdAppQty  > 0 THEN l.ThirdAppQty
-                    WHEN l.SecondAppQty > 0 THEN l.SecondAppQty
-                    WHEN l.FirstAppQty  > 0 THEN l.FirstAppQty
-                    ELSE l.qtyreqd
-                END)                                    AS qtyApproved,
-            CASE WHEN ISNULL(TRY_CAST(l.FinalLevel_Remarks AS int), 0) = 0
+                    WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                     AND ISNULL(dt.FirstAppQty,  0) = 0
+                     AND ISNULL(dt.SecondAppQty, 0) = 0 THEN dt.qtyreqd
+                    WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                     AND ISNULL(dt.SecondAppQty, 0) = 0
+                     AND dt.FirstAppQty > 0           THEN dt.FirstAppQty
+                    WHEN ISNULL(dt.ThirdAppQty,  0) = 0
+                     AND dt.SecondAppQty > 0
+                     AND dt.FirstAppQty  > 0          THEN dt.SecondAppQty
+                    WHEN dt.ThirdAppQty  > 0
+                     AND dt.SecondAppQty > 0
+                     AND dt.FirstAppQty  > 0          THEN dt.ThirdAppQty
+                    ELSE dt.qtyreqd
+                END
+            )                                                           AS qtyApproved,
+            CASE WHEN ISNULL(TRY_CAST(dt.FinalLevel_Remarks AS int), 0) = 0
                  THEN 2
-                 ELSE TRY_CAST(l.FinalLevel_Remarks AS int)
-            END                                         AS disposition,
-            l.LPO_RATE                                  AS lpoRate,
+                 ELSE TRY_CAST(dt.FinalLevel_Remarks AS int)
+            END                                                         AS disposition,
+            dt.LPO_RATE                                                 AS lpoRate,
+            CONVERT(varchar, dt.LPO_DATE, 103)                         AS lpoDate,
+            CASE ISNULL(dt.APPCOST, 0)
+                WHEN 0 THEN NULL
+                ELSE dt.APPCOST
+            END                                                         AS approxCost,
             CASE
-                WHEN l.LPO_DATE IS NOT NULL
-                THEN CONVERT(varchar(10), l.LPO_DATE, 103)
-                ELSE NULL
-            END                                         AS lpoDate,
-            CASE WHEN ISNULL(l.APPCOST, 0) = 0
-                THEN NULL
-                ELSE l.APPCOST
-            END                                         AS approxCost,
-            CASE
-                WHEN l.ThirdApp  IS NOT NULL AND l.ThirdApp  = 'Y' THEN 'final'
-                WHEN l.SecondApp IS NOT NULL AND l.SecondApp = 'Y' THEN 'second'
+                WHEN dt.ThirdApp  IS NOT NULL AND dt.ThirdApp  = 'Y' THEN 'final'
+                WHEN dt.SecondApp IS NOT NULL AND dt.SecondApp = 'Y' THEN 'second'
                 ELSE 'first'
-            END                                         AS approvalStatus,
-            -- Return raw timestamp; C# layer converts to hex via Convert.ToHexString
-            l.row_version                               AS rowVersion
-        FROM   PO_PRL  l
-        JOIN   PO_PRH  h  ON  h.divcode = l.divcode
-                          AND h.prno    = l.prno
-                          AND CAST(h.prdate AS DATE) = CAST(l.prdate AS DATE)
-        JOIN   IN_DEP  d  ON  d.DEPCODE = h.depcode
-                          AND d.divcode = h.divcode
-        JOIN   IN_ITEM i  ON  i.ITEMCODE = l.itemcode
-        WHERE  ISNULL(l.prstatus, '') NOT IN ('C', 'X', 'Z', 'O', 'D')
-          AND  ISNULL(h.cancelflag, 'N') <> 'Y'
-          AND  l.FirstApp = 'Y'
+            END                                                         AS approvalStatus,
+            dt.row_version                                              AS rowVersion,
+            ISNULL(dt.RATE, 0)                                         AS rate
+
+        FROM   PO_PRH    hd
+        LEFT JOIN PO_PRL    dt  ON  hd.divcode  = dt.divcode
+                                AND hd.prno     = dt.prno
+                                AND hd.prdate   = dt.prDate
+        LEFT JOIN IN_DEP    dep ON  dep.divcode = hd.divcode
+                                AND hd.depcode  = dep.depcode
+        LEFT JOIN In_Scc    S   ON  hd.SubCost  = S.SccCode
+                                AND hd.DepCode  = S.DepCode
+                                AND hd.DivCOde  = S.DivCode
+        LEFT JOIN IN_ITEM   itm ON  itm.itemcode = dt.itemcode
+        LEFT JOIN PP_DIVMAS div ON  div.divcode  = hd.divcode
+
+        WHERE  ISNULL(hd.cancelflag, '')  <> 'Y'
+          AND  ISNULL(dt.Fclosed, 'N')   <> 'Y'
+          AND  hd.divcode = div.divcode
+          AND  ISNULL(dt.directApp, 'N') <> 'Y'
+          AND  ISNULL(dt.QtyReqd, 0)      > 0
+          AND  (dt.FirstApp IS NOT NULL AND dt.FirstApp <> '')
+          -- Bypass=1 : only FirstApp required
+          -- Bypass=0/null : SecondApp + ThirdApp must also be set
           AND  (
                 @Bypass = 1
                 OR (
-                    @Bypass = 0
-                    AND (ISNULL(l.SecondApp, 'N') = 'Y' OR ISNULL(l.ThirdApp, 'N') = 'Y')
+                    (dt.SecondApp IS NOT NULL AND dt.SecondApp <> '')
+                AND (dt.ThirdApp  IS NOT NULL AND dt.ThirdApp  <> '')
                 )
                )
-          AND  (@imode = 2 OR l.divcode = @divcode)
-        ORDER BY l.divcode, h.prno, h.prdate, l.prsno;
+          AND  (@imode = 2 OR hd.divcode = @divcode)
+
+        ORDER BY div.divcode, hd.Prdate, hd.Prno, dt.prsno;
 
         SET @Result = 0;
         RETURN;
     END
 
-    -- ── imode=4 — SAVE (one row per call; backend loops) ─────────────────────
+    -- ── imode=4 — SAVE ───────────────────────────────────────────────────────
     IF @imode = 4
     BEGIN
         BEGIN TRY
-            BEGIN TRANSACTION;
+            BEGIN TRAN;
 
-            -- Guard: cancelled PR
-            IF EXISTS (
-                SELECT 1 FROM PO_PRH
-                WHERE divcode  = @divcode
-                  AND prno     = @Prno
-                  AND CAST(prdate AS DATE) = CAST(@Prdate AS DATE)
-                  AND cancelflag = 'Y'
-            )
-            BEGIN
-                SET @Result = 2;
-                RAISERROR('This PR has been cancelled and cannot be approved.', 16, 1);
-                ROLLBACK TRANSACTION;
-                RETURN;
-            END
-
-            -- UPDATE PO_PRL with concurrency guard on row_version
             UPDATE PO_PRL
-            SET
-                FinalAppUser       = @FinalAppUser,
-                prstatus           = 'D',
-                DirectApp          = 'Y',
-                -- OI-09: SecondApp='Y' ONLY when Bypass is active
-                SecondApp          = CASE WHEN @Bypass = 1 THEN 'Y' ELSE SecondApp END,
-                ThirdApp           = 'Y',
-                DirectAppDate      = GETDATE(),
-                qtyreqd            = @FinalAppQty,
-                FinalAppQty        = @FinalAppQty,
-                FinalLevel_Remarks = CAST(@FinalLevel_Remarks AS varchar(20)),   -- CD-08
-                FClosed            = CASE WHEN @FinalLevel_Remarks = 4 THEN 'Y' ELSE FClosed END,
-                FCloseddt          = CASE WHEN @FinalLevel_Remarks = 4 THEN GETDATE() ELSE FCloseddt END
-            WHERE divcode     = @divcode
-              AND prno        = @Prno
-              AND CAST(prdate AS DATE) = CAST(@Prdate AS DATE)   -- CD-12
-              AND prsno       = @Prsno
-              AND row_version = @row_version;                     -- concurrency guard
+            SET    FinalAppUser       = @FinalAppUser,
+                   Prstatus           = 'D',
+                   DirectApp          = 'Y',
+                   FirstApp           = 'Y',
+                   SecondApp          = 'Y',
+                   ThirdApp           = 'Y',
+                   DirectAppDate      = GETDATE(),
+                   QtyReqd            = @FinalAppQty,
+                   FinalAppQty        = @FinalAppQty,
+                   FinalLevel_Remarks = @FinalLevel_Remarks,
+                   FClosed            = CASE WHEN @FinalLevel_Remarks = '4' THEN 'Y'        ELSE FClosed    END,
+                   FCloseddt          = CASE WHEN @FinalLevel_Remarks = '4' THEN GETDATE()  ELSE FCloseddt  END
+            WHERE  prno      = @prno
+              AND  prdate    = @prdate
+              AND  prsno     = @prsno
+              AND  divcode   = @divcode
+              -- row_version guard: active only for Spinrise V2 (VB6 passes NULL — guard skipped)
+              AND  (@row_version IS NULL OR row_version = @row_version);
 
-            -- CD-12: Check if UPDATE matched a row
-            IF @@ROWCOUNT = 0
+            -- Concurrency check for Spinrise V2 (skipped when VB6 passes @row_version=NULL)
+            IF @@ROWCOUNT = 0 AND @row_version IS NOT NULL
             BEGIN
                 IF EXISTS (
                     SELECT 1 FROM PO_PRL
-                    WHERE divcode = @divcode AND prno = @Prno
-                      AND CAST(prdate AS DATE) = CAST(@Prdate AS DATE)
-                      AND prsno = @Prsno
+                    WHERE  divcode = @divcode AND prno = @prno
+                      AND  prdate  = @prdate  AND prsno = @prsno
                 )
                     SET @Result = 3;   -- concurrency conflict
                 ELSE
-                    SET @Result = 4;   -- not found
-                ROLLBACK TRANSACTION;
+                    SET @Result = 4;   -- row not found
+                ROLLBACK TRAN;
                 RETURN;
             END
 
-            -- UPDATE PO_PRH — ISNULL pattern so existing approvals are preserved
             UPDATE PO_PRH
-            SET
-                APPFLG   = 'Y',
-                APP1     = ISNULL(APP1,    'DIR'),
-                APP1DATE = ISNULL(APP1DATE, GETDATE()),
-                APP1TIME = ISNULL(APP1TIME, GETDATE()),
-                APP2     = ISNULL(APP2,    'DIR'),
-                APP2DATE = ISNULL(APP2DATE, GETDATE()),
-                APP2TIME = ISNULL(APP2TIME, GETDATE()),
-                APP3     = ISNULL(APP3,    'DIR'),
-                APP3DATE = ISNULL(APP3DATE, GETDATE()),
-                APP3TIME = ISNULL(APP3TIME, GETDATE())
-            WHERE divcode = @divcode
-              AND prno    = @Prno
-              AND CAST(prdate AS DATE) = CAST(@Prdate AS DATE);
+            SET    appflg    = 'Y',
+                   app1      = ISNULL(app1,     'DIR'),
+                   APP1DATE  = ISNULL(APP1DATE,  GETDATE()),
+                   APP1TIME  = ISNULL(APP1TIME,  GETDATE()),
+                   app2      = ISNULL(app2,     'DIR'),
+                   APP2DATE  = ISNULL(APP2DATE,  GETDATE()),
+                   APP2TIME  = ISNULL(APP2TIME,  GETDATE()),
+                   app3      = ISNULL(app3,     'DIR'),
+                   APP3DATE  = ISNULL(APP3DATE,  GETDATE()),
+                   APP3TIME  = ISNULL(APP3TIME,  GETDATE())
+            WHERE  prno    = @prno
+              AND  prdate  = @prdate
+              AND  divcode = @divcode;
 
-            -- UPDATE PO_Para — PRSMSStatusFlg
-            -- TODO: Confirm key column(s) for WHERE clause with DBA (currently keyed by divcode)
             UPDATE PO_Para
             SET    PRSMSStatusFlg = 'Y'
-            WHERE  divcode = @divcode;
+            WHERE  Divcode = @divcode;
 
-            -- CD-10: Phone lookup (inside imode=4 only — moved from outer scope)
-            DECLARE @phno varchar(20) = NULL;
-            -- TODO: Confirm phone source table and column name with DBA
-            -- Example:
-            -- SELECT @phno = [phone_column] FROM [phone_table] WHERE [key_condition];
+            -- SMS notifications (original column list restored)
+            IF @FinalLevel_Remarks = '1'
+                INSERT INTO Al_SMSMessage
+                    (Divcode, EntryDate, EntryUserID, SmsMsg, SmsMobileNo,
+                     Sendflg, SendDate, SendStatus, NoofTry, NextTryTime)
+                VALUES
+                    (@divcode, GETDATE(), @FinalAppUser,
+                     'PR No :' + CONVERT(varchar(10), @prsno) + ' PR Date :' + CONVERT(varchar(15), @prdate) + ' Is PL Discuss',
+                     @phno, 'N', 0, '', 0, GETDATE());
 
-            -- SMS INSERT — Remarks=1/3/4/5 per FSD v1.4 OI-09 / QA directive 29-May-2026
-            -- Guard: PO_PARA.PRSMSSendFlg='Y' (CEO referenced FinalApproval_SMSEnabled which
-            -- does not exist in live DB; PRSMSSendFlg is the PR SMS send control flag)
-            -- Column names verified from live SpinRiseSaranya DDL (1 Jun 2026)
-            IF @FinalLevel_Remarks IN (1, 3, 4, 5)
-               AND EXISTS (
-                   SELECT 1 FROM PO_Para
-                   WHERE divcode = @divcode
-                     AND ISNULL(PRSMSSendFlg, 'N') = 'Y'
-               )
-            BEGIN
-                INSERT INTO Al_SMSMessage (
-                    Divcode, SmsMobileNo, SmsMsg,
-                    EntryDate, EntryUserID, NoofTry, SendDate, Sendflg
-                )
-                VALUES (
-                    @divcode,
-                    @phno,
-                    CASE @FinalLevel_Remarks
-                        WHEN 1 THEN 'PR No.' + CAST(@Prno AS varchar(10)) + ' has been set to PL Discuss'
-                        WHEN 3 THEN 'PR No.' + CAST(@Prno AS varchar(10)) + ' is on Hold'
-                        WHEN 4 THEN 'PR No.' + CAST(@Prno AS varchar(10)) + ' has been Declined'
-                        WHEN 5 THEN 'PR No.' + CAST(@Prno AS varchar(10)) + ' has been Postponed'
-                    END,
-                    GETDATE(), @FinalAppUser, 0, NULL, 'P'
-                );
-            END
+            ELSE IF @FinalLevel_Remarks = '3'
+                INSERT INTO Al_SMSMessage
+                    (Divcode, EntryDate, EntryUserID, SmsMsg, SmsMobileNo,
+                     Sendflg, SendDate, SendStatus, NoofTry, NextTryTime)
+                VALUES
+                    (@divcode, GETDATE(), @FinalAppUser,
+                     'PR No :' + CONVERT(varchar(10), @prsno) + ' PR Date :' + CONVERT(varchar(15), @prdate) + ' Is Hold',
+                     @phno, 'N', 0, '', 0, GETDATE());
 
-            -- Audit log
-            INSERT INTO LogDet_po (
-                divcode, prno, prdate, prsno,
-                prstatus, Trans_UserId, Trans_date,
-                Trans_Name, Trans_Mod, Activity
-            )
-            VALUES (
-                @divcode, @Prno, @Prdate, @Prsno,
-                'D', @FinalAppUser, GETDATE(),
-                'Final Level PR Approval', 'FinalApp',
-                CASE @FinalLevel_Remarks
-                    WHEN 1 THEN 'PL_DISCUSS'
-                    WHEN 2 THEN 'APPROVED'
-                    WHEN 3 THEN 'HOLD'
-                    WHEN 4 THEN 'DECLINED'
-                    WHEN 5 THEN 'POSTPONED'
-                END
-            );
+            ELSE IF @FinalLevel_Remarks = '4'
+                INSERT INTO Al_SMSMessage
+                    (Divcode, EntryDate, EntryUserID, SmsMsg, SmsMobileNo,
+                     Sendflg, SendDate, SendStatus, NoofTry, NextTryTime)
+                VALUES
+                    (@divcode, GETDATE(), @FinalAppUser,
+                     'PR No :' + CONVERT(varchar(10), @prsno) + ' PR Date :' + CONVERT(varchar(15), @prdate) + ' Declined',
+                     @phno, 'N', 0, '', 0, GETDATE());
 
-            COMMIT TRANSACTION;
+            ELSE IF @FinalLevel_Remarks = '5'
+                INSERT INTO Al_SMSMessage
+                    (Divcode, EntryDate, EntryUserID, SmsMsg, SmsMobileNo,
+                     Sendflg, SendDate, SendStatus, NoofTry, NextTryTime)
+                VALUES
+                    (@divcode, GETDATE(), @FinalAppUser,
+                     'PR No :' + CONVERT(varchar(10), @prsno) + ' PR Date :' + CONVERT(varchar(10), @prdate) + ' Postponed',
+                     @phno, 'N', 0, '', 0, GETDATE());
+
+            -- Audit log (Spinrise V2 addition — transparent to VB6)
+            INSERT INTO LogDet_po
+                (divcode, prno, prdate, prsno,
+                 prstatus, Trans_UserId, Trans_date, Trans_Name, Trans_Mod, Activity)
+            VALUES
+                (@divcode, @prno, @prdate, @prsno,
+                 'D', @FinalAppUser, GETDATE(), 'Final Level PR Approval', 'FinalApp',
+                 CASE @FinalLevel_Remarks
+                     WHEN '1' THEN 'PL_DISCUSS'
+                     WHEN '2' THEN 'APPROVED'
+                     WHEN '3' THEN 'HOLD'
+                     WHEN '4' THEN 'DECLINED'
+                     WHEN '5' THEN 'POSTPONED'
+                     ELSE          'APPROVED'
+                 END);
+
+            COMMIT TRAN;
             SET @Result = 0;
 
         END TRY
         BEGIN CATCH
-            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+            IF @@TRANCOUNT > 0 ROLLBACK TRAN;
             SET @Result = 2;
-            THROW;
+            DECLARE @ErrMsg      nvarchar(4000) = ERROR_MESSAGE(),
+                    @ErrSeverity int            = ERROR_SEVERITY();
+            RAISERROR(@ErrMsg, @ErrSeverity, 1);
         END CATCH
     END
 

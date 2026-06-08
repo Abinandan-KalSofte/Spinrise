@@ -158,6 +158,10 @@ Awaiting your response before generating any output.
 - Implement pagination on all list endpoints
 - DI registrations go in `Program.cs`
 - Use `CREATE OR ALTER PROCEDURE` — never `DROP + CREATE`
+- **HARD RULE — Existing SP referenced in FSD = use AS-IS. Never alter or recreate it.**
+  - If the FSD mentions an SP name **without saying "create new"** → that SP already exists in the legacy DB (VB6/ASP.NET). Use it exactly as-is. Do NOT write, alter, or recreate it.
+  - If any change to that SP is needed → STOP. Raise to **Sasi and CEO** for approval before touching it.
+  - Only `CREATE OR ALTER` an SP when the FSD explicitly says to create a new SP, or when it is confirmed that no legacy application uses that SP name.
 - All endpoints return `ApiResponse<T>` wrapper
 
 ---

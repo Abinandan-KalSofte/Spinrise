@@ -76,6 +76,7 @@ export const getList = (divCode: string, fDate: string, lDate: string, mode: str
   depCode?: string
   reqName?: string
   poGrp?: string
+  search?: string
   page?: number
   pageSize?: number
 }) => {
@@ -83,6 +84,7 @@ export const getList = (divCode: string, fDate: string, lDate: string, mode: str
   if (params?.depCode)  p.set('depCode',  params.depCode)
   if (params?.reqName)  p.set('reqName',  params.reqName)
   if (params?.poGrp)    p.set('poGrp',    params.poGrp)
+  if (params?.search)   p.set('search',   params.search)
   if (params?.page)     p.set('page',     String(params.page))
   if (params?.pageSize) p.set('pageSize', String(params.pageSize))
   return apiHelpers.get<PrSummary[]>(`${BASE}?${p}`)

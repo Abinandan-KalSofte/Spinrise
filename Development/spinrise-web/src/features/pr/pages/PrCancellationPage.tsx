@@ -8,8 +8,10 @@ import UndoPickerModal   from '../components/cancellation/UndoPickerModal'
 import { usePrCancellation } from '../hooks/usePrCancellation'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import dayjs from 'dayjs'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 export default function PrCancellationPage() {
+  usePageTitle('PR Cancellation')
   const processingDate = useAuthStore((s) => s.processingDate)
   const today = processingDate
     ? dayjs(processingDate).format('DD MMM YYYY')

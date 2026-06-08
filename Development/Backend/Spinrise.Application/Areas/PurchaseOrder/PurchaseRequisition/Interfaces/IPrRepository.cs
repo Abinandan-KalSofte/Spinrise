@@ -13,7 +13,7 @@ public interface IPrRepository
     Task<ItemDetailDto?>             GetItemDetailAsync(string divCode, string itemCode, DateOnly fDate, DateOnly lDate, DateOnly pDate);
     Task<PrHeaderDto?>               GetLastRecordAsync(string divCode, DateOnly fDate, DateOnly lDate);
     Task<PrHeaderDto?>               GetByIdAsync(string divCode, decimal prNo, DateOnly prDate);
-    Task<IEnumerable<PrSummaryDto>>  GetListAsync(string divCode, DateOnly fDate, DateOnly lDate, string mode, string? depCode, string? reqName, string? poGrp, int page, int pageSize);
+    Task<IEnumerable<PrSummaryDto>>  GetListAsync(string divCode, DateOnly fDate, DateOnly lDate, string mode, string? depCode, string? reqName, string? poGrp, string? search, int page, int pageSize);
     Task<decimal>                    SaveAsync(string mode, string divCode, SavePrRequest request, string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate);
     Task                             DeleteAsync(string divCode, DeletePrRequest request, string userId, string? hostName, string? ipAddress);
     Task<PendingOrderDto?>               CheckPendingOrderAsync(string divCode, DateOnly fDate, DateOnly lDate, string depCode, string itemCode);

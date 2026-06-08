@@ -34,7 +34,9 @@ BEGIN
             NULL AS DivCode, NULL AS PrNo,   NULL AS PrDate,
             NULL AS DepCode, NULL AS DepName, NULL AS ReqName, NULL AS ReqEmpName,
             NULL AS Section, NULL AS IType,   NULL AS IDesc,   NULL AS RefNo,
-            NULL AS PoGrp,   NULL AS AppFlg,  NULL AS PrStatus,
+            NULL AS PoGrp,   NULL AS AppFlg,
+            NULL AS CancelFlag, NULL AS CancelReason, NULL AS AmendNo,
+            NULL AS PrStatus,
             NULL AS CreatedBy, NULL AS CreatedDt, NULL AS UserId
         WHERE 1 = 0;
 
@@ -66,6 +68,9 @@ BEGIN
         RTRIM(ISNULL(NULLIF(RTRIM(h.refno), '0'), ''))          AS RefNo,
         RTRIM(ISNULL(h.PO_GRP,  ''))                            AS PoGrp,
         ISNULL(h.APPFLG, 'N')                                   AS AppFlg,
+        ISNULL(h.cancelflag, '')                                AS CancelFlag,
+        RTRIM(ISNULL(h.CANREASON, ''))                          AS CancelReason,
+        ISNULL(h.amendno, 0)                                    AS AmendNo,
         -- PR Status: derived from PO_PRL line-level prstatus (not a PO_PRH column)
         CASE
             WHEN ISNULL(h.cancelflag, '') <> ''

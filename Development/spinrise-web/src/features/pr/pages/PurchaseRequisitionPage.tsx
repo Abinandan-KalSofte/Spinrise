@@ -18,8 +18,10 @@ import { PrPrintPreviewModal } from '../components/PrPrintPreviewModal'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import * as prApi from '../api/prApi'
 import type { PrSummary } from '../types'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 export default function PurchaseRequisitionPage() {
+  usePageTitle('Purchase Requisition(PR)')
   const { message } = App.useApp()
   const [searchParams] = useSearchParams()
 

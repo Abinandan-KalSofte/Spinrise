@@ -143,4 +143,43 @@ public class FinalLevelApprovalServiceTests
         result.ApprovedCount.Should().Be(1);
         _repo.Verify(r => r.SaveItemAsync(item, FinalAppUser, 1), Times.Once);
     }
+
+    // ── Regression: FA-DS-01 (disposition default must be Approved=2, not 0) ──
+    // Root cause: SP not deployed to JAT live DB + FE defaulting to 0 instead of 2 (commit a45490d).
+    // The service does not guard disposition values (only blocks PL Discuss=1).
+    // Regression tests here verify: disposition=2 passes through; disposition=1 is still blocked.
+    [Fact]
+    [Trait("Module", "M01")]
+    [Trait("Operation", "SaveFinalApproval")]
+    [Trait("Layer", "Service")]
+    [Trait("Type", "Regression")]
+    [Trait("DefectRef", "FA-DS-01")]
+    public async Task SaveApprovalsAsync_DispositionApproved_IsAcceptedAndReachesRepo()
+    {
+        var item = MakeItem(disposition: 2); // 2 = Approved
+        var request = new FinalApprovalSaveRequest { DbName = "JAT", Items = [item] };
+        _repo.Setup(r => r.SaveItemAsync(item, FinalAppUser, 0)).ReturnsAsync(0);
+
+        var result = await _sut.SaveApprovalsAsync(request, FinalAppUser);
+
+        result.ApprovedCount.Should().Be(1, "disposition=2 (Approved) must reach the SP — FA-DS-01");
+        _repo.Verify(r => r.SaveItemAsync(item, FinalAppUser, 0), Times.Once);
+    }
+
+    [Fact]
+    [Trait("Module", "M01")]
+    [Trait("Operation", "SaveFinalApproval")]
+    [Trait("Layer", "Service")]
+    [Trait("Type", "Regression")]
+    [Trait("DefectRef", "FA-DS-01")]
+    public async Task SaveApprovalsAsync_DispositionPlDiscuss_StillBlockedAfterFix()
+    {
+        // disposition=1 (PL Discuss) must remain blocked post FA-DS-01 fix — ensure no regression
+        var request = new FinalApprovalSaveRequest { DbName = "JAT", Items = [MakeItem(disposition: 1)] };
+
+        var act = () => _sut.SaveApprovalsAsync(request, FinalAppUser);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*PL Discuss*", "blocking PL Discuss must remain intact — FA-DS-01 regression");
+    }
 }

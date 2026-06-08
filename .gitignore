@@ -37,3 +37,29 @@ allure-report/
 .idea/
 .vscode/settings.json
 *.swp
+
+# Local-only — reference docs, prompts, tools, Claude memory
+# These stay on the lead developer's machine and are never pushed.
+Docs/
+Prompts/
+Tools/
+memory/
+.claude/
+
+# Local working folders — never pushed
+Backup/
+Blueprint/
+ChangeLog/
+DB_Schema/
+EMAIL/
+Exports/
+Testing/
+tests/
+
+# Backup archives and build artefacts
+*.rar
+build_output.txt
+
+# Test run output
+Development/spinrise-web/playwright-report/
+Development/spinrise-web/test-results/

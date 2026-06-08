@@ -3,8 +3,10 @@ import { PRDocBand } from '../components/pr-form/PRToolbar'
 import PrForeclosureGrid from '../components/foreclosure/PrForeclosureGrid'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import dayjs from 'dayjs'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 export default function PrForeclosurePage() {
+  usePageTitle('PR Foreclosure')
   const processingDate = useAuthStore((s) => s.processingDate)
   const today = processingDate
     ? dayjs(processingDate).format('DD MMM YYYY')

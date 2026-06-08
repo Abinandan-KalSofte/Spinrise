@@ -102,3 +102,20 @@ IF NOT EXISTS (
     WHERE TABLE_NAME = 'PO_APRL' AND COLUMN_NAME = 'APPCOST')
     ALTER TABLE dbo.PO_APRL ADD APPCOST NUMERIC(11,2) NULL;
 GO
+
+-- PO_PRINT_LOG: audit trail for amendment print events (FSD §6 DB Migration)
+-- Tracks first print vs reprint; required for REPRINT_FLG permission control.
+IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE name = 'PO_PRINT_LOG' AND type = 'U')
+BEGIN
+    CREATE TABLE dbo.PO_PRINT_LOG (
+        id           INT IDENTITY(1,1)  PRIMARY KEY,
+        divcode      VARCHAR(10)        NOT NULL,
+        prno         NUMERIC(6,0)       NOT NULL,
+        amendno      INT                NOT NULL,
+        amenddate    DATE               NOT NULL,
+        printed_by   VARCHAR(50)        NOT NULL,
+        printed_on   DATETIME           NOT NULL DEFAULT GETDATE(),
+        reprint_flag CHAR(1)            NOT NULL DEFAULT 'N'
+    );
+END
+GO

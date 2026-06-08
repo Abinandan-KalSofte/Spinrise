@@ -15,6 +15,7 @@ import { authApi } from '../api/authApi'
 import { authService } from '../services/authService'
 import { useAuthStore } from '../store/useAuthStore'
 import type { ActiveCompanyDto, ActiveDivisionDto, LoginDto } from '../types'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 const LAST_DB_KEY = 'spinrise_last_db'
 
@@ -23,6 +24,7 @@ interface LoginFormValues extends LoginDto {
 }
 
 export default function LoginPage() {
+  usePageTitle('Login')
   const { message } = AntApp.useApp()
   const [form] = Form.useForm<LoginFormValues>()
   const setAuthSession    = useAuthStore((s) => s.setAuthSession)

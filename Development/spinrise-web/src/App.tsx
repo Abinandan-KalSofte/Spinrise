@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Spin } from 'antd'
 import ProtectedRoute from './shared/components/ProtectedRoute'
 import AppShell from './shared/components/AppShell'
+import SessionExpiredModal from './shared/components/SessionExpiredModal'
 
 const LoginPage               = lazy(() => import('./features/auth/pages/LoginPage'))
 const DashboardPage           = lazy(() => import('./pages/DashboardPage'))
@@ -16,6 +17,7 @@ const FinalLevelApprovalPage  = lazy(() => import('./features/pr/pages/FinalLeve
 export default function App() {
   return (
     <BrowserRouter>
+      <SessionExpiredModal />
       <Suspense fallback={<Spin fullscreen />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

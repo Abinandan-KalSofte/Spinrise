@@ -165,10 +165,11 @@ public class PurchaseRequisitionController : BaseApiController
         [FromQuery] string? depCode = null,
         [FromQuery] string? reqName = null,
         [FromQuery] string? poGrp  = null,
+        [FromQuery] string? search = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
-        var result = await _service.GetListAsync(divCode, fDate, lDate, mode, depCode, reqName, poGrp, page, pageSize);
+        var result = await _service.GetListAsync(divCode, fDate, lDate, mode, depCode, reqName, poGrp, search, page, pageSize);
         return OkResponse(result);
     }
 

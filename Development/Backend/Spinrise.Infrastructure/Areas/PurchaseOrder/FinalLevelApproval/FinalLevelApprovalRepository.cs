@@ -35,6 +35,7 @@ public class FinalLevelApprovalRepository : IFinalLevelApprovalRepository
             QtyRequired:    r.QtyRequired,
             QtyApproved:    r.QtyApproved,
             Disposition:    r.Disposition,
+            Rate:           r.Rate,
             LpoRate:        r.LpoRate,
             LpoDate:        r.LpoDate,
             ApproxCost:     r.ApproxCost,
@@ -100,23 +101,26 @@ public class FinalLevelApprovalRepository : IFinalLevelApprovalRepository
         return [];
     }
 
-    // Raw row type — matches SP imode=2/3 column aliases exactly
-    private sealed record FinalApprovalLineRow(
-        string?  DivCode,
-        decimal  PrNo,
-        string?  PrDate,
-        decimal  PrSno,
-        string?  Department,
-        string?  ItemCode,
-        string?  ItemName,
-        string?  Uom,
-        decimal  CurrentStock,
-        decimal  QtyRequired,
-        decimal  QtyApproved,
-        int      Disposition,
-        decimal  LpoRate,
-        string?  LpoDate,
-        decimal? ApproxCost,
-        string?  ApprovalStatus,
-        byte[]?  RowVersion);
+    // Property class — Dapper maps by name, so SP column order and additions never cause constructor errors.
+    private sealed class FinalApprovalLineRow
+    {
+        public string?  DivCode        { get; init; }
+        public decimal  PrNo           { get; init; }
+        public string?  PrDate         { get; init; }
+        public decimal  PrSno          { get; init; }
+        public string?  Department     { get; init; }
+        public string?  ItemCode       { get; init; }
+        public string?  ItemName       { get; init; }
+        public string?  Uom            { get; init; }
+        public decimal  CurrentStock   { get; init; }
+        public decimal  QtyRequired    { get; init; }
+        public decimal  QtyApproved    { get; init; }
+        public int      Disposition    { get; init; }
+        public decimal  Rate           { get; init; }
+        public decimal  LpoRate        { get; init; }
+        public string?  LpoDate        { get; init; }
+        public decimal? ApproxCost     { get; init; }
+        public string?  ApprovalStatus { get; init; }
+        public byte[]?  RowVersion     { get; init; }
+    }
 }

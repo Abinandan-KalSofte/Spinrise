@@ -17,10 +17,12 @@ import PrApprovalFooter       from '../components/first-approval/PrApprovalFoote
 import { PrPrintPreviewModal } from '../components/PrPrintPreviewModal'
 import type { ApprovalDept, PrApprovalSummary } from '../types/prFirstApprovalTypes'
 import dayjs from 'dayjs'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 type LookupMode = 'APPROVE' | 'DELETE' | 'FIND'
 
 export default function PrFirstApprovalPage() {
+  usePageTitle('First Level PR Approval')
   const { message } = App.useApp()
   const user    = useAuthStore((s) => s.user)
   const divCode = user?.divCode ?? ''

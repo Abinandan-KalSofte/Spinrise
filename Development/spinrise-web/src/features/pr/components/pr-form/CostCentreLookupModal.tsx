@@ -19,7 +19,7 @@ export function CostCentreLookupModal({ open, divCode, onSelect, onCancel }: Cos
   const { items, loading, search, selected, handleSearchChange, handleRowClick, handleRowDblClick, handleConfirm } =
     useLookupModal<CostCentreOption>({
       fetcher:  (q) => divCode ? prApi.getCostCentreLookup(divCode, q.trim() || undefined) : Promise.resolve([]),
-      keyOf:    (cc) => cc.ccCode,
+      keyOf:    (cc) => String(cc.ccCode),
       onSelect,
     })
 

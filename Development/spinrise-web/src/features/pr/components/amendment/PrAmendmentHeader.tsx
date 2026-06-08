@@ -1,4 +1,4 @@
-import type { AmendmentHeader } from '../../types'
+import type { AmendmentHeader, PrTypeOption } from '../../types'
 import type { AmendMode } from '../../hooks/usePrAmendmentForm'
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
@@ -48,16 +48,21 @@ interface Props {
   amendReason:         string
   reasonError:         boolean
   processingDate:      string | null
+  prTypes:             PrTypeOption[]
+  purTypeFlg:          number
+  iType:               string
   onRefNoChange:       (v: string) => void
   onAmendReasonChange: (v: string) => void
+  onITypeChange:       (v: string) => void
   onFindPR:            () => void
 }
 
 export function PrAmendmentHeader({
   header, mode, refNo, amendReason, reasonError, processingDate,
-  onRefNoChange, onAmendReasonChange, onFindPR,
+  prTypes, purTypeFlg, iType,
+  onRefNoChange, onAmendReasonChange, onITypeChange, onFindPR,
 }: Props) {
-  const canEdit = mode === 'new' || mode === 'modify'
+  const canEdit = mode === 'new'
 
   // "28 May 2026" format for the date pill
   const todayDisplay = (() => {
@@ -153,12 +158,30 @@ export function PrAmendmentHeader({
             <input style={fldCtrl(true)} value={deptDisplay} disabled readOnly placeholder="—" />
           </Fg>
           <Fg width={128}>
-            <Lbl text="PR Type" />
-            <input
-              style={fldCtrl(true)}
-              value={header?.iDesc || header?.iType || ''}
-              disabled readOnly placeholder="—"
-            />
+            <Lbl text="PR Type" required={purTypeFlg === 1} />
+            {canEdit && prTypes.length > 0 ? (
+              <select
+                style={{
+                  ...fldCtrl(false),
+                  appearance: 'auto',
+                  paddingRight: 4,
+                  borderColor: purTypeFlg === 1 && !iType ? '#A32D2D' : '#e2e2e2',
+                }}
+                value={iType}
+                onChange={(e) => onITypeChange(e.target.value)}
+              >
+                <option value="">— Select —</option>
+                {prTypes.map((t) => (
+                  <option key={t.iType} value={t.iType}>{t.iDesc}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                style={fldCtrl(true)}
+                value={header?.iDesc || header?.iType || ''}
+                disabled readOnly placeholder="—"
+              />
+            )}
           </Fg>
           <Fg flex>
             <Lbl text="Requester Name" />
@@ -178,7 +201,7 @@ export function PrAmendmentHeader({
               style={fldCtrl(!canEdit)}
               value={refNo}
               disabled={!canEdit}
-              maxLength={30}
+              maxLength={6}
               placeholder="Optional"
               onChange={(e) => onRefNoChange(e.target.value)}
             />

@@ -102,7 +102,7 @@ BEGIN
     WHERE h.divcode              = @DivCode
       AND h.prno                 = @PrNo
       AND CAST(h.prdate AS DATE) = @PrDate
-      AND ISNULL(l.AmdFlg, '')  <> 'Y'
+--      AND ISNULL(l.AmdFlg, '')  <> 'Y'
     ORDER BY l.prsno;
 END;
 GO
