@@ -2097,53 +2097,25 @@ GO
 -- ksp_PR_SaveAmendment
 -- FSD: M01 PR Amendment Entry v2.3  §4 Save Sequence
 -- CR:  CR-M01-AM-001 — QA/CEO approved 31-May-2026 (T. Mani)
--- Business logic: PR_Amendment_Form.md (Mariyaiya) — implemented 02-Jun-2026
 --
--- ADD:         INSERT PO_APRH + PO_APRL snapshot; UPDATE PO_PRH (refno);
---              delta-update PO_PRL — PATH A (UPDATE) / PATH B (INSERT) / PATH C (DELETE)
--- MODIFY:      UPDATE PO_APRH header, DELETE + re-INSERT PO_APRL, audit.
--- DELETE:      Dependency check; DELETE PO_APRL + PO_APRH, audit.
--- DELETE_LINE: Single-line DELETE from PO_APRL (deltype=2), dependency check, audit.
+-- ADD: INSERT PO_APRH + PO_APRL snapshot (append-only history);
+--      UPDATE PO_PRH header fields;
+--      delta-update PO_PRL — PATH A (UPDATE) / PATH B (INSERT) / PATH C (DELETE)
 --
 -- Business rules enforced:
 --   BR-AMD-01: AmendDate must equal @PDate (processing date)
 --   BR-AMD-03: PR eligibility checked in ksp_PR_GetAmendmentForNew
 --   BR-AMD-04: Duplicate item codes rejected
---   Qty < ordered qty rejected on ADD
---   Required Date < pdate rejected on ADD
+--   Required Date >= pdate
+--   Qty < approved qty rejected
 --   PATH C: guard PRSTATUS NOT IN ('O','E','C','Z','X')
 --   PATH A: row_version concurrency per line; approval flags preserved
 --   PATH B: MAX(prsno)+1 with UPDLOCK
---   DELETE/DELETE_LINE: PO_PRL dependency check (qtyord > 0 or status ordered/enquired)
---   amdflg = 'Y' set on PO_APRL snapshot lines and PATH B new PO_PRL inserts
---   No DELETE of PO_PRH or PO_PRL
--- ============================================================
--- ksp_PR_SaveAmendment
--- FSD: M01 PR Amendment Entry v2.3  §4 Save Sequence
--- CR:  CR-M01-AM-001 — QA/CEO approved 31-May-2026 (T. Mani)
--- Business logic: PR_Amendment_Form.md (Mariyaiya) — implemented 02-Jun-2026
---
--- ADD:         INSERT PO_APRH + PO_APRL snapshot; UPDATE PO_PRH (refno);
---              delta-update PO_PRL — PATH A (UPDATE) / PATH B (INSERT) / PATH C (DELETE)
--- MODIFY:      UPDATE PO_APRH header, DELETE + re-INSERT PO_APRL, audit.
--- DELETE:      Dependency check; DELETE PO_APRL + PO_APRH, audit.
--- DELETE_LINE: Single-line DELETE from PO_APRL (deltype=2), dependency check, audit.
---
--- Business rules enforced:
---   BR-AMD-01: AmendDate must equal @PDate (processing date)
---   BR-AMD-03: PR eligibility checked in ksp_PR_GetAmendmentForNew
---   BR-AMD-04: Duplicate item codes rejected
---   Qty < ordered qty rejected on ADD
---   Required Date < pdate rejected on ADD
---   PATH C: guard PRSTATUS NOT IN ('O','E','C','Z','X')
---   PATH A: row_version concurrency per line; approval flags preserved
---   PATH B: MAX(prsno)+1 with UPDLOCK
---   DELETE/DELETE_LINE: PO_PRL dependency check (qtyord > 0 or status ordered/enquired)
---   amdflg = 'Y' set on PO_APRL snapshot lines and PATH B new PO_PRL inserts
---   No DELETE of PO_PRH or PO_PRL
+--   NF-01: zero submitted lines rejected
+--   amdflg = 'Y' set on PO_APRL snapshot lines, PATH A existing PO_PRL updates, and PATH B new PO_PRL inserts
 -- ============================================================
 CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_SaveAmendment]
-    @Mode               VARCHAR(15),        -- 'ADD' | 'MODIFY' | 'DELETE' | 'DELETE_LINE'
+    @Mode               VARCHAR(15),        -- 'ADD'
     @DivCode            VARCHAR(10),
     @PrNo               NUMERIC(6,0),
     @PrDate             DATE,
@@ -2159,7 +2131,6 @@ CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_SaveAmendment]
     @AmendNo            INT             = NULL,
     @RowVersion         VARBINARY(8)    = NULL,
     @LinesJson          NVARCHAR(MAX)   = NULL,
-    @PrSno              INT             = NULL, -- used by DELETE_LINE mode only
     @IType              CHAR(1)         = NULL, -- editable PR Type; overrides PO_PRH snapshot
     @Result             INT             = 0 OUTPUT
 AS
@@ -2174,12 +2145,12 @@ BEGIN
         IF @AmendDate < @FDate OR @AmendDate > @LDate
             RAISERROR('Amendment Date is outside the open financial year.', 16, 1);
 
-        -- ── 2. BR-AMD-01: Amendment Date must equal processing date (ADD/MODIFY only) ──
-        IF @Mode IN ('ADD', 'MODIFY') AND @AmendDate <> @PDate
+        -- ── 2. BR-AMD-01: Amendment Date must equal processing date ──────────
+        IF @AmendDate <> @PDate
             RAISERROR('Amendment Date must equal the current processing date.', 16, 1);
 
         -- ── 3. BR-AMD-04: Duplicate item codes ───────────────────────────────
-        IF @Mode IN ('ADD', 'MODIFY') AND @LinesJson IS NOT NULL
+        IF @LinesJson IS NOT NULL
         BEGIN
             IF EXISTS (
                 SELECT 1
@@ -2193,7 +2164,7 @@ BEGIN
         END
 
         -- ── 4. Validate RATE_JUSTIFICATION when RATE_SOURCE = MANUAL ─────────
-        IF @Mode NOT IN ('DELETE', 'DELETE_LINE') AND @LinesJson IS NOT NULL
+        IF @LinesJson IS NOT NULL
         BEGIN
             DECLARE @BadItem VARCHAR(10);
             SELECT TOP 1 @BadItem = j.ItemCode
@@ -2210,233 +2181,75 @@ BEGIN
                 RAISERROR('Rate justification is required for item %s when rate is manually overridden.', 16, 1, @BadItem);
         END
 
-        -- ── 5. Concurrency check (MODIFY / DELETE / DELETE_LINE) ─────────────
-        IF @Mode IN ('MODIFY', 'DELETE', 'DELETE_LINE')
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM dbo.PO_APRH
-                WHERE  divcode              = @DivCode
-                  AND  prno                 = @PrNo
-                  AND  CAST(prdate AS DATE) = @PrDate
-                  AND  amendno              = @AmendNo
-                  AND  row_version          = @RowVersion
-            )
-                RAISERROR('Record has been modified by another user. Please reload.', 16, 1);
-        END
-
-        -- ── 6. Resolve AmendNo ────────────────────────────────────────────────
+        -- ── 5. Generate amendment number ──────────────────────────────────────
         DECLARE @ResolvedAmendNo INT;
 
-        IF @Mode = 'ADD'
-        BEGIN
-            EXEC usp_GetNextAmendNo
-                @DivCode  = @DivCode,
-                @FDate    = @FDate,
-                @LDate    = @LDate,
-                @NewDocNo = @ResolvedAmendNo OUTPUT;
+        EXEC usp_GetNextAmendNo
+            @DivCode  = @DivCode,
+            @FDate    = @FDate,
+            @LDate    = @LDate,
+            @NewDocNo = @ResolvedAmendNo OUTPUT;
 
-            IF @ResolvedAmendNo = -1
-                RAISERROR('Could not generate amendment number. Check PO_DOC_PARA configuration.', 16, 1);
-        END
-        ELSE
-            SET @ResolvedAmendNo = @AmendNo;
+        IF @ResolvedAmendNo = -1
+            RAISERROR('Could not generate amendment number. Check PO_DOC_PARA configuration.', 16, 1);
 
-        -- ── 7. DELETE path ────────────────────────────────────────────────────
-        IF @Mode = 'DELETE'
-        BEGIN
-            -- Dependency check: block if any PRL line has been ordered or enquired
-            IF EXISTS (
-                SELECT 1 FROM dbo.PO_PRL
-                WHERE  divcode              = @DivCode
-                  AND  prno                 = @PrNo
-                  AND  CAST(prdate AS DATE) = @PrDate
-                  AND  (ISNULL(qtyord, 0) > 0 OR ISNULL(prstatus, '') IN ('O', 'E', 'C'))
-            )
-                RAISERROR('Cannot delete amendment — one or more PR lines have been ordered or enquired.', 16, 1);
-
-            DELETE FROM dbo.PO_APRL
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  amendno              = @ResolvedAmendNo;
-
-            DELETE FROM dbo.PO_APRH
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  amendno              = @ResolvedAmendNo;
-
-            INSERT INTO dbo.LogDet_po
-                (divcode, prno, prdate, prsno, itemcode,
-                 Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
-                 Trans_UserId, Trans_date, moduleNo)
-            VALUES
-                (@DivCode, @PrNo, @PrDate, @ResolvedAmendNo, '',
-                 'PR Amendment', 'D', @HostName, @IpAddress,
-                 @UserId, GETDATE(), 4);
-
-            SET @Result = 0;
-            COMMIT TRANSACTION;
-            SELECT @ResolvedAmendNo AS AmendNo;
-            RETURN;
-        END
-
-        -- ── 8. DELETE_LINE path (deltype=2 — single line from amendment) ──────
-        IF @Mode = 'DELETE_LINE'
-        BEGIN
-            IF @PrSno IS NULL
-                RAISERROR('PrSno is required for DELETE_LINE mode.', 16, 1);
-
-            -- Cannot delete last line
-            IF (SELECT COUNT(*) FROM dbo.PO_APRL
-                WHERE divcode = @DivCode AND prno = @PrNo
-                  AND CAST(prdate AS DATE) = @PrDate AND amendno = @ResolvedAmendNo) <= 1
-                RAISERROR('Cannot delete the last line of an amendment.', 16, 1);
-
-            -- PO_APRL.prsno is globally sequential and differs from PO_PRL.prsno after the first amendment.
-            -- Look up itemcode from PO_APRL to find the matching PO_PRL live line for the status check.
-            DECLARE @DelItemCode VARCHAR(10);
-            SELECT @DelItemCode = itemcode
-            FROM   dbo.PO_APRL
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  amendno              = @ResolvedAmendNo
-              AND  prsno                = @PrSno;
-
-            IF @DelItemCode IS NULL
-                RAISERROR('Line not found in amendment %d.', 16, 1, @ResolvedAmendNo);
-
-            IF EXISTS (
-                SELECT 1 FROM dbo.PO_PRL
-                WHERE  divcode              = @DivCode
-                  AND  prno                 = @PrNo
-                  AND  CAST(prdate AS DATE) = @PrDate
-                  AND  itemcode             = @DelItemCode
-                  AND  ISNULL(prstatus, '') IN ('O', 'E', 'C', 'Z', 'X')
-            )
-                RAISERROR('Line for item %s cannot be deleted — its status is beyond amendment scope.', 16, 1, @DelItemCode);
-
-            DELETE FROM dbo.PO_APRL
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  amendno              = @ResolvedAmendNo
-              AND  prsno                = @PrSno;
-
-            INSERT INTO dbo.LogDet_po
-                (divcode, prno, prdate, prsno, itemcode,
-                 Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
-                 Trans_UserId, Trans_date, moduleNo)
-            VALUES
-                (@DivCode, @PrNo, @PrDate, @PrSno, '',
-                 'PR Amendment', 'DELETE_LINE', @HostName, @IpAddress,
-                 @UserId, GETDATE(), 4);
-
-            SET @Result = 0;
-            COMMIT TRANSACTION;
-            SELECT @ResolvedAmendNo AS AmendNo;
-            RETURN;
-        END
-
-        -- ── 9. ADD: capture current header fields from PO_PRH ─────────────────
+        -- ── 6. Capture current header fields from PO_PRH ──────────────────────
         DECLARE @DepCode    VARCHAR(3);
         DECLARE @ReqName    VARCHAR(25);
         DECLARE @Section    VARCHAR(20);
         DECLARE @PlaceOfIss VARCHAR(30);
 
-        IF @Mode = 'ADD'
+        IF EXISTS (
+            SELECT 1 FROM dbo.PO_PRH
+            WHERE  divcode              = @DivCode
+              AND  prno                 = @PrNo
+              AND  CAST(prdate AS DATE) = @PrDate
+        )
         BEGIN
-            IF EXISTS (
-                SELECT 1 FROM dbo.PO_PRH
-                WHERE  divcode              = @DivCode
-                  AND  prno                 = @PrNo
-                  AND  CAST(prdate AS DATE) = @PrDate
-            )
-            BEGIN
-                DECLARE @CapturedIType CHAR(1);
-                SELECT @DepCode = depcode, @ReqName = REQNAME,
-                       @Section = SECTION, @CapturedIType = ITYPE, @PlaceOfIss = PLACEOFISS
-                FROM   dbo.PO_PRH
-                WHERE  divcode              = @DivCode
-                  AND  prno                 = @PrNo
-                  AND  CAST(prdate AS DATE) = @PrDate;
-                -- User-supplied @IType overrides the PO_PRH snapshot
-                SET @IType = ISNULL(@IType, @CapturedIType);
-            END
-            ELSE
-            BEGIN
-                -- Legacy fallback: PO_PRH absent (pre-CR save) — read from latest PO_APRH
-                DECLARE @CapturedIType2 CHAR(1);
-                SELECT TOP 1
-                       @DepCode = depcode, @ReqName = REQNAME,
-                       @Section = SECTION, @CapturedIType2 = ITYPE, @PlaceOfIss = PLACEOFISS
-                FROM   dbo.PO_APRH
-                WHERE  divcode              = @DivCode
-                  AND  prno                 = @PrNo
-                  AND  CAST(prdate AS DATE) = @PrDate
-                ORDER BY amendno DESC;
-                SET @IType = ISNULL(@IType, @CapturedIType2);
-            END
+            DECLARE @CapturedIType CHAR(1);
+            SELECT @DepCode = depcode, @ReqName = REQNAME,
+                   @Section = SECTION, @CapturedIType = ITYPE, @PlaceOfIss = PLACEOFISS
+            FROM   dbo.PO_PRH
+            WHERE  divcode              = @DivCode
+              AND  prno                 = @PrNo
+              AND  CAST(prdate AS DATE) = @PrDate;
+            SET @IType = ISNULL(@IType, @CapturedIType);
+        END
+        ELSE
+        BEGIN
+            -- Legacy fallback: PO_PRH absent — read from latest PO_APRH
+            DECLARE @CapturedIType2 CHAR(1);
+            SELECT TOP 1
+                   @DepCode = depcode, @ReqName = REQNAME,
+                   @Section = SECTION, @CapturedIType2 = ITYPE, @PlaceOfIss = PLACEOFISS
+            FROM   dbo.PO_APRH
+            WHERE  divcode              = @DivCode
+              AND  prno                 = @PrNo
+              AND  CAST(prdate AS DATE) = @PrDate
+            ORDER BY amendno DESC;
+            SET @IType = ISNULL(@IType, @CapturedIType2);
         END
 
-        -- ── 10. ADD: insert amendment header snapshot ─────────────────────────
+        -- ── 7. Insert amendment header snapshot ───────────────────────────────
         DECLARE @CreatedDt VARCHAR(25) =
             CONVERT(VARCHAR(10), GETDATE(), 103) + ' ' +
             CONVERT(VARCHAR(8),  GETDATE(), 108);
 
-        IF @Mode = 'ADD'
-        BEGIN
-            INSERT INTO dbo.PO_APRH
-                (divcode, prno, prdate, amendno, amenddate,
-                 amendreason, refno, createdby, createddt,
-                 depcode, REQNAME, SECTION, ITYPE, PLACEOFISS)
-            VALUES
-                (@DivCode, @PrNo, @PrDate, @ResolvedAmendNo, @AmendDate,
-                 NULLIF(RTRIM(@AmendmentReason), ''),
-                 NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
-                 @UserId, @CreatedDt,
-                 @DepCode, @ReqName, @Section, @IType, @PlaceOfIss);
-        END
+        INSERT INTO dbo.PO_APRH
+            (divcode, prno, prdate, amendno, amenddate,
+             amendreason, refno, createdby, createddt,
+             depcode, REQNAME, SECTION, ITYPE, PLACEOFISS)
+        VALUES
+            (@DivCode, @PrNo, @PrDate, @ResolvedAmendNo, @AmendDate,
+             NULLIF(RTRIM(@AmendmentReason), ''),
+             NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
+             @UserId, @CreatedDt,
+             @DepCode, @ReqName, @Section, @IType, @PlaceOfIss);
 
-        -- ── 11. MODIFY: update amendment header ───────────────────────────────
-        ELSE
-        BEGIN
-            UPDATE dbo.PO_APRH
-            SET    amenddate   = @AmendDate,
-                   amendreason = NULLIF(RTRIM(@AmendmentReason), ''),
-                   refno       = NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
-                   ITYPE       = ISNULL(@IType, ITYPE)
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  amendno              = @ResolvedAmendNo;
-
-            -- Propagate PR Type change to live PR header if user changed it
-            IF @IType IS NOT NULL AND EXISTS (
-                SELECT 1 FROM dbo.PO_PRH
-                WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate
-            )
-            BEGIN
-                UPDATE dbo.PO_PRH SET ITYPE = @IType
-                WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate;
-            END
-
-            -- Clear only this amendment's rows; other amendments' history is preserved
-            DELETE FROM dbo.PO_APRL
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  amendno              = @ResolvedAmendNo;
-        END
-
-        -- ── 12. Append amendment lines snapshot (ADD and MODIFY) ──────────────
+        -- ── 8. Append amendment lines snapshot ────────────────────────────────
         -- PO_APRL is an append-only history log (FSD §4 Architecture Note).
-        -- ADD:    no prior rows for this amendno — INSERT all submitted lines as a fresh snapshot.
-        -- MODIFY: Step 11 cleared this amendno's rows — re-INSERT the revised snapshot.
-        -- prsno  = MAX(PO_APRL.prsno) + ROW_NUMBER() — globally sequential per PR across all amendments.
+        -- prsno  = MAX(PO_APRL.prsno) + ROW_NUMBER() — globally sequential per PR.
         -- amendslno = ROW_NUMBER() — line position within this amendment (1, 2, 3...).
-        -- Old amendments' rows are never touched.
 
         DECLARE @MaxAprlSno INT;
         SELECT @MaxAprlSno = ISNULL(MAX(prsno), 0)
@@ -2489,341 +2302,192 @@ BEGIN
         ) j
         WHERE  RTRIM(ISNULL(j.ItemCode, '')) <> '';
 
-        -- ── 13. ADD: delta-update PO_PRH and PO_PRL (CR-M01-AM-001) ──────────
-        IF @Mode = 'ADD'
+        -- ── 9. Delta-update PO_PRH and PO_PRL (CR-M01-AM-001) ────────────────
+        -- Update PO_PRH refno and ITYPE
+        IF EXISTS (SELECT 1 FROM dbo.PO_PRH WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate)
         BEGIN
-            -- Update PO_PRH refno and ITYPE (user may change PR Type during amendment)
-            IF EXISTS (SELECT 1 FROM dbo.PO_PRH WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate)
-            BEGIN
-                UPDATE dbo.PO_PRH
-                SET    refno = NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
-                       ITYPE = ISNULL(@IType, ITYPE)
-                WHERE  divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate;
-            END
+            UPDATE dbo.PO_PRH
+            SET    refno = NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
+                   ITYPE = ISNULL(@IType, ITYPE)
+            WHERE  divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate;
+        END
 
-            -- Parse submitted lines into work table (includes RowVersion for PATH A)
-            DECLARE @LineWork TABLE (
-                PrSno             INT,
-                ItemCode          VARCHAR(10),
-                MacNo             VARCHAR(5),
-                QtyInd            NUMERIC(12,3),
-                ReqdDate          VARCHAR(10),
-                Rate              NUMERIC(13,4),
-                RateSource        VARCHAR(20),
-                RateJustification VARCHAR(200),
-                CurStock          NUMERIC(12,3),
-                CcCode            NUMERIC(4,0),
-                CatCode           VARCHAR(1),
-                BgrpCode          VARCHAR(4),
-                Place             VARCHAR(40),
-                AppCost           NUMERIC(11,2),
-                Remarks           VARCHAR(50),
-                RowVersion        VARBINARY(8)
-            );
+        -- Parse submitted lines into work table (includes RowVersion for PATH A)
+        DECLARE @LineWork TABLE (
+            PrSno             INT,
+            ItemCode          VARCHAR(10),
+            MacNo             VARCHAR(5),
+            QtyInd            NUMERIC(12,3),
+            ReqdDate          VARCHAR(10),
+            Rate              NUMERIC(13,4),
+            RateSource        VARCHAR(20),
+            RateJustification VARCHAR(200),
+            CurStock          NUMERIC(12,3),
+            CcCode            NUMERIC(4,0),
+            CatCode           VARCHAR(1),
+            BgrpCode          VARCHAR(4),
+            Place             VARCHAR(40),
+            AppCost           NUMERIC(11,2),
+            Remarks           VARCHAR(50),
+            RowVersion        VARBINARY(8)
+        );
 
-            INSERT INTO @LineWork
-            SELECT
-                j.PrSno,
-                RTRIM(j.ItemCode),
-                NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
-                j.QtyInd,
-                j.ReqdDate,
-                j.Rate,
-                ISNULL(NULLIF(RTRIM(j.RateSource), ''), 'ORIGINAL'),
-                NULLIF(RTRIM(ISNULL(j.RateJustification, '')), ''),
-                ISNULL(j.CurStock, 0),
-                NULLIF(j.CcCode, 0),
-                NULLIF(RTRIM(ISNULL(j.CatCode, '')), ''),
-                NULLIF(RTRIM(ISNULL(j.BgrpCode, '')), ''),
-                NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
-                NULLIF(j.AppCost, 0),
-                NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), ''),
-                TRY_CONVERT(VARBINARY(8), j.RowVersion, 1)
-            FROM OPENJSON(@LinesJson)
-            WITH (
-                PrSno              INT             '$.PrSno',
-                ItemCode           VARCHAR(10)     '$.ItemCode',
-                MacNo              VARCHAR(5)      '$.MacNo',
-                QtyInd             NUMERIC(12,3)   '$.QtyInd',
-                ReqdDate           VARCHAR(10)     '$.ReqdDate',
-                Rate               NUMERIC(13,4)   '$.Rate',
-                RateSource         VARCHAR(20)     '$.RateSource',
-                RateJustification  VARCHAR(200)    '$.RateJustification',
-                CurStock           NUMERIC(12,3)   '$.CurStock',
-                CcCode             NUMERIC(4,0)    '$.CcCode',
-                CatCode            VARCHAR(1)      '$.CatCode',
-                BgrpCode           VARCHAR(4)      '$.BgrpCode',
-                Place              VARCHAR(40)     '$.Place',
-                AppCost            NUMERIC(11,2)   '$.AppCost',
-                Remarks            VARCHAR(50)     '$.Remarks',
-                RowVersion         VARCHAR(20)     '$.RowVersion'
-            ) j
-            WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
+        INSERT INTO @LineWork
+        SELECT
+            j.PrSno,
+            RTRIM(j.ItemCode),
+            NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
+            j.QtyInd,
+            j.ReqdDate,
+            j.Rate,
+            ISNULL(NULLIF(RTRIM(j.RateSource), ''), 'ORIGINAL'),
+            NULLIF(RTRIM(ISNULL(j.RateJustification, '')), ''),
+            ISNULL(j.CurStock, 0),
+            NULLIF(j.CcCode, 0),
+            NULLIF(RTRIM(ISNULL(j.CatCode, '')), ''),
+            NULLIF(RTRIM(ISNULL(j.BgrpCode, '')), ''),
+            NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
+            NULLIF(j.AppCost, 0),
+            NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), ''),
+            TRY_CONVERT(VARBINARY(8), j.RowVersion, 1)
+        FROM OPENJSON(@LinesJson)
+        WITH (
+            PrSno              INT             '$.PrSno',
+            ItemCode           VARCHAR(10)     '$.ItemCode',
+            MacNo              VARCHAR(5)      '$.MacNo',
+            QtyInd             NUMERIC(12,3)   '$.QtyInd',
+            ReqdDate           VARCHAR(10)     '$.ReqdDate',
+            Rate               NUMERIC(13,4)   '$.Rate',
+            RateSource         VARCHAR(20)     '$.RateSource',
+            RateJustification  VARCHAR(200)    '$.RateJustification',
+            CurStock           NUMERIC(12,3)   '$.CurStock',
+            CcCode             NUMERIC(4,0)    '$.CcCode',
+            CatCode            VARCHAR(1)      '$.CatCode',
+            BgrpCode           VARCHAR(4)      '$.BgrpCode',
+            Place              VARCHAR(40)     '$.Place',
+            AppCost            NUMERIC(11,2)   '$.AppCost',
+            Remarks            VARCHAR(50)     '$.Remarks',
+            RowVersion         VARCHAR(20)     '$.RowVersion'
+        ) j
+        WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
 
-            -- Required Date ≥ pdate validation
-            IF EXISTS (
-                SELECT 1 FROM @LineWork
-                WHERE  ReqdDate IS NOT NULL
-                  AND  TRY_CONVERT(DATE, NULLIF(ReqdDate, '')) < @PrDate
-            )
-                RAISERROR('Required Date cannot be earlier than the PR date.', 16, 1);
+        -- Required Date >= pdate
+        IF EXISTS (
+            SELECT 1 FROM @LineWork
+            WHERE  ReqdDate IS NOT NULL
+              AND  TRY_CONVERT(DATE, NULLIF(ReqdDate, '')) < @PrDate
+        )
+            RAISERROR('Required Date cannot be earlier than the PR date.', 16, 1);
 
-            -- Qty < ordered qty validation (cannot reduce below already-approved quantity)
-            IF EXISTS (
-                SELECT 1 FROM @LineWork lw
-                INNER JOIN dbo.PO_PRL p
-                    ON  p.divcode              = @DivCode
-                    AND p.prno                 = @PrNo
-                    AND CAST(p.prdate AS DATE) = @PrDate
-                    AND p.prsno                = lw.PrSno
-                WHERE lw.QtyInd < ISNULL(p.qtyreqd, 0)
-            )
-                RAISERROR('Amended quantity cannot be less than the already-approved quantity.', 16, 1);
-
-            -- PATH C guard: RAISERROR before DELETE if any removed line has a protected status
-            IF EXISTS (
-                SELECT 1 FROM dbo.PO_PRL p
-                WHERE  p.divcode              = @DivCode
-                  AND  p.prno                 = @PrNo
-                  AND  CAST(p.prdate AS DATE) = @PrDate
-                  AND  p.prsno NOT IN (SELECT PrSno FROM @LineWork)
-                  AND  ISNULL(p.prstatus, '') IN ('O', 'E', 'C', 'Z', 'X')
-            )
-            BEGIN
-                DECLARE @BlockedSno  INT;
-                DECLARE @BlockedStat CHAR(1);
-                SELECT TOP 1
-                    @BlockedSno  = p.prsno,
-                    @BlockedStat = p.prstatus
-                FROM dbo.PO_PRL p
-                WHERE  p.divcode              = @DivCode
-                  AND  p.prno                 = @PrNo
-                  AND  CAST(p.prdate AS DATE) = @PrDate
-                  AND  p.prsno NOT IN (SELECT PrSno FROM @LineWork)
-                  AND  ISNULL(p.prstatus, '') IN ('O', 'E', 'C', 'Z', 'X');
-                RAISERROR('Line %d cannot be deleted — status ''%s'' is beyond amendment scope.', 16, 1, @BlockedSno, @BlockedStat);
-            END
-
-            -- NF-01: Guard — zero submitted lines would wipe all PO_PRL rows
-            IF (SELECT COUNT(*) FROM @LineWork) = 0
-                RAISERROR('At least one line must be submitted in an amendment.', 16, 1);
-
-            -- PATH C: DELETE lines removed by the user
-            DELETE FROM dbo.PO_PRL
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  prsno NOT IN (SELECT PrSno FROM @LineWork);
-
-            -- PATH A: UPDATE existing lines (approval flags preserved, rowversion enforced)
-            DECLARE @PathAExpected INT;
-            SELECT @PathAExpected = COUNT(*)
-            FROM @LineWork lw
+        -- Qty cannot go below already-approved quantity
+        IF EXISTS (
+            SELECT 1 FROM @LineWork lw
             INNER JOIN dbo.PO_PRL p
                 ON  p.divcode              = @DivCode
                 AND p.prno                 = @PrNo
                 AND CAST(p.prdate AS DATE) = @PrDate
-                AND p.prsno                = lw.PrSno;
-
-            -- PATH A: amdflg='Y' marks line as amended (FSD §4 PATH A explicit requirement)
-            UPDATE p
-            SET    p.qtyind   = lw.QtyInd,
-                   p.RATE     = lw.Rate,
-                   p.reqddate = TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
-                   p.APPCOST  = lw.AppCost,
-                   p.remarks  = lw.Remarks,
-                   p.macno    = lw.MacNo,
-                   p.PLACE    = lw.Place,
-                   p.CCCODE   = lw.CcCode,
-                   p.amdflg   = 'Y'
-                   -- FirstApp, SecondApp, ThirdApp, PRSTATUS, DirectApp preserved
-            FROM   dbo.PO_PRL p
-            INNER JOIN @LineWork lw
-                ON  p.divcode              = @DivCode
-                AND p.prno                 = @PrNo
-                AND CAST(p.prdate AS DATE) = @PrDate
                 AND p.prsno                = lw.PrSno
-                AND p.row_version          = lw.RowVersion;
+            WHERE lw.QtyInd < ISNULL(p.qtyreqd, 0)
+        )
+            RAISERROR('Amended quantity cannot be less than the already-approved quantity.', 16, 1);
 
-            IF @@ROWCOUNT <> @PathAExpected
-                RAISERROR('One or more lines were modified by another user. Please reload and try again.', 16, 1);
-
-            -- PATH B: INSERT new lines (prsno not yet in PO_PRL)
-            DECLARE @MaxPrSno INT;
-            SELECT @MaxPrSno = ISNULL(MAX(prsno), 0)
-            FROM   dbo.PO_PRL WITH (UPDLOCK)
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate;
-
-            INSERT INTO dbo.PO_PRL
-                (divcode, prno, prdate, prsno,
-                 itemcode, macno, qtyind, reqddate, RATE,
-                 CCCODE, CATCODE, BGRPCODE, PLACE, APPCOST, remarks,
-                 amdflg, Depcode,
-                 FirstApp, SecondApp, ThirdApp, prstatus, DirectApp)
-            SELECT
-                @DivCode, @PrNo, @PrDate,
-                @MaxPrSno + ROW_NUMBER() OVER (ORDER BY lw.PrSno),
-                lw.ItemCode, lw.MacNo, lw.QtyInd,
-                TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
-                lw.Rate, lw.CcCode, lw.CatCode, lw.BgrpCode,
-                lw.Place, lw.AppCost, lw.Remarks,
-                'Y', @DepCode,
-                NULL, NULL, NULL, NULL, NULL
-            FROM @LineWork lw
-            WHERE lw.PrSno NOT IN (
-                SELECT prsno FROM dbo.PO_PRL
-                WHERE  divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate
-            );
-        END
-
-        -- ── 14. MODIFY: delta-update PO_PRL (FSD §4 Architecture Note — must update live tables) ──
-        IF @Mode = 'MODIFY' AND @LinesJson IS NOT NULL
+        -- PATH C guard: block if any removed line has a protected status
+        IF EXISTS (
+            SELECT 1 FROM dbo.PO_PRL p
+            WHERE  p.divcode              = @DivCode
+              AND  p.prno                 = @PrNo
+              AND  CAST(p.prdate AS DATE) = @PrDate
+              AND  p.prsno NOT IN (SELECT PrSno FROM @LineWork)
+              AND  ISNULL(p.prstatus, '') IN ('O', 'E', 'C', 'Z', 'X')
+        )
         BEGIN
-            -- Parse lines (no RowVersion needed — concurrency protected at PO_APRH level)
-            DECLARE @ModLineWork TABLE (
-                PrSno             INT,
-                ItemCode          VARCHAR(10),
-                MacNo             VARCHAR(5),
-                QtyInd            NUMERIC(12,3),
-                ReqdDate          VARCHAR(10),
-                Rate              NUMERIC(13,4),
-                CcCode            NUMERIC(4,0),
-                CatCode           VARCHAR(1),
-                BgrpCode          VARCHAR(4),
-                Place             VARCHAR(40),
-                AppCost           NUMERIC(11,2),
-                Remarks           VARCHAR(50)
-            );
-
-            INSERT INTO @ModLineWork
-            SELECT
-                j.PrSno,
-                RTRIM(j.ItemCode),
-                NULLIF(RTRIM(ISNULL(j.MacNo, '')), ''),
-                j.QtyInd,
-                j.ReqdDate,
-                j.Rate,
-                NULLIF(j.CcCode, 0),
-                NULLIF(RTRIM(ISNULL(j.CatCode, '')), ''),
-                NULLIF(RTRIM(ISNULL(j.BgrpCode, '')), ''),
-                NULLIF(RTRIM(ISNULL(j.Place, '')), ''),
-                NULLIF(j.AppCost, 0),
-                NULLIF(UPPER(LEFT(RTRIM(ISNULL(j.Remarks, '')), 50)), '')
-            FROM OPENJSON(@LinesJson)
-            WITH (
-                PrSno     INT             '$.PrSno',
-                ItemCode  VARCHAR(10)     '$.ItemCode',
-                MacNo     VARCHAR(5)      '$.MacNo',
-                QtyInd    NUMERIC(12,3)   '$.QtyInd',
-                ReqdDate  VARCHAR(10)     '$.ReqdDate',
-                Rate      NUMERIC(13,4)   '$.Rate',
-                CcCode    NUMERIC(4,0)    '$.CcCode',
-                CatCode   VARCHAR(1)      '$.CatCode',
-                BgrpCode  VARCHAR(4)      '$.BgrpCode',
-                Place     VARCHAR(40)     '$.Place',
-                AppCost   NUMERIC(11,2)   '$.AppCost',
-                Remarks   VARCHAR(50)     '$.Remarks'
-            ) j
-            WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
-
-            -- ReqdDate >= PrDate validation
-            IF EXISTS (
-                SELECT 1 FROM @ModLineWork
-                WHERE  ReqdDate IS NOT NULL
-                  AND  TRY_CONVERT(DATE, NULLIF(ReqdDate, '')) < @PrDate
-            )
-                RAISERROR('Required Date cannot be earlier than the PR date.', 16, 1);
-
-            -- Qty < qtyreqd validation
-            IF EXISTS (
-                SELECT 1 FROM @ModLineWork lw
-                INNER JOIN dbo.PO_PRL p
-                    ON  p.divcode              = @DivCode
-                    AND p.prno                 = @PrNo
-                    AND CAST(p.prdate AS DATE) = @PrDate
-                    AND p.prsno                = lw.PrSno
-                WHERE lw.QtyInd < ISNULL(p.qtyreqd, 0)
-            )
-                RAISERROR('Amended quantity cannot be less than the already-approved quantity.', 16, 1);
-
-            -- PATH C guard
-            IF EXISTS (
-                SELECT 1 FROM dbo.PO_PRL p
-                WHERE  p.divcode              = @DivCode
-                  AND  p.prno                 = @PrNo
-                  AND  CAST(p.prdate AS DATE) = @PrDate
-                  AND  p.prsno NOT IN (SELECT PrSno FROM @ModLineWork)
-                  AND  ISNULL(p.prstatus, '') IN ('O', 'E', 'C', 'Z', 'X')
-            )
-                RAISERROR('One or more lines cannot be removed — their status is beyond amendment scope.', 16, 1);
-
-            -- PATH C: DELETE removed lines from PO_PRL
-            DELETE FROM dbo.PO_PRL
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-              AND  prsno NOT IN (SELECT PrSno FROM @ModLineWork);
-
-            -- PATH A: UPDATE existing PO_PRL lines (amdflg='Y'; approval flags preserved)
-            UPDATE p
-            SET    p.qtyind   = lw.QtyInd,
-                   p.RATE     = lw.Rate,
-                   p.reqddate = TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
-                   p.APPCOST  = lw.AppCost,
-                   p.remarks  = lw.Remarks,
-                   p.macno    = lw.MacNo,
-                   p.PLACE    = lw.Place,
-                   p.CCCODE   = lw.CcCode,
-                   p.amdflg   = 'Y'
-            FROM   dbo.PO_PRL p
-            INNER JOIN @ModLineWork lw
-                ON  p.divcode              = @DivCode
-                AND p.prno                 = @PrNo
-                AND CAST(p.prdate AS DATE) = @PrDate
-                AND p.prsno                = lw.PrSno;
-
-            -- PATH B: INSERT new lines (not yet in PO_PRL)
-            DECLARE @ModMaxPrSno INT;
-            SELECT @ModMaxPrSno = ISNULL(MAX(prsno), 0)
-            FROM   dbo.PO_PRL WITH (UPDLOCK)
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate;
-
-            -- Capture @DepCode for new inserts from PO_APRH (PO_PRH may not exist)
-            DECLARE @ModDepCode VARCHAR(3);
-            SELECT TOP 1 @ModDepCode = ISNULL(depcode, '')
-            FROM   dbo.PO_APRH
-            WHERE  divcode              = @DivCode
-              AND  prno                 = @PrNo
-              AND  CAST(prdate AS DATE) = @PrDate
-            ORDER BY amendno DESC;
-
-            INSERT INTO dbo.PO_PRL
-                (divcode, prno, prdate, prsno,
-                 itemcode, macno, qtyind, reqddate, RATE,
-                 CCCODE, CATCODE, BGRPCODE, PLACE, APPCOST, remarks,
-                 amdflg, Depcode,
-                 FirstApp, SecondApp, ThirdApp, prstatus, DirectApp)
-            SELECT
-                @DivCode, @PrNo, @PrDate,
-                @ModMaxPrSno + ROW_NUMBER() OVER (ORDER BY lw.PrSno),
-                lw.ItemCode, lw.MacNo, lw.QtyInd,
-                TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
-                lw.Rate, lw.CcCode, lw.CatCode, lw.BgrpCode,
-                lw.Place, lw.AppCost, lw.Remarks,
-                'Y', @ModDepCode,
-                NULL, NULL, NULL, NULL, NULL
-            FROM @ModLineWork lw
-            WHERE lw.PrSno NOT IN (
-                SELECT prsno FROM dbo.PO_PRL
-                WHERE  divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate
-            );
+            DECLARE @BlockedSno  INT;
+            DECLARE @BlockedStat CHAR(1);
+            SELECT TOP 1
+                @BlockedSno  = p.prsno,
+                @BlockedStat = p.prstatus
+            FROM dbo.PO_PRL p
+            WHERE  p.divcode              = @DivCode
+              AND  p.prno                 = @PrNo
+              AND  CAST(p.prdate AS DATE) = @PrDate
+              AND  p.prsno NOT IN (SELECT PrSno FROM @LineWork)
+              AND  ISNULL(p.prstatus, '') IN ('O', 'E', 'C', 'Z', 'X');
+            RAISERROR('Line %d cannot be deleted — status ''%s'' is beyond amendment scope.', 16, 1, @BlockedSno, @BlockedStat);
         END
 
-        -- ── 15. Audit log ──────────────────────────────────────────────────────
+        -- NF-01: Guard — zero submitted lines would wipe all PO_PRL rows
+        IF (SELECT COUNT(*) FROM @LineWork) = 0
+            RAISERROR('At least one line must be submitted in an amendment.', 16, 1);
+
+        -- PATH C: DELETE lines removed by the user
+        DELETE FROM dbo.PO_PRL
+        WHERE  divcode              = @DivCode
+          AND  prno                 = @PrNo
+          AND  CAST(prdate AS DATE) = @PrDate
+          AND  prsno NOT IN (SELECT PrSno FROM @LineWork);
+
+        -- PATH A: UPDATE existing lines (approval flags preserved, rowversion enforced)
+        DECLARE @PathAExpected INT;
+        SELECT @PathAExpected = COUNT(*)
+        FROM @LineWork lw
+        INNER JOIN dbo.PO_PRL p
+            ON  p.divcode              = @DivCode
+            AND p.prno                 = @PrNo
+            AND CAST(p.prdate AS DATE) = @PrDate
+            AND p.prsno                = lw.PrSno;
+
+        UPDATE p
+        SET    p.qtyind   = lw.QtyInd,
+               p.RATE     = lw.Rate,
+               p.reqddate = TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
+               p.APPCOST  = lw.AppCost,
+               p.remarks  = lw.Remarks,
+               p.macno    = lw.MacNo,
+               p.PLACE    = lw.Place,
+               p.CCCODE   = lw.CcCode,
+               p.amdflg   = 'Y'        -- FSD §4 PATH A explicit requirement (CR-M01-AM-001 §9)
+               -- FirstApp, SecondApp, ThirdApp, PRSTATUS, DirectApp preserved
+        FROM   dbo.PO_PRL p
+        INNER JOIN @LineWork lw
+            ON  p.divcode              = @DivCode
+            AND p.prno                 = @PrNo
+            AND CAST(p.prdate AS DATE) = @PrDate
+            AND p.prsno                = lw.PrSno
+            AND p.row_version          = lw.RowVersion;
+
+        IF @@ROWCOUNT <> @PathAExpected
+            RAISERROR('One or more lines were modified by another user. Please reload and try again.', 16, 1);
+
+        -- PATH B: INSERT new lines (prsno not yet in PO_PRL)
+        DECLARE @MaxPrSno INT;
+        SELECT @MaxPrSno = ISNULL(MAX(prsno), 0)
+        FROM   dbo.PO_PRL WITH (UPDLOCK)
+        WHERE  divcode              = @DivCode
+          AND  prno                 = @PrNo
+          AND  CAST(prdate AS DATE) = @PrDate;
+
+        INSERT INTO dbo.PO_PRL
+            (divcode, prno, prdate, prsno,
+             itemcode, macno, qtyind, reqddate, RATE,
+             CCCODE, CATCODE, BGRPCODE, PLACE, APPCOST, remarks,
+             amdflg, Depcode,
+             FirstApp, SecondApp, ThirdApp, prstatus, DirectApp)
+        SELECT
+            @DivCode, @PrNo, @PrDate,
+            @MaxPrSno + ROW_NUMBER() OVER (ORDER BY lw.PrSno),
+            lw.ItemCode, lw.MacNo, lw.QtyInd,
+            TRY_CONVERT(DATE, NULLIF(lw.ReqdDate, '')),
+            lw.Rate, lw.CcCode, lw.CatCode, lw.BgrpCode,
+            lw.Place, lw.AppCost, lw.Remarks,
+            'Y', @DepCode,
+            NULL, NULL, NULL, NULL, NULL
+        FROM @LineWork lw
+        WHERE lw.PrSno NOT IN (
+            SELECT prsno FROM dbo.PO_PRL
+            WHERE  divcode = @DivCode AND prno = @PrNo AND CAST(prdate AS DATE) = @PrDate
+        );
+
+        -- ── 10. Audit log ──────────────────────────────────────────────────────
         INSERT INTO dbo.LogDet_po
             (divcode, prno, prdate, prsno, itemcode, macno, quantity, RATE,
              Trans_Name, Trans_Mod, Trans_Host, Trans_IPADD,
@@ -2831,7 +2495,7 @@ BEGIN
         SELECT
             @DivCode, @PrNo, @PrDate, l.prsno, l.itemcode, l.macno,
             CAST(l.qtyind AS NUMERIC(15,0)), l.RATE,
-            'PR Amendment', @Mode, @HostName, @IpAddress,
+            'PR Amendment', 'ADD', @HostName, @IpAddress,
             @UserId, GETDATE(), 4, '', @UserId
         FROM dbo.PO_APRL l
         WHERE  l.divcode              = @DivCode
