@@ -500,6 +500,10 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
     const row = itemsRef.current.find((r) => r.key === rowKey)
     if (!row) return
     onUpdate({ ...row, ccCode: cc.ccCode, ccName: cc.ccName })
+    // Propagate to all other rows with no SCC set
+    itemsRef.current
+      .filter((r) => r.key !== rowKey && r.ccCode === null)
+      .forEach((r) => onUpdate({ ...r, ccCode: cc.ccCode, ccName: cc.ccName }))
     setCcAutoNextKey(null)
     setCcPickerKey(null)
     if (autoKey) setFocusRemarksKey(autoKey)
@@ -513,6 +517,7 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
     const newLines: PRLineItem[] = []
     const duplicates: string[] = []
     const batchKeys = new Set<string>()
+    const lastCc = [...itemsRef.current].reverse().find((l) => l.ccCode != null)
 
     picked.forEach((item) => {
       // FSD CEO D-09: block add if same itemCode already exists WITHOUT a machine code
@@ -535,6 +540,8 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
         appCost:  0,
         minLevel: item.minLevel,
         maxLevel: item.maxLevel,
+        ccCode:   lastCc?.ccCode ?? null,
+        ccName:   lastCc?.ccName ?? '',
       }
       onAdd(line)
       newLines.push(line)
