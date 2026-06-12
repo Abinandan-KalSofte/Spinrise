@@ -73,6 +73,11 @@ public class ExceptionHandlingMiddleware
             (int)HttpStatusCode.Conflict,
             ex.Message),
 
+        // ── Business rule conflict (e.g. GRN raised, cannot delete) ─────────────
+        BusinessConflictException => (
+            (int)HttpStatusCode.Conflict,
+            ex.Message),
+
         // ── Database exceptions ──────────────────────────────────────────────────
         SqlException sqlEx => (
             (int)HttpStatusCode.BadRequest,
