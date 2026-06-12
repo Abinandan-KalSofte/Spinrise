@@ -11,6 +11,7 @@ import PrAmendmentListModal from '../components/amendment/PrAmendmentListModal'
 import PrPickerForAmendModal from '../components/amendment/PrPickerForAmendModal'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import { usePageTitle } from '@/shared/hooks/usePageTitle'
+import { PRDocBand } from '../components/pr-form/PRToolbar'
 
 // ── Style tokens ──────────────────────────────────────────────────────────────
 function tbBtn(extra?: React.CSSProperties): React.CSSProperties {
@@ -242,23 +243,11 @@ export default function PrAmendmentPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#F5F5F3' }}>
 
       {/* ── Doc Band ──────────────────────────────────────────────────────────── */}
-      <div style={{
-        background: 'linear-gradient(90deg,#0C447C 0%,#185FA5 100%)',
-        padding: '0 20px', height: 30,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>Purchase Order</span>
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,.35)' }}>›</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>Purchase Requisition Amendment</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,.5)' }}>Amendment No.</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
-            {amendNoLabel}
-          </span>
-        </div>
-      </div>
+      <PRDocBand
+        breadcrumb={[ 'Purchase Order', 'Purchase Requisition Amendment' ]}
+        subLabel="Amendment No."
+        subValue={amendNoLabel}
+      />
 
       {/* ── Toolbar ───────────────────────────────────────────────────────────── */}
       <div style={{
