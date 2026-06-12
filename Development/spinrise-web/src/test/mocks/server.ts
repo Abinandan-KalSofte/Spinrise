@@ -5,11 +5,13 @@ import { firstApprovalHandlers } from '../handlers/firstApprovalHandlers'
 import { finalApprovalHandlers } from '../handlers/finalApprovalHandlers'
 import { cancellationHandlers } from '../handlers/cancellationHandlers'
 import { foreclosureHandlers } from '../handlers/foreclosureHandlers'
+import { poTransferHandlers } from '../handlers/poTransferHandlers'
 import { authHandlers } from '../handlers/authHandlers'
 
 export const server = setupServer(
   ...authHandlers,
   ...prHandlers,
+  ...poTransferHandlers,
   ...amendmentHandlers,
   ...firstApprovalHandlers,
   ...finalApprovalHandlers,
