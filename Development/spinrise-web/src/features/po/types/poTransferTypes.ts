@@ -274,6 +274,7 @@ export interface PoSummary {
 // ── Request types (provisional — Q7) ─────────────────────────────────────────
 
 export interface SavePoLineRequest {
+  prNo:         number
   prSno:        number
   itemCode:     string
   rate:         number

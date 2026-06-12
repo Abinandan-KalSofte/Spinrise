@@ -12,11 +12,13 @@ public interface IPoEntryRepository
     Task<IEnumerable<CarrierOptionDto>>   GetCarriersAsync(string? search);
     Task<IEnumerable<BankOptionDto>>      GetBanksAsync(string? search);
     Task<IEnumerable<FormTypeOptionDto>>  GetFormTypesAsync();
-    Task<IEnumerable<GstTaxCodeOptionDto>>GetGstTaxCodesAsync(string? search);
+    Task<IEnumerable<GstTaxCodeOptionDto>>  GetGstTaxCodesAsync(string? search);
+    Task<IEnumerable<AddressOptionDto>>     GetAddressesAsync(string divCode, string kind, string? search);
     Task<GstRoutingResultDto>             GetGstRoutingAsync(string divCode, string slCode);
     Task<IEnumerable<EligiblePrLineDto>>  GetEligiblePrLinesAsync(string divCode, string? orderType, string? search, int page, int pageSize);
     Task<PoHeaderDto?>                    GetByIdAsync(string divCode, decimal poNo, DateOnly poDate);
     Task<PoHeaderDto?>                    GetLastRecordAsync(string divCode, DateOnly fDate, DateOnly lDate);
     Task<PoSaveResultDto>                 SaveAsync(string divCode, AddPoRequest request, string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate);
     Task                                  DeleteAsync(string divCode, DeletePoRequest request, string userId, string? hostName, string? ipAddress);
+    Task<PoPrintDto?>                     GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate);
 }

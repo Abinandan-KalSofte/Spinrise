@@ -49,3 +49,9 @@ public class GstRoutingResultDto
     public string DivStateCode { get; set; } = "";
     public string SupStateCode { get; set; } = "";
 }
+
+public class AddressOptionDto
+{
+    public string Code { get; set; } = "";
+    public string Name { get; set; } = "";
+}

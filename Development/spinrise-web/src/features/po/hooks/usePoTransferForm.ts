@@ -584,6 +584,7 @@ export function usePoTransferForm() {
         .filter((s) => (Number(s.qty) || 0) > 0 || s.shDate)
 
     const reqLines: SavePoLineRequest[] = working.map((l) => ({
+      prNo:     l.prNo,
       prSno:    l.prSno,
       itemCode: l.itemCode,
       rate:     l.rate,

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Spinrise.API.Areas.PurchaseOrder.Print;
 using Spinrise.API.Controllers;
 using Spinrise.Application.Areas.PurchaseOrder.PoEntry.DTOs;
 using Spinrise.Application.Areas.PurchaseOrder.PoEntry.Interfaces;
@@ -97,6 +98,16 @@ public class PoEntryController : BaseApiController
         return OkResponse(result);
     }
 
+    [HttpGet("addresses")]
+    public async Task<IActionResult> GetAddresses(
+        [FromQuery] string divCode,
+        [FromQuery] string kind,
+        [FromQuery] string? search)
+    {
+        var result = await _service.GetAddressesAsync(divCode, kind, search);
+        return OkResponse(result);
+    }
+
     // ── PR Picker ──────────────────────────────────────────────────────────────
 
     [HttpGet("eligible-pr-lines")]
@@ -147,6 +158,19 @@ public class PoEntryController : BaseApiController
 
         var result = await _service.AddAsync(divCode, request, userId, hostName, ipAddress, fDate, lDate);
         return OkResponse(result, $"Purchase Order created. Number: {(long)result.PoNo}");
+    }
+
+    // ── Print ─────────────────────────────────────────────────────────────────
+
+    [HttpGet("{poNo}/print")]
+    public async Task<IActionResult> Print(decimal poNo, [FromQuery] string divCode, [FromQuery] DateOnly poDate)
+    {
+        var po = await _service.GetPrintDataAsync(divCode, poNo, poDate);
+        if (po is null)
+            return NotFoundResponse("No records to print.");
+
+        var pdfBytes = PurchaseOrderDocument.Generate(po);
+        return File(pdfBytes, "application/pdf", $"PO-{(long)poNo:D6}.pdf");
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────────

@@ -80,6 +80,8 @@ public static class StoredProcedures
         public const string GetLastRecord      = "ksp_PO_GetLastPO";
         public const string SaveEntry          = "ksp_PO_SaveEntry";
         public const string DeletePo           = "ksp_PO_DeletePO";
+        public const string GetAddresses       = "ksp_PO_GetAddresses";
+        public const string GetPrintData       = "ksp_PO_GetPrint";
     }
 
     public static class Pr

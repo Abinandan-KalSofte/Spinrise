@@ -42,6 +42,9 @@ public class PoEntryService : IPoEntryService
     public Task<IEnumerable<GstTaxCodeOptionDto>> GetGstTaxCodesAsync(string? search) =>
         _repo.GetGstTaxCodesAsync(search);
 
+    public Task<IEnumerable<AddressOptionDto>> GetAddressesAsync(string divCode, string kind, string? search) =>
+        _repo.GetAddressesAsync(divCode, kind, search);
+
     public Task<GstRoutingResultDto> GetGstRoutingAsync(string divCode, string slCode) =>
         _repo.GetGstRoutingAsync(divCode, slCode);
 
@@ -69,4 +72,7 @@ public class PoEntryService : IPoEntryService
         await _repo.DeleteAsync(divCode, request, userId, hostName, ipAddress);
         _logger.LogInformation("PO Delete | Div: {DivCode} | PO: {PoNo} | User: {UserId}", divCode, request.PoNo, userId);
     }
+
+    public Task<PoPrintDto?> GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate) =>
+        _repo.GetPrintDataAsync(divCode, poNo, poDate);
 }

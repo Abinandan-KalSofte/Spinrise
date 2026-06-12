@@ -101,6 +101,14 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
     }
 
+    public async Task<IEnumerable<AddressOptionDto>> GetAddressesAsync(string divCode, string kind, string? search)
+    {
+        return await _uow.Connection.QueryAsync<AddressOptionDto>(
+            StoredProcedures.Po.GetAddresses,
+            new { DivCode = divCode, Kind = kind, Search = search },
+            commandType: CommandType.StoredProcedure);
+    }
+
     public async Task<IEnumerable<EligiblePrLineDto>> GetEligiblePrLinesAsync(
         string divCode, string? orderType, string? search, int page, int pageSize)
     {
@@ -253,6 +261,41 @@ public class PoEntryRepository : IPoEntryRepository
         {
             throw new BusinessConflictException("SORRY - ALREADY GRN IS RAISED FOR THIS PURCHASE ORDER");
         }
+    }
+
+    public async Task<PoPrintDto?> GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate)
+    {
+        using var multi = await _uow.Connection.QueryMultipleAsync(
+            StoredProcedures.Po.GetPrintData,
+            new { DivCode = divCode, PoNo = poNo, PoDate = poDate },
+            commandType: CommandType.StoredProcedure);
+
+        var header = await multi.ReadFirstOrDefaultAsync<PoPrintHeaderRow>();
+        if (header is null) return null;
+
+        var lineRows = (await multi.ReadAsync<PoPrintLineRow>()).ToList();
+
+        var lines = lineRows.Select(r => new PoPrintLineDto(
+            r.LineNo, r.ItemCode, r.ItemName, r.Uom, r.HsnCode,
+            r.PrNo, r.PrSno, r.Qty, r.Rate, r.Value,
+            r.TaxCode, r.TaxPer, r.TaxAmt,
+            r.CgstPer, r.CgstAmt, r.SgstPer, r.SgstAmt,
+            r.IgstPer, r.IgstAmt, r.TcsPer, r.TcsAmt
+        )).ToList();
+
+        return new PoPrintDto(
+            header.DivLogo, header.DivName, header.DivPrintName,
+            header.DivAddress1, header.DivAddress2, header.DivAddress3,
+            header.DivPinCode, header.DivPhone, header.DivEmail, header.DivGstin,
+            header.DivCode, header.PoNo, header.PoDate,
+            header.SlCode, header.SlName, header.SlAddress, header.SlGstin,
+            header.OrderType, header.Carrier, header.Currency, header.CurrRate,
+            header.CreditDays, header.PayMode, header.Remarks,
+            header.CgstPer, header.SgstPer, header.IgstPer, header.TcsPer,
+            header.DiscPer, header.FreightAmt, header.RoundOff, header.OrderValue,
+            header.FirstLevelApp, header.Conflg, header.CreatedBy, header.CreatedDt,
+            lines
+        );
     }
 
     private static async Task<List<DeliveryScheduleLineDto>> ReadDeliveryAsync(SqlMapper.GridReader multi)
