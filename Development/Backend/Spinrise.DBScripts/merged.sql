@@ -2112,7 +2112,7 @@ GO
 --   PATH A: row_version concurrency per line; approval flags preserved
 --   PATH B: MAX(prsno)+1 with UPDLOCK
 --   NF-01: zero submitted lines rejected
---   amdflg = 'Y' set on PO_APRL snapshot lines, PATH A existing PO_PRL updates, and PATH B new PO_PRL inserts
+--   amdflg = 'Y' set on PO_APRL snapshot lines and PATH B new PO_PRL inserts (new items added). PATH A existing line updates do not set amdflg — CEO direction 08-Jun-2026.
 -- ============================================================
 CREATE OR ALTER PROCEDURE [dbo].[ksp_PR_SaveAmendment]
     @Mode               VARCHAR(15),        -- 'ADD'
@@ -2303,12 +2303,14 @@ BEGIN
         WHERE  RTRIM(ISNULL(j.ItemCode, '')) <> '';
 
         -- ── 9. Delta-update PO_PRH and PO_PRL (CR-M01-AM-001) ────────────────
-        -- Update PO_PRH refno and ITYPE
         IF EXISTS (SELECT 1 FROM dbo.PO_PRH WHERE divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate)
         BEGIN
             UPDATE dbo.PO_PRH
-            SET    refno = NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
-                   ITYPE = ISNULL(@IType, ITYPE)
+            SET    refno   = NULLIF(RTRIM(ISNULL(@RefNo, '')), ''),
+                   ITYPE   = ISNULL(@IType, ITYPE),
+                   depcode = @DepCode,
+                   SECTION = @Section,
+                   REQNAME = @ReqName
             WHERE  divcode=@DivCode AND prno=@PrNo AND CAST(prdate AS DATE)=@PrDate;
         END
 
@@ -2444,8 +2446,7 @@ BEGIN
                p.remarks  = lw.Remarks,
                p.macno    = lw.MacNo,
                p.PLACE    = lw.Place,
-               p.CCCODE   = lw.CcCode,
-               p.amdflg   = 'Y'        -- FSD §4 PATH A explicit requirement (CR-M01-AM-001 §9)
+               p.CCCODE   = lw.CcCode
                -- FirstApp, SecondApp, ThirdApp, PRSTATUS, DirectApp preserved
         FROM   dbo.PO_PRL p
         INNER JOIN @LineWork lw
