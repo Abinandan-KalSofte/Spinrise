@@ -37,6 +37,7 @@ const NAV_ITEMS: MenuItem[] = [
   mk('/dashboard', 'Dashboard', <DashboardOutlined />),
   mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined />, [
     mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)'), <FileTextOutlined />),
+    mk('/po/transfer',          wrapLabel('PR to PO Transfer'),                       <FileTextOutlined />),
     mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment '),        <FileTextOutlined />),
     mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure '),      <FileTextOutlined />),
     mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'),           <FileTextOutlined />),
@@ -48,6 +49,7 @@ const NAV_ITEMS: MenuItem[] = [
 function getOpenKeys(path: string): string[] {
   if (
     path.startsWith('/purchase-requisition') ||
+    path.startsWith('/po/transfer') ||
     path.startsWith('/pr-amendment') ||
     path.startsWith('/pr-foreclosure') ||
     path.startsWith('/pr-cancellation') ||

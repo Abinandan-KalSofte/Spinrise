@@ -258,7 +258,7 @@ export default function PurchaseRequisitionPage() {
   }
 
   return (
-    <div className="pr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f3', padding: '0 12px' }}>
+    <div className="pr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f3' }}>
 
       {/* ── Header band ── */}
       <PRDocBand savedPrNo={savedPrNo} prStatus={prStatus} />
