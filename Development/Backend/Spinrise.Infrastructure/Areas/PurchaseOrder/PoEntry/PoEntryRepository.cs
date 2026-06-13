@@ -300,8 +300,8 @@ public class PoEntryRepository : IPoEntryRepository
 
     private static async Task<List<DeliveryScheduleLineDto>> ReadDeliveryAsync(SqlMapper.GridReader multi)
     {
-        var slots     = (await multi.ReadAsync<DeliverySlotRow>()).ToList();
-        var slotsByLine = slots.GroupBy(s => s.LineNo).ToDictionary(g => g.Key, g => g.ToList());
+        var slots       = (await multi.ReadAsync<DeliverySlotRow>()).ToList();
+        var slotsByLine = slots.GroupBy(s => (int)s.LineNo).ToDictionary(g => g.Key, g => g.ToList());
 
         return slotsByLine.Select(kvp => new DeliveryScheduleLineDto
         {
@@ -313,7 +313,7 @@ public class PoEntryRepository : IPoEntryRepository
             PoQty    = kvp.Value.First().PoQty,
             Slots    = kvp.Value.Select(s => new DeliverySlotDto
             {
-                SlotNo  = s.SlotNo,
+                SlotNo  = (int)s.SlotNo,
                 ShDate  = s.ShDate,
                 Qty     = s.Qty,
                 Remarks = s.Remarks
@@ -322,13 +322,13 @@ public class PoEntryRepository : IPoEntryRepository
     }
 
     private sealed record DeliverySlotRow(
-        int     LineNo,
+        decimal LineNo,   // PORDSNO is NUMERIC in SQL — must be decimal
         string  ItemCode,
         string  ItemName,
         string  Uom,
         decimal PrNo,
         decimal PoQty,
-        int     SlotNo,
+        long    SlotNo,   // ROW_NUMBER() always returns BIGINT — must be long
         string? ShDate,
         decimal Qty,
         string  Remarks);

@@ -207,7 +207,7 @@ export default function LoginPage() {
                         background: '#f8fafc', border: '1px solid #e2e8f0',
                         borderRadius: 6, padding: '4px 12px',
                       }}>
-                        http://172.16.16.40:5001
+                        
                       </div>
                       <Button
                         type="primary"

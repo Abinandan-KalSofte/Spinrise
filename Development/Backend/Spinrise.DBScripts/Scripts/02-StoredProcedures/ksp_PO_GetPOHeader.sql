@@ -1,0 +1,202 @@
+-- ============================================================
+-- ksp_PO_GetPOHeader
+-- Loads a specific PO by divCode + poNo + poDate.
+-- Returns 3 result sets: (1) header, (2) lines, (3) delivery slots.
+-- Used by Find / post-save / post-delete refresh.
+-- Column mapping confirmed against live JAT PO_ORDH schema.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPOHeader
+(
+    @DivCode VARCHAR(2),
+    @PoNo    NUMERIC(10,0),
+    @PoDate  DATE
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM dbo.PO_ORDH
+        WHERE DIVCODE = @DivCode
+          AND PORDNO  = @PoNo
+          AND CAST(PORDDT AS DATE) = @PoDate
+    )
+    BEGIN
+        SELECT NULL AS DivCode WHERE 1 = 0;
+        SELECT 0 AS [LineNo] WHERE 1 = 0;
+        SELECT 0 AS [LineNo] WHERE 1 = 0;
+        RETURN;
+    END
+
+    -- ─── Result set 1: Header ─────────────────────────────────────────────────
+    SELECT
+        RTRIM(h.DIVCODE)                                            AS DivCode,
+        h.PORDNO                                                    AS PoNo,
+        CONVERT(varchar(10), CAST(h.PORDDT AS DATE), 120)          AS PoDate,
+        RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
+        RTRIM(ISNULL(t.TYPNAME, ''))                                AS OrderTypeDesc,
+        RTRIM(ISNULL(h.SLCODE, ''))                                 AS Supplier,
+        RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
+        RTRIM(ISNULL(h.cust_gstinno, ''))                           AS Gstin,
+        CAST(ISNULL(h.cust_gststcode, 0) AS VARCHAR(10))            AS GstState,
+        RTRIM(ISNULL(h.INSPECT, 'NO'))                              AS Inspect,
+        ISNULL(h.roff, 0)                                           AS RoundOff,
+        ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
+        RTRIM(ISNULL(h.Form_type, ''))                              AS FormType,
+        RTRIM(ISNULL(h.refno, ''))                                  AS RefNo,
+        CASE WHEN h.refDate IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(h.refDate AS DATE), 120) END AS RefDate,
+        RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
+        ISNULL(h.FCurRate, 1)                                       AS CurrRate,
+        RTRIM(ISNULL(h.REMARKS, ''))                                AS Remarks,
+        -- Header GST: PO_ORDH stores amounts only (CGSTAMT/SGSTAMT/IGSTAMT), not percentages
+        CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS TcsPer,
+        ISNULL(h.DISPER, 0)                                         AS DiscPer,
+        ISNULL(h.Cessper, 0)                                        AS CessPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
+        ISNULL(h.FREIGHT, 0)                                        AS FreightAmt,
+        ISNULL(h.PCKPER, 0)                                         AS PackPer,
+        ISNULL(h.INSPER, 0)                                         AS InsurPer,
+        ISNULL(h.SURPER, 0)                                         AS SurchargePer,
+        ISNULL(h.ADDTAXPER, 0)                                      AS AddTaxPer,
+        RTRIM(ISNULL(h.FILENO, ''))                                 AS FileNo,
+        ISNULL(h.FCACharg, 0)                                       AS FcaFob,
+        CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
+        'BEFORE'                                                    AS DiscApp,
+        'BEFORE'                                                    AS PackApp,
+        'BEFORE'                                                    AS CessApp,
+        -- Payment
+        CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
+        RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
+        RTRIM(ISNULL(h.BANK_CODE, ''))                              AS BankCode,
+        RTRIM(ISNULL(h.PAYTERMS, ''))                               AS PaymentTerms,
+        ISNULL(h.ADV_PER, 0)                                        AS AdvPer,
+        ISNULL(h.ADV_AMT, 0)                                        AS AdvAmt,
+        RTRIM(ISNULL(h.advpaymenttype, ''))                         AS ModeOfPayment,
+        ''                                                          AS PayRef,
+        NULL                                                        AS PayRefDate,
+        RTRIM(ISNULL(h.chqno, ''))                                  AS ChequeNo,
+        CASE WHEN h.chqdt IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(h.chqdt AS DATE), 120) END AS ChequeDate,
+        ISNULL(h.CRDDAYS, 0)                                        AS CreditDays,
+        -- Instructions
+        CASE WHEN h.Duedate IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(h.Duedate AS DATE), 120) END AS DeliveryDate,
+        RTRIM(ISNULL(h.DEL_INS1, ''))                               AS DeliveryLocation,
+        RTRIM(ISNULL(h.Billadd, ''))                                AS BillingAddress,
+        RTRIM(ISNULL(h.SPL_INS, ''))                                AS SpecialInstr,
+        RTRIM(ISNULL(h.DEL_INS2, ''))                               AS Despatch,
+        RTRIM(ISNULL(h.Note, ''))                                   AS Purpose,
+        ''                                                          AS OtherLevies,
+        RTRIM(ISNULL(h.PriceTerm, ''))                              AS PricingTerms,
+        RTRIM(ISNULL(h.RemarksPF, ''))                              AS PackForwarding,
+        RTRIM(ISNULL(h.RemarksIns, ''))                             AS Insurance,
+        RTRIM(ISNULL(h.RemarksFrt, ''))                             AS Freight,
+        -- Cancel / status
+        RTRIM(ISNULL(h.REMINDER, ''))                               AS Reminder,
+        ''                                                          AS Status,
+        CAST(CASE WHEN ISNULL(h.CANFLG, '') <> '' THEN 1 ELSE 0 END AS BIT) AS Cancelled,
+        CASE WHEN h.CANDT IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(h.CANDT AS DATE), 120) END AS CancelDate,
+        RTRIM(ISNULL(h.REASON, ''))                                 AS CancelReason,
+        RTRIM(ISNULL(h.APPROVED, 'N'))                              AS Approved,
+        RTRIM(ISNULL(h.APPBY, ''))                                  AS ApprovedBy,
+        -- Amendment
+        TRY_CAST(NULLIF(RTRIM(h.AMDORDNO), '') AS DECIMAL(10,0))   AS AmdOrderNo,
+        CASE WHEN h.AMDORDDT IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(h.AMDORDDT AS DATE), 120) END AS AmdDate,
+        TRY_CAST(NULLIF(RTRIM(h.REFORDNO), '') AS DECIMAL(10,0))   AS AmdRefNo,
+        CASE WHEN h.REFORDDT IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(h.REFORDDT AS DATE), 120) END AS AmdRefDate,
+        -- Approval / print
+        CASE WHEN ISNULL(h.Conflg, 'N') = 'Y' THEN 'CONFIRMED' ELSE 'PENDING' END AS ApprovalStatus,
+        RTRIM(ISNULL(h.poprintflg, 'N'))                            AS PrintStatus,
+        RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
+        RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
+        RTRIM(ISNULL(h.createdby, ''))                              AS CreatedBy,
+        ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
+        RTRIM(ISNULL(h.createdby, ''))                              AS UserId,
+        RTRIM(ISNULL(h.CARCODE, ''))                                AS Carrier
+    FROM dbo.PO_ORDH h
+    LEFT JOIN dbo.PO_TYPE t
+        ON RTRIM(t.TYPE_CODE) = RTRIM(h.POGRP)
+    LEFT JOIN dbo.FA_SLMAS sl
+        ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    WHERE h.DIVCODE = @DivCode
+      AND h.PORDNO  = @PoNo
+      AND CAST(h.PORDDT AS DATE) = @PoDate;
+
+    -- ─── Result set 2: Lines ──────────────────────────────────────────────────
+    SELECT
+        l.PORDSNO                                                   AS [LineNo],
+        l.PRSNO                                                     AS PrSno,
+        RTRIM(l.ITEMCODE)                                           AS ItemCode,
+        RTRIM(ISNULL(i.itemname, ''))                               AS ItemName,
+        RTRIM(ISNULL(i.uom, ''))                                    AS Uom,
+        l.PRNO                                                      AS PrNo,
+        ISNULL(CONVERT(varchar(10), CAST(l.PRDATE AS DATE), 120), '') AS PrDate,
+        ISNULL(l.Rate, 0)                                           AS Rate,
+        ISNULL(l.ORDqty, 0)                                         AS Qty,
+        ISNULL(prl.qtyreqd,0) - ISNULL(prl.qtyord,0) - ISNULL(prl.Enq_Qty,0) AS BalanceQty,
+        ISNULL(l.ORDVAL, 0)                                         AS Value,
+        RTRIM(ISNULL(l.Tax_code, ''))                               AS TaxCode,
+        ISNULL(l.taxper, 0)                                         AS TaxPer,
+        ISNULL(l.Taxamt, 0)                                         AS TaxAmt,
+        RTRIM(ISNULL(l.hsncode, ''))                                AS HsnCode,
+        ISNULL(l.cgstper, 0)                                        AS CgstPer,
+        ISNULL(l.cgstamt, 0)                                        AS CgstAmt,
+        ISNULL(l.sgstper, 0)                                        AS SgstPer,
+        ISNULL(l.sgstamt, 0)                                        AS SgstAmt,
+        ISNULL(l.igstper, 0)                                        AS IgstPer,
+        ISNULL(l.igstamt, 0)                                        AS IgstAmt,
+        ISNULL(l.Tcs_per, 0)                                        AS TcsPer,
+        ISNULL(l.Tcs_amt, 0)                                        AS TcsAmt,
+        RTRIM(ISNULL(l.cgst_tax_code, ''))                          AS CgstCode,
+        RTRIM(ISNULL(l.sgst_tax_code, ''))                          AS SgstCode,
+        RTRIM(ISNULL(l.igst_tax_code, ''))                          AS IgstCode,
+        RTRIM(ISNULL(l.reqidpo, ''))                                AS RequesterId,
+        RTRIM(ISNULL(l.reqnamepo, ''))                              AS RequesterName,
+        CASE WHEN ISNULL(l.igstper, 0) > 0 THEN 'IGST' ELSE 'LOCAL' END AS Route,
+        RTRIM(ISNULL(l.deletereason, ''))                           AS DeleteReason
+    FROM dbo.PO_ORDL l
+    INNER JOIN dbo.IN_ITEM i
+        ON i.itemcode = l.ITEMCODE
+    LEFT JOIN dbo.PO_PRL prl
+        ON prl.divcode = l.DIVCODE
+       AND prl.prno    = l.PRNO
+       AND CAST(prl.prdate AS DATE) = CAST(l.PRDATE AS DATE)
+       AND prl.prsno   = l.PRSNO
+    WHERE l.DIVCODE = @DivCode
+      AND l.PORDNO  = @PoNo
+      AND CAST(l.PORDDT AS DATE) = @PoDate
+    ORDER BY l.PORDSNO;
+
+    -- ─── Result set 3: Delivery slots ─────────────────────────────────────────
+    SELECT
+        d.PORDSNO                                                   AS [LineNo],
+        RTRIM(l.ITEMCODE)                                           AS ItemCode,
+        RTRIM(ISNULL(i.itemname, ''))                               AS ItemName,
+        RTRIM(ISNULL(i.uom, ''))                                    AS Uom,
+        l.PRNO                                                      AS PrNo,
+        ISNULL(l.ORDqty, 0)                                         AS PoQty,
+        ROW_NUMBER() OVER (PARTITION BY d.PORDSNO ORDER BY d.shdate) AS SlotNo,
+        CASE WHEN d.shdate IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(d.shdate AS DATE), 120) END AS ShDate,
+        ISNULL(d.Quantity, 0)                                       AS Qty,
+        ''                                                          AS Remarks
+    FROM dbo.PO_ORDL_DETL d
+    INNER JOIN dbo.PO_ORDL l
+        ON l.DIVCODE = d.divcode AND l.PORDNO = d.pordno
+       AND CAST(l.PORDDT AS DATE) = CAST(d.porddt AS DATE)
+       AND l.PORDSNO = d.PORDSNO
+    INNER JOIN dbo.IN_ITEM i
+        ON i.itemcode = l.ITEMCODE
+    WHERE d.divcode = @DivCode
+      AND d.pordno  = @PoNo
+      AND CAST(d.porddt AS DATE) = @PoDate
+    ORDER BY d.PORDSNO, d.shdate;
+END;
+GO
