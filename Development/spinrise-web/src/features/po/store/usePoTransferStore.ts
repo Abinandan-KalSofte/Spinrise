@@ -7,7 +7,6 @@ import type {
   DeliveryScheduleLine,
   DeliverySlot,
 } from '../types'
-import { DS_MAX_SLOTS } from '../types'
 
 interface PoTransferState {
   // Screen mode — VIEW / ADD / DELETE (no EDIT; Modify is a separate screen)
@@ -22,7 +21,7 @@ interface PoTransferState {
   // Working lines (Add) — re-sequenced on remove
   draftLines: PoLine[]
 
-  // Delivery schedule (fixed 4-slot per line — Sprint 1, Q3)
+  // Delivery schedule — item-wise open child grid, unlimited rows (OQ-NEW B)
   deliveryLines: DeliveryScheduleLine[]
 
   // Row currently open in the GST & Tax modal (lineNo) or null
@@ -110,7 +109,7 @@ export const usePoTransferStore = create<PoTransferState>()((set) => ({
     set((s) => ({
       deliveryLines: s.deliveryLines.map((d) => {
         if (d.lineNo !== lineNo) return d
-        if (d.slots.length >= DS_MAX_SLOTS) return d   // Sprint 1 cap (Q3)
+        // OQ-NEW B: no row cap — unlimited delivery rows per item.
         const balance = d.poQty - d.slots.reduce((a, x) => a + (Number(x.qty) || 0), 0)
         const next: DeliverySlot = {
           slotNo:  d.slots.length + 1,

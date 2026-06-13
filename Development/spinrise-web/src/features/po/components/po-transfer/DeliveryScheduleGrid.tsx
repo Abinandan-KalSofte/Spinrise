@@ -2,12 +2,13 @@ import { Button, DatePicker, Input, InputNumber } from 'antd'
 import { PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { erpTh, ERP_TD as TD } from '@/shared/styles/erpTable'
-import { DS_MAX_SLOTS, type DeliveryScheduleLine, type ScreenMode } from '../../types'
+import { type DeliveryScheduleLine, type ScreenMode } from '../../types'
 
 // ── Delivery Schedule (HTML #ds-table — VB6 childgrd / PO_ORDL_DETL) ─────────
-// Sprint 1: FIXED 4-slot model per PO line (Q3 confirmed; N-row deferred to
-// Sprint 2). Reconciliation is on QUANTITY, not value (UX-01); each slot keeps
-// its own item UOM (UX-02). Editable in ADD; read-only in VIEW/DELETE.
+// OQ-NEW Option B (approved): item-wise OPEN child grid — UNLIMITED delivery
+// rows per PO line (retired 4-slot model removed). Reconciliation is on
+// QUANTITY, not value (UX-01); each row keeps its own item UOM (UX-02).
+// Editable in ADD; read-only in VIEW/DELETE.
 
 const TH = erpTh({ zIndex: 10 })
 const fmt3 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
@@ -45,7 +46,7 @@ export function DeliveryScheduleGrid({
         </span>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: '#888' }}>
-          Up to {DS_MAX_SLOTS} delivery slots per item · each item’s slots reconcile to its PO quantity
+          Add unlimited delivery rows per item · each item’s rows reconcile to its PO quantity
         </span>
       </div>
 
@@ -120,12 +121,12 @@ export function DeliveryScheduleGrid({
                     </td>
                   </tr>
                 )).concat(
-                  !ro && n < DS_MAX_SLOTS ? [(
+                  !ro ? [(
                     <tr key={`${d.lineNo}-add`}>
                       <td colSpan={10} style={{ ...TD, padding: '3px 8px 5px 64px' }}>
                         <Button size="small" type="dashed" icon={<PlusOutlined />}
                           onClick={() => onAddSlot(d.lineNo)} style={{ fontSize: 11, height: 22 }}>
-                          Add delivery slot ({n}/{DS_MAX_SLOTS})
+                          Add delivery row
                         </Button>
                       </td>
                     </tr>

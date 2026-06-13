@@ -1,7 +1,8 @@
 // ── usePoTransferForm — orchestration hook for PR to PO Transfer ─────────────
 //
-// Mirrors src/features/pr/hooks/usePRFormCore.ts conventions: App.useApp(),
-// useAuthStore, getFYBounds, AntD Form for the header, Zustand store for lines.
+// Mirrors src/features/pr/hooks/usePRFormCore.ts conventions: useAuthStore,
+// getFYBounds, AntD Form for the header, Zustand store for lines. User feedback
+// is surfaced via the centralized notificationService (top-right notifications).
 //
 // Source authority: built against FSD draft v3.1.
 //   ⚠ Q2 PENDING (Gate 0): countersign status unconfirmed — no logic depends on
@@ -15,7 +16,7 @@
 //   • BR-16/17 (budget)  → server-driven only; surfaced via save-error handler.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Form } from 'antd'
+import { Form } from 'antd'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
@@ -23,9 +24,10 @@ import { getFYBounds } from '@/shared/lib/dateUtils'
 import { getErrorMessage, AppError } from '@/shared/lib/errorHandler'
 import { formatPoNo } from '../types'
 import { usePoTransferStore } from '../store/usePoTransferStore'
+import { notificationService } from '@/shared/lib/notification'
 import * as poApi from '../api/poTransferApi'
 import type {
-  PoHeader, PoLine, PoParameters, PoPreAddChecks, PoUserPermissions,
+  PoHeader, PoLine, PoParameters, PoPreAddChecks,
   SupplierOption, OrderTypeOption, CarrierOption, BankOption, FormTypeOption,
   EligiblePrLine, DeliveryScheduleLine, AddPoRequest, SavePoLineRequest,
   GstRoute, LineTaxDetail,
@@ -132,7 +134,6 @@ export interface PoHeaderFormValues {
 const HO_TYPE = 'HO'
 
 export function usePoTransferForm() {
-  const { message } = App.useApp()
   const [headerForm] = Form.useForm<PoHeaderFormValues>()
 
   const authUser       = useAuthStore((s) => s.user)
@@ -168,7 +169,8 @@ export function usePoTransferForm() {
 
   const [parameters,  setParameters]  = useState<PoParameters | null>(null)
   const [preChecks,   setPreChecks]   = useState<PoPreAddChecks | null>(null)
-  const [permissions, setPermissions] = useState<PoUserPermissions>({ canAdd: false, canDelete: false, canPrint: false }) // deny-by-default (D-12)
+  // Record-navigation index — every PO number in the active FY, ascending.
+  const [navList, setNavList] = useState<{ poNo: number; poDate: string }[]>([])
 
   const [orderTypes, setOrderTypes] = useState<OrderTypeOption[]>([])
   const [carriers,   setCarriers]   = useState<CarrierOption[]>([])
@@ -189,7 +191,7 @@ export function usePoTransferForm() {
     [mode, currentPo, draftLines],
   )
 
-  // ── Load lookups + permissions on mount ────────────────────────────────────
+  // ── Load lookups on mount ───────────────────────────────────────────────────
   const loadLookups = useCallback(async () => {
     if (!divCode) return
     setLookupsLoading(true)
@@ -216,15 +218,17 @@ export function usePoTransferForm() {
   useEffect(() => {
     if (!divCode) return
     void loadLookups()
-    poApi.getUserPermissions(divCode)
-      .then(setPermissions)
-      .catch(() => { /* deny-by-default already set (D-12 / R-09) */ })
   }, [divCode, loadLookups])
 
-  // Search-driven lookups (modals/selects load on demand)
-  const loadSuppliers = useCallback(async (search?: string) => {
-    if (!divCode) return
-    try { setSuppliers(await poApi.getSuppliers(divCode, search)) } catch { /* surfaced by caller */ }
+  // Supplier list — loaded in full once (on first dropdown open). The Select
+  // then filters the loaded options client-side (UX-3 — list appears immediately).
+  const suppliersLoadedRef = useRef(false)
+  const loadSuppliers = useCallback(async () => {
+    if (!divCode || suppliersLoadedRef.current) return
+    try {
+      setSuppliers(await poApi.getSuppliers(divCode))
+      suppliersLoadedRef.current = true
+    } catch { /* surfaced by caller */ }
   }, [divCode])
   const loadBanks = useCallback(async (search?: string) => {
     try { setBanks(await poApi.getBanks(search)) } catch { /* noop */ }
@@ -278,17 +282,17 @@ export function usePoTransferForm() {
     const poNo = currentPo?.poNo
     if (!poNo || mode === 'ADD') {
       // Provisional: propagation deferred to save-time server computation.
-      void message.info('Header tax will be applied to all lines when the PO is saved.')
+      notificationService.info('Header Tax', 'Header tax will be applied to all lines when the PO is saved.')
       return
     }
     try {
       const updated = await poApi.applyHeaderTax(divCode, poNo, currentPo!.poDate, changes)
       setCurrentPo(updated)
-      void message.success('Header tax applied to all lines.')
+      notificationService.success('Header Tax Applied', 'Header tax has been applied to all lines.')
     } catch (err) {
-      void message.error(getErrorMessage(err))
+      notificationService.error('Header Tax Failed', getErrorMessage(err))
     }
-  }, [currentPo, mode, divCode, message, setCurrentPo])
+  }, [currentPo, mode, divCode, setCurrentPo])
 
   // ── PR Picker → add lines (VB6 delmodok_Click) ─────────────────────────────
   const mapEligibleToLine = (pr: EligiblePrLine, lineNo: number): PoLine =>
@@ -341,7 +345,10 @@ export function usePoTransferForm() {
     const newLines = selected.map((pr, i) => mapEligibleToLine(pr, start + i + 1))
     setDraftLines([...draftLines, ...newLines])
     setDeliveryLines([...deliveryLines, ...newLines.map(toDeliveryLine)])
-    void message.success(`${newLines.length} PR line${newLines.length !== 1 ? 's' : ''} loaded. Set rates and save.`)
+    notificationService.success(
+      'PR Lines Loaded',
+      `${newLines.length} PR line${newLines.length !== 1 ? 's' : ''} loaded. Set rates and save.`,
+    )
   }
 
   // Edit Rate / Qty inline → recompute line + keep delivery poQty in sync.
@@ -392,7 +399,7 @@ export function usePoTransferForm() {
     const result = await runPreChecks()
     // BR-02 gate: no eligible PR lines ⇒ cannot start an Add.
     if (result && result.approvedPrLinesExist === false) {
-      void message.warning('No approved PR lines available to convert.')
+      notificationService.warning('No Eligible PR Lines', 'There are no approved PR lines available to convert.')
       return
     }
     headerForm.resetFields()
@@ -415,7 +422,7 @@ export function usePoTransferForm() {
   const cancelMode = () => {
     resetToView()
     if (currentPo) fillHeaderFromPo(currentPo)
-    void message.info('Operation cancelled.')
+    notificationService.info('Operation Cancelled', 'The current operation was cancelled.')
   }
 
   // ── Load existing PO (VIEW) ────────────────────────────────────────────────
@@ -490,7 +497,7 @@ export function usePoTransferForm() {
       fillHeaderFromPo(po)
       setMode('VIEW')
     } catch (err) {
-      void message.error(getErrorMessage(err))
+      notificationService.error('Failed to Load Record', getErrorMessage(err))
     } finally {
       setNavLoading(false)
     }
@@ -507,41 +514,54 @@ export function usePoTransferForm() {
     finally { setNavLoading(false) }
   }, [divCode, processingDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Build the navigation index (all PO numbers in the FY, ascending) for the
+  // First / Prev / Next / Last toolbar buttons. Refreshed after Save/Delete.
+  const loadNavList = useCallback(async () => {
+    if (!divCode) return
+    const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
+    try {
+      const list = await poApi.getList(divCode, yfDate, ylDate, { pageSize: 2000 })
+      setNavList(
+        [...list].sort((a, b) => a.poNo - b.poNo).map((s) => ({ poNo: s.poNo, poDate: s.poDate })),
+      )
+    } catch { setNavList([]) }
+  }, [divCode, processingDate])
+
   // ── Client-side validation (mirrors BR register; server is authoritative) ──
   const validateLines = (): boolean => {
     const working = draftLines.filter((l) => l.itemCode.trim() !== '')
     if (working.length === 0) {
-      void message.error('Add at least one PR line before saving.')
+      notificationService.warning('No Line Items', 'Add at least one PR line before saving.')
       return false
     }
     // BR-07 Rate > 0
     const zeroRate = working.filter((l) => (l.rate ?? 0) <= 0)
     if (zeroRate.length) {
-      void message.error(`Rate must be greater than 0 for: ${zeroRate.map((l) => l.itemCode).join(', ')}.`)
+      notificationService.warning('Validation Failed', `Rate must be greater than 0 for: ${zeroRate.map((l) => l.itemCode).join(', ')}.`)
       return false
     }
     // BR-06 Qty > 0
     const zeroQty = working.filter((l) => (l.qty ?? 0) <= 0)
     if (zeroQty.length) {
-      void message.error(`Quantity must be greater than 0 for: ${zeroQty.map((l) => l.itemCode).join(', ')}.`)
+      notificationService.warning('Validation Failed', `Quantity must be greater than 0 for: ${zeroQty.map((l) => l.itemCode).join(', ')}.`)
       return false
     }
     // BR-05 Qty ≤ PR balance
     const overBalance = working.filter((l) => (l.qty ?? 0) > (l.balanceQty ?? 0))
     if (overBalance.length) {
-      void message.error(`Quantity exceeds PR balance for: ${overBalance.map((l) => l.itemCode).join(', ')}.`)
+      notificationService.warning('Validation Failed', `Quantity exceeds PR balance for: ${overBalance.map((l) => l.itemCode).join(', ')}.`)
       return false
     }
     // BR-08 Tax Code mandatory
     const noTaxCode = working.filter((l) => !l.taxCode.trim())
     if (noTaxCode.length) {
-      void message.error(`Tax Code is required for: ${noTaxCode.map((l) => l.itemCode).join(', ')}.`)
+      notificationService.warning('Mandatory Fields Missing', `Tax Code is required for: ${noTaxCode.map((l) => l.itemCode).join(', ')}.`)
       return false
     }
     // BR-10 HSN mandatory (SPINRISE enforces at save; server re-checks → 400)
     const noHsn = working.filter((l) => !l.hsnCode.trim())
     if (noHsn.length) {
-      void message.error(`HSN Code is required for: ${noHsn.map((l) => l.itemCode).join(', ')}. Configure it in Item Master.`)
+      notificationService.warning('Mandatory Fields Missing', `HSN Code is required for: ${noHsn.map((l) => l.itemCode).join(', ')}. Configure it in Item Master.`)
       return false
     }
     // UX-01 delivery reconciliation — block over-allocation; under is allowed.
@@ -549,7 +569,7 @@ export function usePoTransferForm() {
       round3(d.slots.reduce((s, x) => s + (Number(x.qty) || 0), 0)) > round3(d.poQty),
     )
     if (overSched.length) {
-      void message.error(`Scheduled quantity exceeds PO quantity for: ${overSched.map((d) => d.itemCode).join(', ')}.`)
+      notificationService.warning('Delivery Schedule Mismatch', `Scheduled quantity exceeds PO quantity for: ${overSched.map((d) => d.itemCode).join(', ')}.`)
       return false
     }
     return true
@@ -559,18 +579,18 @@ export function usePoTransferForm() {
   const validateHeaderConditionals = (v: PoHeaderFormValues): boolean => {
     // BR-15 Bank → Bank Code + Cheque No.
     if (v.payMode === 'BANK') {
-      if (!v.bankCode?.trim()) { void message.error('Bank is required for bank payment.'); return false }
-      if (!v.chequeNo?.trim()) { void message.error('Cheque No. is required for bank payment.'); return false }
+      if (!v.bankCode?.trim()) { notificationService.warning('Mandatory Fields Missing', 'Bank is required for bank payment.'); return false }
+      if (!v.chequeNo?.trim()) { notificationService.warning('Mandatory Fields Missing', 'Cheque No. is required for bank payment.'); return false }
     }
     // BR-15 HO order type → Pricing Terms
     if (v.orderType === HO_TYPE && !v.pricingTerms?.trim()) {
-      void message.error('Pricing Terms is required for HO purchase type.'); return false
+      notificationService.warning('Mandatory Fields Missing', 'Pricing Terms is required for HO purchase type.'); return false
     }
     // BR-01 backdate guard (client mirror; server re-enforces)
-    if (preChecks?.backDateFlag === 'N' && preChecks.maxPoDate) {
+    if (preChecks?.backDateFlag === 'N' && preChecks.maxPoDate && v.poDate) {
       const maxDate = dayjs(preChecks.maxPoDate)
       if (v.poDate.isBefore(maxDate, 'day')) {
-        void message.error(`PO date must be ${maxDate.format('DD-MMM-YYYY')} or later.`); return false
+        notificationService.warning('Invalid PO Date', `PO date must be ${maxDate.format('DD-MMM-YYYY')} or later.`); return false
       }
     }
     return true
@@ -602,10 +622,14 @@ export function usePoTransferForm() {
       slots:    slotsFor(l.lineNo),
     }))
 
+    // Guard the PO date: fall back to the processing date / today if the form
+    // value is ever missing, so the request can never crash on `.format`.
+    const poDateStr = fmtDate(v.poDate) ?? processingDate ?? dayjs().format('YYYY-MM-DD')
+
     return {
-      poDate: v.poDate.format('YYYY-MM-DD'),
+      poDate: poDateStr,
       header: {
-        poDate:        v.poDate.format('YYYY-MM-DD'),
+        poDate:        poDateStr,
         orderType:     v.orderType,
         orderTypeDesc: orderTypes.find((t) => t.poGrp === v.orderType)?.typName ?? '',
         supplier:      v.supplier,
@@ -650,7 +674,7 @@ export function usePoTransferForm() {
   const doSave = async () => {
     let values: PoHeaderFormValues
     try { values = await headerForm.validateFields() }   // BR-11..14 via field rules (HF-19a)
-    catch { void message.error('Please fill in all required fields.'); return }
+    catch { notificationService.warning('Mandatory Fields Missing', 'Please fill in all required fields.'); return }
 
     if (!validateHeaderConditionals(values)) return       // BR-15, BR-01
     if (!validateLines()) return                          // BR-05/06/07/08/10, UX-01
@@ -665,12 +689,13 @@ export function usePoTransferForm() {
       setCurrentPo(saved)
       fillHeaderFromPo(saved)
       resetToView()
-      void message.success(`Purchase Order ${formatPoNo(result.poNo)} created successfully.`)
+      void loadNavList()   // new PO joins the navigation index
+      notificationService.success('Purchase Order Saved Successfully', `Purchase Order ${formatPoNo(result.poNo)} was created.`)
     } catch (err) {
       // BR-16/17 budget rejections are SERVER-DRIVEN — surface the server message
       // verbatim. TODO[BR-16/17]: when the contract is final, branch on a typed
       // budget-error code for inline field highlighting (provisional: message only).
-      void message.error(getErrorMessage(err))
+      notificationService.error('Failed to Save Purchase Order', getErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -687,7 +712,7 @@ export function usePoTransferForm() {
     // BR-04: every line must carry a non-empty delete reason.
     const blank = draftLines.find((l) => !l.deleteReason.trim())
     if (blank) {
-      void message.error('Delete Reason is mandatory on every line.')
+      notificationService.warning('Delete Reason Required', 'A delete reason is mandatory on every line.')
       return false
     }
     setDeleteModalOpen(false)
@@ -700,16 +725,17 @@ export function usePoTransferForm() {
         defaultReason,
         lineReasons:   draftLines.map((l) => ({ prSno: l.prSno, deleteReason: l.deleteReason.trim() })),
       })
-      void message.success(`${formatPoNo(currentPo.poNo)} deleted. PR quantities reversed.`)
+      notificationService.success('Purchase Order Deleted', `${formatPoNo(currentPo.poNo)} deleted. PR quantities reversed.`)
       resetToView()
       await loadLastRecord()
+      void loadNavList()   // drop the deleted PO from the navigation index
       return true
     } catch (err) {
       // BR-03: GRN raised → HTTP 409. Surface the (server) guard message.
       const msg = err instanceof AppError && err.status === 409
         ? 'Cannot delete — a GRN has already been raised for this Purchase Order.'
         : getErrorMessage(err)
-      void message.error(msg)
+      notificationService.error('Failed to Delete Purchase Order', msg)
       return false
     } finally {
       setDeleting(false)
@@ -748,6 +774,25 @@ export function usePoTransferForm() {
 
   const pageBusy = saving || deleting || navLoading
 
+  // ── Record navigation (First / Prev / Next / Last) ─────────────────────────
+  // Position within the FY index; -1 when the current PO isn't in the list yet.
+  const currentIndex = useMemo(
+    () => (currentPo?.poNo ? navList.findIndex((r) => r.poNo === currentPo.poNo) : -1),
+    [navList, currentPo],
+  )
+  const hasRecords = navList.length > 0
+  const canPrev = currentIndex > 0
+  const canNext = currentIndex >= 0 && currentIndex < navList.length - 1
+
+  const goToIndex = async (idx: number) => {
+    const rec = navList[idx]
+    if (rec) await loadRecord(rec.poNo, rec.poDate)
+  }
+  const goFirst = () => { if (hasRecords) void goToIndex(0) }
+  const goPrev  = () => { if (canPrev)    void goToIndex(currentIndex - 1) }
+  const goNext  = () => { if (canNext)    void goToIndex(currentIndex + 1) }
+  const goLast  = () => { if (hasRecords) void goToIndex(navList.length - 1) }
+
   // ── Ctrl+S save shortcut (ADD only) ────────────────────────────────────────
   const doSaveRef = useRef(doSave)
   doSaveRef.current = doSave
@@ -771,14 +816,14 @@ export function usePoTransferForm() {
     // data
     currentPo, lines, draftLines, deliveryLines, gstRoute,
     // lookups
-    parameters, preChecks, permissions,
+    parameters, preChecks,
     orderTypes, carriers, formTypes, suppliers, banks,
     lookupsLoaded, lookupsLoading, lookupsError,
     loadLookups, loadSuppliers, loadBanks, runPreChecks,
     // line ops
     addPrLines, updateLineRateQty, removeDraftLine, applyGstDetail,
     setDefaultDeleteReason, setLineDeleteReason,
-    // delivery slot ops (Sprint 1 — 4-slot)
+    // delivery row ops (OQ-NEW B — item-wise open grid, unlimited rows)
     addSlot, updateSlot, removeSlot,
     // gst modal / selection
     gstLineNo, openGstModal, closeGstModal, selectedLineNo, setSelectedLineNo,
@@ -787,7 +832,8 @@ export function usePoTransferForm() {
     // mode transitions
     enterAddMode, enterDeleteMode, cancelMode,
     // record nav
-    loadRecord, loadLastRecord,
+    loadRecord, loadLastRecord, loadNavList,
+    goFirst, goPrev, goNext, goLast, canPrev, canNext, hasRecords,
     // actions
     doSave, handleDeleteClick, handleDeleteConfirm,
     // totals

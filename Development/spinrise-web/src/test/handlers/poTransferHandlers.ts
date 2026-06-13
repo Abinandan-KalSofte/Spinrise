@@ -49,10 +49,6 @@ export const poTransferHandlers = [
   http.get(`${BASE}/pre-add-checks`, () =>
     ok({ approvedPrLinesExist: true, docParaExists: true, backDateFlag: 'N', maxPoDate: null })),
 
-  // Deny-by-default (D-12) — server is authoritative. RECONCILE flag names.
-  http.get(`${BASE}/permissions`, () =>
-    ok({ canAdd: true, canDelete: true, canPrint: true })),
-
   // ── Lookups (RECONCILE: every column name) ─────────────────────────────────
   http.get(`${BASE}/order-types`, () =>
     ok([{ poGrp: 'STORE', typName: 'Store Purchase' }, { poGrp: 'HO', typName: 'Head Office' }])),
@@ -92,6 +88,13 @@ export const poTransferHandlers = [
 
   // ── PO data ────────────────────────────────────────────────────────────────
   http.get(`${BASE}/last`, () => ok(null)),
+
+  // Find / record-navigation list (PoSummary[]). RECONCILE: paging shape.
+  http.get(BASE, () =>
+    ok([
+      { divCode: 'S', poNo: 137, poDate: '2026-06-05', orderType: 'STORE', supplier: 'SUP-0042', supplierName: 'Coimbatore Spinners Supply Co.', orderValue: 125000, approvalStatus: 'APPROVED', totalLines: 3 },
+      { divCode: 'S', poNo: 138, poDate: '2026-06-07', orderType: 'STORE', supplier: 'SUP-IGST', supplierName: 'Maharashtra Traders', orderValue: 48250, approvalStatus: 'PENDING L1', totalLines: 1 },
+    ])),
 
   http.get(`${BASE}/:poNo`, ({ params }) => ok(makePo(Number(params.poNo)))),
 

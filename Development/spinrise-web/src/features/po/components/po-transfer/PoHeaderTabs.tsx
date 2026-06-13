@@ -30,12 +30,12 @@ interface PoHeaderTabsProps {
   formTypes:        FormTypeOption[]
   banks:            BankOption[]
   onSupplierChange: (s: SupplierOption | null) => void
-  onSupplierSearch: (q: string) => void
+  onSupplierOpen:   () => void
 }
 
 export function PoHeaderTabs(props: PoHeaderTabsProps) {
   const { mode, poNo, orderValue, currentPo, orderTypes, suppliers, carriers, formTypes, banks,
-    onSupplierChange, onSupplierSearch } = props
+    onSupplierChange, onSupplierOpen } = props
   const [active, setActive] = useState<TabKey>('order')
   const disabled = mode !== 'ADD'
 
@@ -93,20 +93,40 @@ export function PoHeaderTabs(props: PoHeaderTabsProps) {
         </div>
       </div>
 
-      {/* Active panel */}
-      {activeKey === 'order' && (
+      {/* Panels — every form tab stays MOUNTED; only visibility is toggled.
+          Conditionally mounting a panel unregisters its Form.Items, so
+          headerForm.validateFields() would silently drop fields from inactive
+          tabs (e.g. PO Date / Order Type / Supplier) — that produced the
+          `Cannot read properties of undefined (reading 'format')` crash on Save
+          and let mandatory validation be skipped. Keeping them mounted fixes both. */}
+      <div style={{ display: activeKey === 'order' ? 'block' : 'none' }}>
         <OrderDetailsTab
           mode={mode} disabled={disabled} poNo={poNo} orderValue={orderValue}
           orderTypes={orderTypes} suppliers={suppliers} formTypes={formTypes}
-          onSupplierChange={onSupplierChange} onSupplierSearch={onSupplierSearch}
+          onSupplierChange={onSupplierChange} onSupplierOpen={onSupplierOpen}
         />
+      </div>
+      <div style={{ display: activeKey === 'tax' ? 'block' : 'none' }}>
+        <TaxDiscountTab disabled={disabled} />
+      </div>
+      <div style={{ display: activeKey === 'payment' ? 'block' : 'none' }}>
+        <PaymentTab disabled={disabled} banks={banks} />
+      </div>
+      <div style={{ display: activeKey === 'instructions' ? 'block' : 'none' }}>
+        <InstructionsTab disabled={disabled} carriers={carriers} />
+      </div>
+      <div style={{ display: activeKey === 'cancel' ? 'block' : 'none' }}>
+        <CancelStatusTab disabled={disabled} />
+      </div>
+      {/* Amendment / Approval are read-only display panels (no Form.Items). */}
+      <div style={{ display: activeKey === 'amendment' ? 'block' : 'none' }}>
+        <AmendmentTab currentPo={currentPo} />
+      </div>
+      {mode !== 'ADD' && (
+        <div style={{ display: activeKey === 'approval' ? 'block' : 'none' }}>
+          <ApprovalTab currentPo={currentPo} />
+        </div>
       )}
-      {activeKey === 'tax'          && <TaxDiscountTab disabled={disabled} />}
-      {activeKey === 'payment'      && <PaymentTab disabled={disabled} banks={banks} />}
-      {activeKey === 'instructions' && <InstructionsTab disabled={disabled} carriers={carriers} />}
-      {activeKey === 'cancel'       && <CancelStatusTab disabled={disabled} />}
-      {activeKey === 'amendment'    && <AmendmentTab currentPo={currentPo} />}
-      {activeKey === 'approval'     && <ApprovalTab currentPo={currentPo} />}
     </div>
   )
 }

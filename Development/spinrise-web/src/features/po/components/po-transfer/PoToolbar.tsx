@@ -7,25 +7,32 @@ import { TbBtn, TbSep } from '@/features/pr/components/pr-form/PRToolbar'
 import type { ScreenMode } from '../../types'
 
 // ── Toolbar (HTML .toolbar) — maps to VB6 BUTTON_Click(Index) ─────────────────
-// Reuses the shared TbBtn / TbSep primitives. Mode drives enable/disable.
-// Find and record navigation depend on getList (Q6 deferred this sprint) → shown
-// disabled with a clear title rather than omitted, preserving mockup parity.
+// Reuses the shared TbBtn / TbSep primitives. Enable/disable is driven purely by
+// screen MODE and business rules (no permission gating). New/Find/Delete/Print +
+// record navigation are available in VIEW; Save/Cancel in ADD/DELETE.
 
 interface PoToolbarProps {
-  mode:        ScreenMode
-  canAdd:      boolean
-  canDelete:   boolean
-  canPrint:    boolean
-  busy:        boolean
-  onNew:       () => void
-  onDelete:    () => void
-  onSave:      () => void
-  onCancel:    () => void
-  onPrint:     () => void
+  mode:      ScreenMode
+  busy:      boolean
+  hasRecord: boolean       // a saved PO is loaded → Delete / Print / nav apply
+  canPrev:   boolean       // a previous record exists in the FY index
+  canNext:   boolean       // a next record exists in the FY index
+  onNew:     () => void
+  onFind:    () => void
+  onDelete:  () => void
+  onSave:    () => void
+  onCancel:  () => void
+  onPrint:   () => void
+  onFirst:   () => void
+  onPrev:    () => void
+  onNext:    () => void
+  onLast:    () => void
 }
 
 export function PoToolbar({
-  mode, canAdd, canDelete, canPrint, busy, onNew, onDelete, onSave, onCancel, onPrint,
+  mode, busy, hasRecord, canPrev, canNext,
+  onNew, onFind, onDelete, onSave, onCancel, onPrint,
+  onFirst, onPrev, onNext, onLast,
 }: PoToolbarProps) {
   const isView   = mode === 'VIEW'
   const isAdd    = mode === 'ADD'
@@ -38,34 +45,37 @@ export function PoToolbar({
       display: 'flex', alignItems: 'center', gap: 3, padding: '5px 16px',
       background: '#fff', borderBottom: '1px solid #e2e2e2', flexShrink: 0, flexWrap: 'wrap',
     }}>
-      <TbBtn icon={<PlusOutlined />} label="New PO" kbd="Ctrl+A" variant="primary"
-        disabled={!isView || !canAdd || busy} onClick={onNew} />
-      <TbBtn icon={<SearchOutlined />} label="Find" kbd="Ctrl+F"
-        disabled title="Find by PO No. — planned for a later sprint" />
-      <TbBtn icon={<DeleteOutlined />} label="Delete" kbd="Ctrl+D" variant="danger"
-        disabled={!isView || !canDelete || busy} onClick={onDelete} />
+      <TbBtn icon={<PlusOutlined />} label="New PO" kbd="F1" variant="primary"
+        disabled={!isView || busy} onClick={onNew} />
+      <TbBtn icon={<SearchOutlined />} label="Find" kbd="F2"
+        disabled={!isView || busy} onClick={onFind} />
+      <TbBtn icon={<DeleteOutlined />} label="Delete" kbd="F3" variant="danger"
+        disabled={!isView || busy || !hasRecord} onClick={onDelete} />
 
       <TbSep />
 
-      <TbBtn icon={<SaveOutlined />} label={saveLabel} kbd="Ctrl+S"
+      <TbBtn icon={<SaveOutlined />} label={saveLabel} kbd={isDelete ? 'F8' : 'F4'}
         variant={isDelete ? 'danger-filled' : 'primary'}
         disabled={isView || busy} onClick={onSave} />
-      <TbBtn icon={<CloseOutlined />} label="Cancel" kbd="Ctrl+Bksp"
+      <TbBtn icon={<CloseOutlined />} label="Cancel" kbd="F6"
         disabled={isView || busy} onClick={onCancel} />
 
       <TbSep />
 
-      <TbBtn icon={<PrinterOutlined />} label="Print" kbd="Ctrl+P"
-        disabled={!isView || !canPrint || busy} onClick={onPrint}
-        title={!canPrint ? 'Print enabled after approval' : undefined} />
+      <TbBtn icon={<PrinterOutlined />} label="Print" kbd="F7"
+        disabled={!isView || busy || !hasRecord} onClick={onPrint} />
 
       <span style={{ flex: 1 }} />
 
-      {/* Record navigation — deferred with Find (Q6); disabled this sprint. */}
-      <TbBtn icon={<StepBackwardOutlined />} variant="icon" disabled title="First — later sprint" />
-      <TbBtn icon={<LeftOutlined />}        variant="icon" disabled title="Previous — later sprint" />
-      <TbBtn icon={<RightOutlined />}       variant="icon" disabled title="Next — later sprint" />
-      <TbBtn icon={<StepForwardOutlined />} variant="icon" disabled title="Last — later sprint" />
+      {/* Record navigation — VIEW mode, bounded by the FY index. */}
+      <TbBtn icon={<StepBackwardOutlined />} variant="icon"
+        disabled={!isView || busy || !canPrev} onClick={onFirst} title="First record" />
+      <TbBtn icon={<LeftOutlined />} variant="icon"
+        disabled={!isView || busy || !canPrev} onClick={onPrev} title="Previous record" />
+      <TbBtn icon={<RightOutlined />} variant="icon"
+        disabled={!isView || busy || !canNext} onClick={onNext} title="Next record" />
+      <TbBtn icon={<StepForwardOutlined />} variant="icon"
+        disabled={!isView || busy || !canNext} onClick={onLast} title="Last record" />
     </div>
   )
 }

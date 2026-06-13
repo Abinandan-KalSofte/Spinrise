@@ -260,6 +260,24 @@ body {
   100% { left: 100%;  }
 }
 
+/* ── Fix: force AntD required mark to appear before label text globally ──
+   Some form labels render the required mark after the label text due to
+   layout/override interactions. Ensure the star appears before the label
+   and is consistently spaced. */
+.ant-form-item-label > label.ant-form-item-required::before {
+  display: inline-block !important;
+  content: '*' !important;
+  color: var(--ant-form-item-required-mark-color, #f5222d) !important;
+  font-size: inherit !important;
+  margin-left: 0.5em !important;
+  vertical-align: middle !important;
+  order: 1 !important;
+}
+
+.ant-form-item-label > label.ant-form-item-required::after {
+  display: none !important;
+}
+
 .login-card__left-company {
   font-size:      17px;
   font-weight:    700;
