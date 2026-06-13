@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Layout, Menu, Button, Dropdown, ConfigProvider } from 'antd'
+import { Layout, Menu, Button, Dropdown } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   DashboardOutlined,
