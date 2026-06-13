@@ -132,20 +132,20 @@ export interface PoLine {
   deleteReason:  string       // (85) — DELETE mode only (BR-04)
 }
 
-// ── Delivery schedule (PO_ORDL_DETL — fixed 4-slot, Sprint 1, Q3 confirmed) ──
-// N-row model deferred to Sprint 2. Reconciliation is on QTY not value (UX-01);
-// each slot keeps its own item UOM (UX-02).
-
-export const DS_MAX_SLOTS = 4
+// ── Delivery schedule (PO_ORDL_DETL — item-wise open child grid; OQ-NEW B) ───
+// OQ-NEW Option B (approved): UNLIMITED delivery rows per PO item — the retired
+// fixed 4-slot model is gone. Reconciliation is on QTY not value (UX-01); each
+// slot keeps its own item UOM (UX-02). `slotNo` is just the 1..n row sequence
+// within the item, re-numbered on add/remove.
 
 export interface DeliverySlot {
-  slotNo:  number             // 1..4
+  slotNo:  number             // 1..n row sequence within the item (open grid)
   shDate:  string | null      // PO_ORDL_DETL.shdate
   qty:     number             // PO_ORDL_DETL.Quantity (3dp)
   remarks: string
 }
 
-/** Delivery slots grouped per PO line (keyed by lineNo). */
+/** Delivery rows grouped per PO line (keyed by lineNo). Unlimited rows per item. */
 export interface DeliveryScheduleLine {
   lineNo:   number            // matches PoLine.lineNo
   itemCode: string
@@ -153,7 +153,7 @@ export interface DeliveryScheduleLine {
   uom:      string
   prNo:     number
   poQty:    number            // Σ slot qty must reconcile to this (UX-01)
-  slots:    DeliverySlot[]    // ≤ DS_MAX_SLOTS
+  slots:    DeliverySlot[]    // unlimited rows (OQ-NEW B)
 }
 
 // ── PO header (PO_ORDH) ──────────────────────────────────────────────────────
@@ -288,7 +288,7 @@ export interface SavePoLineRequest {
   sgstCode:     string
   igstCode:     string
   route:        GstRoute
-  slots:        DeliverySlot[]   // ≤ 4 (Sprint 1)
+  slots:        DeliverySlot[]   // unlimited delivery rows per item (OQ-NEW B)
 }
 
 /** Add-PO payload. PO No is allocated server-side — never sent (CD-03). */
@@ -311,10 +311,3 @@ export interface DeletePoRequest {
   lineReasons:  DeletePoLineReason[]   // BR-04 — every line non-empty
 }
 
-// ── User permissions (deny-by-default — D-12 / R-09) ─────────────────────────
-
-export interface PoUserPermissions {
-  canAdd:    boolean
-  canDelete: boolean
-  canPrint:  boolean
-}

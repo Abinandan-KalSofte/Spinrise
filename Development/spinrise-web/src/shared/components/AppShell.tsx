@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Layout, Menu, Button, Dropdown } from 'antd'
+import { Layout, Menu, Button, Dropdown, ConfigProvider } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   DashboardOutlined,
@@ -33,32 +33,37 @@ function wrapLabel(text: string) {
   return <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'inline-block' }}>{text}</span>
 }
 
+// Paths that live under the "Purchase Requisition (PR)" sub-group.
+const PR_PATHS = [
+  '/purchase-requisition',
+  '/pr-amendment',
+  '/pr-foreclosure',
+  '/pr-cancellation',
+  '/pr-first-approval',
+  '/pr-final-approval',
+]
+
 const NAV_ITEMS: MenuItem[] = [
   mk('/dashboard', 'Dashboard', <DashboardOutlined />),
+  { type: 'divider', style: { borderColor: 'rgba(255,255,255,0.08)', margin: '8px 16px' } } as MenuItem,
   mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined />, [
-    mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)'), <FileTextOutlined />),
-    mk('/po/transfer',          wrapLabel('PR to PO Transfer'),                       <FileTextOutlined />),
-    mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment '),        <FileTextOutlined />),
-    mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure '),      <FileTextOutlined />),
-    mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'),           <FileTextOutlined />),
-    mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval'),   <FileTextOutlined />),
-    mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval'),   <FileTextOutlined />),
+    mk('grp-pr', wrapLabel('Purchase Requisition (PR)'), <FileTextOutlined />, [
+      mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)')),
+      mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment')),
+      mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure')),
+      mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation')),
+      mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval')),
+      mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval')),
+    ]),
+    mk('grp-transfer', wrapLabel('PR to PO Transfer'), <FileTextOutlined />, [
+      mk('/po/transfer', wrapLabel('PR to PO Transfer')),
+    ]),
   ]),
 ]
 
 function getOpenKeys(path: string): string[] {
-  if (
-    path.startsWith('/purchase-requisition') ||
-    path.startsWith('/po/transfer') ||
-    path.startsWith('/pr-amendment') ||
-    path.startsWith('/pr-foreclosure') ||
-    path.startsWith('/pr-cancellation') ||
-    path.startsWith('/pr-first-approval') ||
-    path.startsWith('/pr-final-approval') ||
-    path.startsWith('/rmi-purchase-order')
-  ) {
-    return ['grp-purchase']
-  }
+  if (PR_PATHS.some((p) => path.startsWith(p))) return ['grp-purchase', 'grp-pr']
+  if (path.startsWith('/po/transfer'))          return ['grp-purchase', 'grp-transfer']
   return []
 }
 

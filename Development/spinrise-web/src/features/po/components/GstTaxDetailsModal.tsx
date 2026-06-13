@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { App, Button, Input, InputNumber, Modal } from 'antd'
+import { Button, Input, InputNumber, Modal } from 'antd'
 import type { PoLine, LineTaxDetail, ScreenMode } from '../types'
+import { notificationService } from '@/shared/lib/notification'
 
 // ── GST & Tax Details modal (HTML #gst-modal-overlay) ────────────────────────
 //
@@ -61,7 +62,6 @@ const labelChip = (text: string, bg: string, color: string) => (
 export function GstTaxDetailsModal({
   open, line, mode, onApply, onCancel, onTaxCodeLookup,
 }: GstTaxDetailsModalProps) {
-  const { message } = App.useApp()
   const [tax, setTax] = useState<DraftTax>(seed(null))
   const [deleteReason, setDeleteReason] = useState('')
   const [reasonError, setReasonError] = useState(false)
@@ -94,7 +94,7 @@ export function GstTaxDetailsModal({
   const handleApply = () => {
     if (isDelete && !deleteReason.trim()) {
       setReasonError(true)
-      void message.error('Delete Reason is mandatory.')   // BR-04 (hook re-checks)
+      notificationService.warning('Delete Reason Required', 'A delete reason is mandatory.')   // BR-04 (hook re-checks)
       return
     }
     const detail: LineTaxDetail = {

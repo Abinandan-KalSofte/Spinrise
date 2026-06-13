@@ -4,11 +4,10 @@ import { formatPoNo } from '../types'
 import type {
   PoParameters, PoPreAddChecks,
   SupplierOption, OrderTypeOption, CarrierOption, BankOption,
-  FormTypeOption, AddressOption,
+  FormTypeOption,
   EligiblePrLine,
   PoHeader, PoSummary,
   AddPoRequest, DeletePoRequest,
-  PoUserPermissions,
   GstRoutingResult, GstTaxCodeOption,
 } from '../types'
 
@@ -29,9 +28,8 @@ export const runPreAddChecks = (divCode: string) =>
 
 // ── Lookups (provisional — Q7) ───────────────────────────────────────────────
 
-export const getSuppliers = (divCode: string, search?: string) => {
+export const getSuppliers = (divCode: string) => {
   const p = new URLSearchParams({ divCode })
-  if (search) p.set('search', search)
   return apiHelpers.get<SupplierOption[]>(`${BASE}/suppliers?${p}`)
 }
 
@@ -53,12 +51,6 @@ export const getBanks = (search?: string) => {
 export const getFormTypes = () =>
   apiHelpers.get<FormTypeOption[]>(`${BASE}/form-types`)
 
-export const getAddresses = (divCode: string, kind: 'delivery' | 'billing', search?: string) => {
-  const p = new URLSearchParams({ divCode, kind })
-  if (search) p.set('search', search)
-  return apiHelpers.get<AddressOption[]>(`${BASE}/addresses?${p}`)
-}
-
 export const getGstTaxCodes = (search?: string) => {
   const p = new URLSearchParams()
   if (search) p.set('search', search)
@@ -66,13 +58,14 @@ export const getGstTaxCodes = (search?: string) => {
 }
 
 // ── PR Picker — eligible approved PR lines (BR-02 filtered server-side) ───────
+// Order Type is NOT a filter here — all eligible approved PR lines are returned
+// regardless of the PO's order type; only free-text search + paging are sent.
 
 export const getEligiblePrLines = (
   divCode: string,
-  params?: { orderType?: string; search?: string; page?: number; pageSize?: number },
+  params?: { search?: string; page?: number; pageSize?: number },
 ) => {
   const p = new URLSearchParams({ divCode })
-  if (params?.orderType) p.set('orderType', params.orderType)
   if (params?.search)    p.set('search',    params.search)
   if (params?.page)      p.set('page',      String(params.page))
   if (params?.pageSize)  p.set('pageSize',  String(params.pageSize))
@@ -114,7 +107,7 @@ export const getById = (divCode: string, poNo: number, poDate: string) =>
 export const getList = (divCode: string, fDate: string, lDate: string, params?: {
   supplier?: string; search?: string; page?: number; pageSize?: number
 }) => {
-  const p = new URLSearchParams({ divCode, fDate, lDate })
+  const p = new URLSearchParams({ divCode, fDate, lDate,mode: 'FIND' })
   if (params?.supplier) p.set('supplier', params.supplier)
   if (params?.search)   p.set('search',   params.search)
   if (params?.page)     p.set('page',     String(params.page))
@@ -134,11 +127,6 @@ export const addPo = (divCode: string, fDate: string, lDate: string, request: Ad
 // GRN guard (BR-03) is enforced server-side → expect HTTP 409 if any GRN exists.
 export const deletePo = (divCode: string, request: DeletePoRequest) =>
   apiHelpers.del<void>(`${BASE}?divCode=${divCode}`, { data: request })
-
-// ── Permissions (deny-by-default — D-12 / R-09) ──────────────────────────────
-
-export const getUserPermissions = (divCode: string) =>
-  apiHelpers.get<PoUserPermissions>(`${BASE}/permissions?divCode=${divCode}`)
 
 // ── Print (approval-gated — FSD §5.18; QuestPDF backend, out of scope here) ───
 

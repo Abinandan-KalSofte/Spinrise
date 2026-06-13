@@ -55,6 +55,8 @@ const Row = memo(function Row({
   return (
     <tr
       onClick={onSelect}
+      onDoubleClick={() => { onSelect(); onOpenGst() }}
+      title="Double-click to open GST & Tax details (or select the row and press F5)"
       style={{
         background: selected ? '#EBF3FF' : isDelete ? '#fff7f7' : idx % 2 === 0 ? '#ffffff' : '#F0F5FF',
         cursor: 'pointer',
@@ -69,7 +71,9 @@ const Row = memo(function Row({
       <td style={{ ...TD_TXT, width: 80, fontFamily: 'monospace' }}>{line.prDate || '—'}</td>
 
       {/* Rate — editable in ADD (4dp, BR-07) */}
-      <td style={{ ...TD_TXT, width: 88, textAlign: 'right' }} onClick={(e) => isAdd && e.stopPropagation()}>
+      <td style={{ ...TD_TXT, width: 88, textAlign: 'right' }}
+        onClick={(e) => isAdd && e.stopPropagation()}
+        onDoubleClick={(e) => isAdd && e.stopPropagation()}>
         {isAdd ? (
           <InputNumber
             size="small" min={0} precision={4} controls={false} value={line.rate}
@@ -83,7 +87,9 @@ const Row = memo(function Row({
       </td>
 
       {/* Quantity — editable in ADD (3dp, BR-05/06) */}
-      <td style={{ ...TD_TXT, width: 82, textAlign: 'right' }} onClick={(e) => isAdd && e.stopPropagation()}>
+      <td style={{ ...TD_TXT, width: 82, textAlign: 'right' }}
+        onClick={(e) => isAdd && e.stopPropagation()}
+        onDoubleClick={(e) => isAdd && e.stopPropagation()}>
         {isAdd ? (
           <Tooltip
             title={line.qty > line.balanceQty ? `Exceeds PR balance (${fmt3(line.balanceQty)})` : ''}
@@ -137,7 +143,7 @@ const Row = memo(function Row({
 
       {/* Delete Reason — DELETE mode only (BR-04) */}
       {isDelete && (
-        <td style={{ ...TD, minWidth: 160 }} onClick={(e) => e.stopPropagation()}>
+        <td style={{ ...TD, minWidth: 160 }} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
           <Input
             size="small" value={line.deleteReason} placeholder="Delete reason…"
             status={!line.deleteReason.trim() ? 'error' : undefined}

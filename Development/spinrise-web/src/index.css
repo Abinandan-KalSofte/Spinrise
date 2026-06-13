@@ -278,12 +278,6 @@ body {
   display: none !important;
 }
 
-input[type="text" i],
-input[type="number" i] {
-  cursor: not-allowed;
-}
-
-
 .login-card__left-company {
   font-size:      17px;
   font-weight:    700;

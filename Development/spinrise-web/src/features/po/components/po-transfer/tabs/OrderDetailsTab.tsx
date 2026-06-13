@@ -22,12 +22,12 @@ interface OrderDetailsTabProps {
   suppliers:        SupplierOption[]
   formTypes:        FormTypeOption[]
   onSupplierChange: (s: SupplierOption | null) => void
-  onSupplierSearch: (q: string) => void
+  onSupplierOpen:   () => void
 }
 
 export function OrderDetailsTab({
   mode, disabled, poNo, orderValue, orderTypes, suppliers, formTypes,
-  onSupplierChange, onSupplierSearch,
+  onSupplierChange, onSupplierOpen,
 }: OrderDetailsTabProps) {
   const form = Form.useFormInstance()
 
@@ -68,8 +68,8 @@ export function OrderDetailsTab({
           <Form.Item name="supplier" label="Supplier" required
             rules={[{ required: true, message: 'Supplier is required' }]} style={mb}>
             <Select
-              showSearch filterOption={false} placeholder="Search supplier code or name…" disabled={disabled}
-              onSearch={onSupplierSearch}
+              showSearch optionFilterProp="label" placeholder="Select supplier — type to filter…" disabled={disabled}
+              onDropdownVisibleChange={(open) => { if (open) onSupplierOpen() }}
               onChange={(v) => onSupplierChange(suppliers.find((s) => s.slCode === v) ?? null)}
               options={suppliers.map((s) => ({ value: s.slCode, label: `${s.slCode} — ${s.slName}` }))}
             />

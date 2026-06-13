@@ -16,12 +16,11 @@ const fmt3 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 3
 interface PrPickerModalProps {
   open:      boolean
   divCode:   string
-  orderType?: string
   onLoad:    (lines: EligiblePrLine[]) => void
   onCancel:  () => void
 }
 
-export function PrPickerModal({ open, divCode, orderType, onLoad, onCancel }: PrPickerModalProps) {
+export function PrPickerModal({ open, divCode, onLoad, onCancel }: PrPickerModalProps) {
   const [rows,     setRows]     = useState<EligiblePrLine[]>([])
   const [loading,  setLoading]  = useState(false)
   const [search,   setSearch]   = useState('')
@@ -35,13 +34,12 @@ export function PrPickerModal({ open, divCode, orderType, onLoad, onCancel }: Pr
     setLoading(true)
     try {
       const result = await poApi.getEligiblePrLines(divCode, {
-        orderType: orderType || undefined,
-        search:    searchTerm.trim() || undefined,
+        search: searchTerm.trim() || undefined,
       })
       setRows(result)
     } catch { setRows([]) }
     finally { setLoading(false) }
-  }, [divCode, orderType])
+  }, [divCode])
 
   useEffect(() => {
     if (!open) return

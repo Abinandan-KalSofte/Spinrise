@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
-import { App, Alert, Form, Skeleton, Spin } from 'antd'
+import { useEffect, useRef, useState } from 'react'
+import { Alert, ConfigProvider, Form, Skeleton, Spin } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { usePageTitle } from '@/shared/hooks/usePageTitle'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import { getErrorMessage } from '@/shared/lib/errorHandler'
+import { notificationService } from '@/shared/lib/notification'
 import { usePoTransferForm } from '../hooks/usePoTransferForm'
 import * as poApi from '../api/poTransferApi'
 import { PoDocBand } from '../components/po-transfer/PoDocBand'
@@ -14,8 +15,10 @@ import { PoLineGrid } from '../components/po-transfer/PoLineGrid'
 import { DeliveryScheduleGrid } from '../components/po-transfer/DeliveryScheduleGrid'
 import { PoKpiStrip } from '../components/po-transfer/PoKpiStrip'
 import { PrPickerModal } from '../components/PrPickerModal'
+import PoListModal from '../components/PoListModal'
 import { GstTaxDetailsModal } from '../components/GstTaxDetailsModal'
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal'
+import { PrPrintPreviewModal } from '@/features/pr/components/PrPrintPreviewModal'
 
 // ── PR to PO Transfer page ───────────────────────────────────────────────────
 // Composes the orchestration hook with all presentation components inside the
@@ -25,21 +28,27 @@ import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal'
 
 export default function PrToPoTransferPage() {
   usePageTitle('PR to PO Transfer')
-  const { message } = App.useApp()
 
   const f = usePoTransferForm()
 
   const [prPickerOpen, setPrPickerOpen] = useState(false)
+  const [findOpen,     setFindOpen]     = useState(false)
   const [bodyTab,      setBodyTab]      = useState<'lines' | 'delivery'>('lines')
   const [deleteReason, setDeleteReason] = useState('')
-  const [printLoading, setPrintLoading] = useState(false)
 
-  // Load the latest PO on mount (VIEW).
+  // Print preview (modal — mirrors the PR module; no new browser tab).
+  const [printOpen,     setPrintOpen]     = useState(false)
+  const [printLoading,  setPrintLoading]  = useState(false)
+  const [printBlobUrl,  setPrintBlobUrl]  = useState<string | null>(null)
+  const [printFilename, setPrintFilename] = useState('')
+
+  // Load the latest PO + the navigation index on mount (VIEW).
   useEffect(() => {
     void f.loadLastRecord()
+    void f.loadNavList()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { yfDate } = getFYBounds(f.processingDate ? new Date(f.processingDate) : undefined)
+  const { yfDate, ylDate } = getFYBounds(f.processingDate ? new Date(f.processingDate) : undefined)
   const fyYear = dayjs(yfDate).year()
   const fy = `${fyYear}-${String(fyYear + 1).slice(2)}`
 
@@ -48,21 +57,32 @@ export default function PrToPoTransferPage() {
 
   // ── Toolbar actions ────────────────────────────────────────────────────────
   const handleNew    = () => { setBodyTab('lines'); void f.enterAddMode() }
+  const handleFind   = () => setFindOpen(true)
   const handleDelete = () => { setDeleteReason(''); f.enterDeleteMode() }
   const handleCancel = () => { setDeleteReason(''); setBodyTab('lines'); f.cancelMode() }
   const handleSave   = () => { if (f.mode === 'DELETE') f.handleDeleteClick(); else void f.doSave() }
 
   const handlePrint = async () => {
     if (!f.currentPo?.poNo) return
+    setPrintOpen(true)
     setPrintLoading(true)
+    setPrintBlobUrl(null)
     try {
-      const { blobUrl } = await poApi.getPrintBlobUrl(f.divCode, f.currentPo.poNo, f.currentPo.poDate)
-      window.open(blobUrl, '_blank', 'noopener')
+      const { blobUrl, filename } = await poApi.getPrintBlobUrl(f.divCode, f.currentPo.poNo, f.currentPo.poDate)
+      setPrintBlobUrl(blobUrl)
+      setPrintFilename(filename)
     } catch (err) {
-      void message.error(getErrorMessage(err))
+      notificationService.error('Failed to Print', getErrorMessage(err))
+      setPrintOpen(false)
     } finally {
       setPrintLoading(false)
     }
+  }
+
+  const closePrint = () => {
+    setPrintOpen(false)
+    if (printBlobUrl) URL.revokeObjectURL(printBlobUrl)
+    setPrintBlobUrl(null)
   }
 
   // Header-level default delete reason → auto-propagate to all lines (BR-04).
@@ -70,6 +90,50 @@ export default function PrToPoTransferPage() {
     setDeleteReason(reason)
     f.setDefaultDeleteReason(reason)
   }
+
+  // F5 — GST & Tax details for the selected line (also triggered by row dbl-click).
+  const openGstForSelected = () => {
+    if (f.selectedLineNo == null) {
+      notificationService.info('No Line Selected', 'Select a line item first, then press F5 for GST details.')
+      return
+    }
+    f.openGstModal(f.selectedLineNo)
+  }
+
+  // ── Keyboard shortcuts (F1–F8) ──────────────────────────────────────────────
+  // Function keys are global action keys (not typed characters), so they fire
+  // from anywhere in the form — including inside inputs — which is intended for
+  // an ERP data-entry screen. preventDefault stops browser defaults (F1 help,
+  // F3 find, F5 refresh, F7 caret browsing). Gating mirrors the toolbar rules.
+  // A "latest ref" keeps the handler current (no stale closures) without
+  // re-registering the listener; the ref is updated in an effect, not in render.
+  const shortcutRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  useEffect(() => {
+    shortcutRef.current = (e: KeyboardEvent) => {
+      const isView    = f.mode === 'VIEW'
+      const busy      = f.pageBusy || printLoading
+      const hasRecord = !!f.currentPo?.poNo
+      switch (e.key) {
+        case 'F1': e.preventDefault(); if (isView && !busy) handleNew(); break
+        case 'F2': e.preventDefault(); if (isView && !busy) handleFind(); break
+        case 'F3': e.preventDefault(); if (isView && !busy && hasRecord) handleDelete(); break
+        case 'F4': e.preventDefault(); if (!isView && !busy) handleSave(); break
+        case 'F5': e.preventDefault(); openGstForSelected(); break
+        case 'F6': e.preventDefault(); if (!isView && !busy) handleCancel(); break
+        case 'F7': e.preventDefault(); if (isView && !busy && hasRecord) void handlePrint(); break
+        case 'F8':
+          e.preventDefault()
+          if (f.deleteModalOpen) void f.handleDeleteConfirm(deleteReason)
+          else if (f.mode === 'DELETE' && !busy) f.handleDeleteClick()
+          break
+      }
+    }
+  })
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => shortcutRef.current(e)
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const gstLine = f.lines.find((l) => l.lineNo === f.gstLineNo) ?? null
 
@@ -87,15 +151,20 @@ export default function PrToPoTransferPage() {
 
       <PoToolbar
         mode={f.mode}
-        canAdd={f.permissions.canAdd}
-        canDelete={f.permissions.canDelete}
-        canPrint={f.permissions.canPrint}
         busy={f.pageBusy || printLoading}
+        hasRecord={!!f.currentPo?.poNo}
+        canPrev={f.canPrev}
+        canNext={f.canNext}
         onNew={handleNew}
+        onFind={handleFind}
         onDelete={handleDelete}
         onSave={handleSave}
         onCancel={handleCancel}
         onPrint={() => void handlePrint()}
+        onFirst={f.goFirst}
+        onPrev={f.goPrev}
+        onNext={f.goNext}
+        onLast={f.goLast}
       />
 
       {/* Status / mode banners */}
@@ -132,23 +201,27 @@ export default function PrToPoTransferPage() {
         </div>
       )}
 
-      {/* Header form — 7 tabs */}
+      {/* Header form — 7 tabs. In VIEW/DELETE the fields are disabled; the
+          ConfigProvider token darkens disabled text so saved values stay
+          clearly readable (UX-5) while remaining non-editable. */}
       <Skeleton active loading={!f.lookupsLoaded && !f.lookupsError} paragraph={{ rows: 3 }} style={{ padding: 16 }}>
-        <Form form={f.headerForm} layout="vertical" component={false}>
-          <PoHeaderTabs
-            mode={f.mode}
-            poNo={f.currentPo?.poNo ?? null}
-            orderValue={f.totals.orderValue}
-            currentPo={f.currentPo}
-            orderTypes={f.orderTypes}
-            suppliers={f.suppliers}
-            carriers={f.carriers}
-            formTypes={f.formTypes}
-            banks={f.banks}
-            onSupplierChange={(s) => void f.onSupplierChange(s)}
-            onSupplierSearch={(q) => void f.loadSuppliers(q)}
-          />
-        </Form>
+        <ConfigProvider theme={{ token: { colorTextDisabled: 'rgba(0,0,0,0.82)' } }}>
+          <Form form={f.headerForm} layout="vertical" component={false}>
+            <PoHeaderTabs
+              mode={f.mode}
+              poNo={f.currentPo?.poNo ?? null}
+              orderValue={f.totals.orderValue}
+              currentPo={f.currentPo}
+              orderTypes={f.orderTypes}
+              suppliers={f.suppliers}
+              carriers={f.carriers}
+              formTypes={f.formTypes}
+              banks={f.banks}
+              onSupplierChange={(s) => void f.onSupplierChange(s)}
+              onSupplierOpen={() => void f.loadSuppliers()}
+            />
+          </Form>
+        </ConfigProvider>
       </Skeleton>
 
       {/* PR selection bar (ADD only) */}
@@ -219,7 +292,6 @@ export default function PrToPoTransferPage() {
       <PrPickerModal
         open={prPickerOpen}
         divCode={f.divCode}
-        orderType={f.headerForm.getFieldValue('orderType')}
         onLoad={(lines) => { f.addPrLines(lines); setPrPickerOpen(false) }}
         onCancel={() => setPrPickerOpen(false)}
       />
@@ -242,6 +314,22 @@ export default function PrToPoTransferPage() {
         deleting={f.deleting}
         onConfirm={() => void f.handleDeleteConfirm(deleteReason)}
         onCancel={() => f.setDeleteModalOpen(false)}
+      />
+
+      <PoListModal
+        open={findOpen}
+        fDate={yfDate}
+        lDate={ylDate}
+        onSelect={(po) => { void f.loadRecord(po.poNo, po.poDate) }}
+        onClose={() => setFindOpen(false)}
+      />
+
+      <PrPrintPreviewModal
+        open={printOpen}
+        blobUrl={printBlobUrl}
+        filename={printFilename}
+        loading={printLoading}
+        onClose={closePrint}
       />
     </div>
   )
