@@ -263,6 +263,14 @@ public class PoEntryRepository : IPoEntryRepository
         }
     }
 
+    public async Task UpdatePrintFlagAsync(string divCode, decimal poNo, DateOnly poDate)
+    {
+        await _uow.Connection.ExecuteAsync(
+            StoredProcedures.Po.SetPrintFlag,
+            new { DivCode = divCode, PoNo = poNo, PoDate = poDate },
+            commandType: CommandType.StoredProcedure);
+    }
+
     public async Task<PoPrintDto?> GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate)
     {
         using var multi = await _uow.Connection.QueryMultipleAsync(

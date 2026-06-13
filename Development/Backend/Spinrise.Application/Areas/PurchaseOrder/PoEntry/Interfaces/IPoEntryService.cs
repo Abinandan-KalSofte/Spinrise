@@ -21,4 +21,5 @@ public interface IPoEntryService
     Task<PoSaveResultDto>                 AddAsync(string divCode, AddPoRequest request, string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate);
     Task                                  DeleteAsync(string divCode, DeletePoRequest request, string userId, string? hostName, string? ipAddress);
     Task<PoPrintDto?>                     GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate);
+    Task                                  UpdatePrintFlagAsync(string divCode, decimal poNo, DateOnly poDate);
 }

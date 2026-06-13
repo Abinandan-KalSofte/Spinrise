@@ -1,0 +1,396 @@
+{
+  "info": {
+    "name": "Spinrise — PO Transfer Module",
+    "description": "All 17 PO module endpoints for the PR→PO Transfer screen. Covers FSD §3 endpoints (PR_TO_PO_TRANSFER_BACKEND_HANDOVER.md). Run '0. Auth / Login' first — the test script saves the bearer token automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "spinrise-po-transfer-v1"
+  },
+  "variable": [
+    { "key": "baseUrl",  "value": "http://localhost:5000",  "type": "string" },
+    { "key": "divCode",  "value": "S",                     "type": "string" },
+    { "key": "fDate",    "value": "2025-04-01",             "type": "string" },
+    { "key": "lDate",    "value": "2026-03-31",             "type": "string" },
+    { "key": "token",    "value": "",                       "type": "string" },
+    { "key": "poNo",     "value": "1",                      "type": "string" },
+    { "key": "poDate",   "value": "2026-06-13",             "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "0. Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"divCode\": \"{{divCode}}\",\n  \"userName\": \"ADMIN\",\n  \"password\": \"ADMIN\",\n  \"dbName\": \"JAT\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.success && json.data && json.data.token) {",
+                  "    pm.collectionVariables.set('token', json.data.token);",
+                  "    pm.test('Login OK — token saved', () => pm.response.to.have.status(200));",
+                  "} else {",
+                  "    pm.test('Login FAILED', () => { throw new Error('No token in response'); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Screen Init",
+      "item": [
+        {
+          "name": "GET Parameters",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/parameters?divCode={{divCode}}",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","parameters"],
+              "query": [{ "key": "divCode", "value": "{{divCode}}" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('success=true', () => pm.expect(pm.response.json().success).to.be.true);",
+            "pm.test('poPrintApp present', () => pm.expect(pm.response.json().data).to.have.property('poPrintApp'));"
+          ]}}]
+        },
+        {
+          "name": "GET Pre-Add Checks",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/pre-add-checks?divCode={{divCode}}",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","pre-add-checks"],
+              "query": [{ "key": "divCode", "value": "{{divCode}}" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('approvedPrLinesExist present', () => pm.expect(pm.response.json().data).to.have.property('approvedPrLinesExist'));"
+          ]}}]
+        },
+        {
+          "name": "GET User Permissions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/permissions?divCode={{divCode}}",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","permissions"],
+              "query": [{ "key": "divCode", "value": "{{divCode}}" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('canAdd present', () => pm.expect(pm.response.json().data).to.have.property('canAdd'));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "2. Lookups",
+      "item": [
+        {
+          "name": "GET Suppliers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/suppliers?divCode={{divCode}}&search=",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","suppliers"],
+              "query": [
+                { "key": "divCode", "value": "{{divCode}}" },
+                { "key": "search",  "value": "" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('returns array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "GET Order Types",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/order-types?activeOnly=true",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","order-types"],
+              "query": [{ "key": "activeOnly", "value": "true" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('returns array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "GET Carriers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/carriers?search=",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","carriers"],
+              "query": [{ "key": "search", "value": "" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('returns array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "GET Banks",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/banks?search=",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","banks"],
+              "query": [{ "key": "search", "value": "" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('returns array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "GET Form Types",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/form-types",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","form-types"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('returns array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "GET GST Tax Codes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/gst-tax-codes?search=",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","gst-tax-codes"],
+              "query": [{ "key": "search", "value": "" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('returns array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "GET GST Routing",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/gst-routing?divCode={{divCode}}&supplier=S001",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","gst-routing"],
+              "query": [
+                { "key": "divCode",  "value": "{{divCode}}" },
+                { "key": "supplier", "value": "S001" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('route present', () => pm.expect(pm.response.json().data).to.have.property('route'));"
+          ]}}]
+        },
+        {
+          "name": "GET Addresses (delivery/billing)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/addresses?divCode={{divCode}}&kind=delivery&search=",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","addresses"],
+              "query": [
+                { "key": "divCode", "value": "{{divCode}}" },
+                { "key": "kind",    "value": "delivery" },
+                { "key": "search",  "value": "" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "3. Eligible PR Lines",
+      "item": [
+        {
+          "name": "GET Eligible PR Lines",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/eligible-pr-lines?divCode={{divCode}}&orderType=&search=&page=1&pageSize=50",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","eligible-pr-lines"],
+              "query": [
+                { "key": "divCode",   "value": "{{divCode}}" },
+                { "key": "orderType", "value": "" },
+                { "key": "search",    "value": "" },
+                { "key": "page",      "value": "1" },
+                { "key": "pageSize",  "value": "50" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('returns array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "4. PO Record",
+      "item": [
+        {
+          "name": "GET Last PO",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/last?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","last"],
+              "query": [
+                { "key": "divCode", "value": "{{divCode}}" },
+                { "key": "fDate",   "value": "{{fDate}}" },
+                { "key": "lDate",   "value": "{{lDate}}" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "var data = pm.response.json().data;",
+            "if (data && data.poNo) {",
+            "    pm.collectionVariables.set('poNo', data.poNo);",
+            "    pm.collectionVariables.set('poDate', data.poDate);",
+            "    pm.test('poNo saved', () => pm.expect(data.poNo).to.be.a('number'));",
+            "} else {",
+            "    pm.test('No PO in FY (empty screen — expected if no data)', () => true);",
+            "}"
+          ]}}]
+        },
+        {
+          "name": "GET PO By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/{{poNo}}?divCode={{divCode}}&poDate={{poDate}}",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","{{poNo}}"],
+              "query": [
+                { "key": "divCode", "value": "{{divCode}}" },
+                { "key": "poDate",  "value": "{{poDate}}" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('data.poNo matches', () => pm.expect(pm.response.json().data).to.have.property('poNo'));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "5. Save / Delete",
+      "item": [
+        {
+          "name": "POST Add PO",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po"],
+              "query": [
+                { "key": "divCode", "value": "{{divCode}}" },
+                { "key": "fDate",   "value": "{{fDate}}" },
+                { "key": "lDate",   "value": "{{lDate}}" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"poDate\": \"2026-06-13\",\n  \"header\": {\n    \"poDate\": \"2026-06-13\",\n    \"orderType\": \"LOC\",\n    \"orderTypeDesc\": \"Local Purchase\",\n    \"supplier\": \"S001\",\n    \"supplierName\": \"Test Supplier\",\n    \"currency\": \"INR\",\n    \"currRate\": 1,\n    \"carrier\": \"BY HAND\",\n    \"gstin\": \"\",\n    \"gstState\": \"\",\n    \"inspect\": \"NO\",\n    \"formType\": \"\",\n    \"refNo\": \"\",\n    \"refDate\": null,\n    \"remarks\": \"Test PO from Postman\",\n    \"cgstPer\": 0, \"sgstPer\": 0, \"igstPer\": 0, \"tcsPer\": 0,\n    \"discPer\": 0, \"cessPer\": 0, \"aedPer\": 0,\n    \"freightAmt\": 0, \"packPer\": 0, \"insurPer\": 0,\n    \"surchargePer\": 0, \"addTaxPer\": 0,\n    \"fileNo\": \"\", \"fcaFob\": 0,\n    \"freightType\": \"PAID\",\n    \"discApp\": \"BEFORE\", \"packApp\": \"BEFORE\", \"cessApp\": \"BEFORE\",\n    \"payMode\": \"DIRECT\",\n    \"directInstr\": \"\", \"bankCode\": \"\", \"paymentTerms\": \"\",\n    \"advPer\": 0, \"advAmt\": 0,\n    \"modeOfPayment\": \"\", \"payRef\": \"\", \"payRefDate\": null,\n    \"chequeNo\": \"\", \"chequeDate\": null,\n    \"creditDays\": 30,\n    \"deliveryDate\": null,\n    \"deliveryLocation\": \"Stores\",\n    \"billingAddress\": \"Head Office\",\n    \"specialInstr\": \"\",\n    \"despatch\": \"\",\n    \"purpose\": \"\",\n    \"otherLevies\": \"\",\n    \"pricingTerms\": \"\",\n    \"packForwarding\": \"\",\n    \"insurance\": \"\",\n    \"freight\": \"\"\n  },\n  \"lines\": [\n    {\n      \"prNo\": 1,\n      \"prSno\": 1,\n      \"itemCode\": \"ITEM001\",\n      \"rate\": 100.0000,\n      \"qty\": 10.000,\n      \"taxCode\": \"GST5\",\n      \"hsnCode\": \"5201\",\n      \"cgstPer\": 2.5, \"sgstPer\": 2.5, \"igstPer\": 0, \"tcsPer\": 0,\n      \"cgstCode\": \"CGST2.5\", \"sgstCode\": \"SGST2.5\", \"igstCode\": \"\",\n      \"route\": \"LOCAL\",\n      \"slots\": [\n        { \"slotNo\": 1, \"shDate\": \"2026-07-01\", \"qty\": 10.000, \"remarks\": \"\" }\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 or 201', () => pm.expect(pm.response.status).to.be.oneOf(['200 OK', '201 Created']));",
+            "var data = pm.response.json().data;",
+            "if (data && data.poNo) {",
+            "    pm.collectionVariables.set('poNo', data.poNo);",
+            "    pm.collectionVariables.set('poDate', data.poDate);",
+            "    pm.test('poNo returned', () => pm.expect(data.poNo).to.be.a('number'));",
+            "}"
+          ]}}]
+        },
+        {
+          "name": "DELETE PO",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po?divCode={{divCode}}",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po"],
+              "query": [{ "key": "divCode", "value": "{{divCode}}" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"poNo\": {{poNo}},\n  \"poDate\": \"{{poDate}}\",\n  \"deleteMode\": \"FULL\",\n  \"defaultReason\": \"Test delete from Postman\",\n  \"lineReasons\": [\n    { \"prSno\": 1, \"deleteReason\": \"Test delete from Postman\" }\n  ]\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('success=true', () => pm.expect(pm.response.json().success).to.be.true);"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "6. Print",
+      "item": [
+        {
+          "name": "GET Print PDF",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/po/{{poNo}}/print?divCode={{divCode}}&poDate={{poDate}}",
+              "host": ["{{baseUrl}}"], "path": ["api","v1","po","{{poNo}}","print"],
+              "query": [
+                { "key": "divCode", "value": "{{divCode}}" },
+                { "key": "poDate",  "value": "{{poDate}}" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK or 403 (approval gate)', () => {",
+            "    pm.expect(pm.response.code).to.be.oneOf([200, 403, 404]);",
+            "});",
+            "if (pm.response.code === 200) {",
+            "    pm.test('content-type is PDF', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf'));",
+            "}"
+          ]}}]
+        }
+      ]
+    }
+  ]
+}

@@ -4540,7 +4540,7 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS Supplier,
         RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
         RTRIM(ISNULL(h.cust_gstinno, ''))                           AS Gstin,
-        CAST(ISNULL(h.cust_gststcode, 0) AS VARCHAR(10))            AS GstState,
+        CAST(ISNULL(h.cust_gststcode, 0) AS VARCHAR(50))            AS GstState,
         RTRIM(ISNULL(h.INSPECT, 'NO'))                              AS Inspect,
         ISNULL(h.roff, 0)                                           AS RoundOff,
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
@@ -4745,7 +4745,7 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS Supplier,
         RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
         RTRIM(ISNULL(h.cust_gstinno, ''))                           AS Gstin,
-        CAST(ISNULL(h.cust_gststcode, 0) AS VARCHAR(10))            AS GstState,
+        CAST(ISNULL(h.cust_gststcode, 0) AS VARCHAR(50))            AS GstState,
         RTRIM(ISNULL(h.INSPECT, 'NO'))                              AS Inspect,
         ISNULL(h.roff, 0)                                           AS RoundOff,
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
@@ -5016,4 +5016,546 @@ END;
 GO
 
 
+
+
+-- ============================================================
+-- ksp_PO_SaveEntry
+-- Converts approved PR lines into a Purchase Order (ADD only).
+-- Atomic transaction: header + lines + delivery slots + PR update.
+-- Column names verified against live JAT schema via ksp_PO_GetLastPO.
+-- JSON keys are camelCase (C# JsonNamingPolicy.CamelCase).
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
+(
+    -- Header
+    @DivCode          VARCHAR(2),
+    @PoDate           DATE,
+    @OrderType        VARCHAR(5),
+    @Supplier         VARCHAR(10),
+    @Currency         VARCHAR(3),
+    @CurrRate         NUMERIC(13,4)  = 1,
+    @Carrier          VARCHAR(10),
+    @Inspect          VARCHAR(5)     = NULL,
+    @FormType         VARCHAR(10)    = NULL,
+    @RefNo            VARCHAR(30)    = NULL,
+    @RefDate          DATE           = NULL,
+    @Remarks          VARCHAR(500)   = NULL,
+    -- Tax / Discount
+    @CgstPer          NUMERIC(10,2)  = 0,
+    @SgstPer          NUMERIC(10,2)  = 0,
+    @IgstPer          NUMERIC(10,2)  = 0,
+    @TcsPer           NUMERIC(10,2)  = 0,
+    @DiscPer          NUMERIC(10,2)  = 0,
+    @CessPer          NUMERIC(10,2)  = 0,
+    @AedPer           NUMERIC(10,2)  = 0,    -- legacy pass-through (D-11)
+    @FreightAmt       NUMERIC(13,2)  = 0,
+    @PackPer          NUMERIC(10,2)  = 0,
+    @InsurPer         NUMERIC(10,2)  = 0,
+    @SurchargePer     NUMERIC(10,2)  = 0,
+    @AddTaxPer        NUMERIC(10,2)  = 0,
+    @FileNo           VARCHAR(20)    = NULL,
+    @FcaFob           NUMERIC(13,2)  = 0,
+    @FreightType      VARCHAR(10)    = 'PAID',
+    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- accepted, not yet stored
+    @PackApp          VARCHAR(10)    = 'BEFORE',
+    @CessApp          VARCHAR(10)    = 'BEFORE',
+    -- Payment
+    @PayMode          VARCHAR(10)    = 'DIRECT',
+    @DirectInstr      VARCHAR(200)   = NULL,
+    @BankCode         VARCHAR(10)    = NULL,
+    @PaymentTerms     VARCHAR(100)   = NULL,
+    @AdvPer           NUMERIC(10,2)  = 0,
+    @AdvAmt           NUMERIC(13,2)  = 0,
+    @ModeOfPayment    VARCHAR(20)    = NULL,
+    @PayRef           VARCHAR(50)    = NULL,   -- no column in PO_ORDH; accepted, not stored
+    @PayRefDate       DATE           = NULL,   -- no column in PO_ORDH; accepted, not stored
+    @ChequeNo         VARCHAR(50)    = NULL,
+    @ChequeDate       DATE           = NULL,
+    -- Instructions
+    @CreditDays       INT            = 0,
+    @DeliveryDate     DATE           = NULL,
+    @DeliveryLocation VARCHAR(200)   = NULL,
+    @BillingAddress   VARCHAR(200)   = NULL,
+    @SpecialInstr     VARCHAR(500)   = NULL,
+    @Despatch         VARCHAR(200)   = NULL,
+    @Purpose          VARCHAR(500)   = NULL,
+    @OtherLevies      VARCHAR(200)   = NULL,   -- no confirmed column; accepted, not stored
+    @PricingTerms     VARCHAR(100)   = NULL,
+    @PackForwarding   VARCHAR(200)   = NULL,
+    @Insurance        VARCHAR(200)   = NULL,
+    @Freight          VARCHAR(200)   = NULL,
+    -- Lines (camelCase JSON; each element has a nested $.slots array)
+    @LinesJson        NVARCHAR(MAX),
+    -- Financial year bounds
+    @FDate            DATE,
+    @LDate            DATE,
+    -- Audit
+    @UserId           VARCHAR(50),
+    @HostName         VARCHAR(100)   = NULL,
+    @IpAddress        VARCHAR(50)    = NULL,
+    -- Output
+    @PoNo             NUMERIC(10,0)  OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- ── 0. FY date guard ─────────────────────────────────────────────────────
+        IF @PoDate < @FDate OR @PoDate > @LDate
+            RAISERROR('PO Date is outside the open financial year. Please select a date within the current financial year.', 16, 1);
+
+        -- ── 1. Header mandatory fields (BR-11, BR-12, BR-13, BR-14) ─────────────
+        IF RTRIM(ISNULL(@OrderType, '')) = ''
+            RAISERROR('Purchase Type Cannot be empty', 16, 1);
+        IF RTRIM(ISNULL(@Supplier, '')) = ''
+            RAISERROR('Party Cannot be empty', 16, 1);
+        IF RTRIM(ISNULL(@Currency, '')) = ''
+            RAISERROR('Currency Cannot be empty', 16, 1);
+        IF RTRIM(ISNULL(@Carrier, '')) = ''
+            RAISERROR('Carrier Cannot be empty', 16, 1);
+
+        -- ── 2. BR-15: Bank mode requires BankCode + ChequeNo; HO requires PricingTerms
+        IF UPPER(RTRIM(ISNULL(@PayMode, ''))) = 'BANK'
+        BEGIN
+            IF RTRIM(ISNULL(@BankCode, '')) = ''
+                RAISERROR('Bank Code Cannot be empty', 16, 1);
+            IF RTRIM(ISNULL(@ChequeNo, '')) = ''
+                RAISERROR('Cheque No. Cannot be empty', 16, 1);
+        END
+
+        IF UPPER(RTRIM(ISNULL(@OrderType, ''))) = 'HO'
+            AND RTRIM(ISNULL(@PricingTerms, '')) = ''
+            RAISERROR('Pricing Term Cannot be empty', 16, 1);
+
+        -- ── 3. BR-01: Backdate check ─────────────────────────────────────────────
+        DECLARE @BackDate CHAR(1) = 'Y';
+        SELECT TOP 1 @BackDate = ISNULL(UPPER(RTRIM(BACKDATE)), 'Y') FROM dbo.IN_PARA;
+
+        IF @BackDate <> 'Y'
+        BEGIN
+            DECLARE @MaxExPoDate DATE;
+            SELECT @MaxExPoDate = CAST(MAX(PORDDT) AS DATE)
+            FROM dbo.PO_ORDH
+            WHERE DIVCODE = @DivCode
+              AND ISNULL(CANFLG, '') = ''
+              AND CAST(PORDDT AS DATE) BETWEEN @FDate AND @LDate;
+
+            IF @MaxExPoDate IS NOT NULL AND @PoDate < @MaxExPoDate
+                RAISERROR('Date should be Equal to Current Date Or Max Purchase Order Date', 16, 1);
+        END
+
+        -- ── 4. Parse lines JSON into temp table (one row per line) ───────────────
+        --    SlotsJson captured AS JSON for the nested delivery OPENJSON pass.
+        SELECT
+            CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS NUMERIC(4,0)) AS PORDSNO,
+            j.PrNo,
+            j.PrSno,
+            RTRIM(j.ItemCode)           AS ItemCode,
+            j.Rate,
+            j.Qty,
+            RTRIM(ISNULL(j.TaxCode,'')) AS TaxCode,
+            RTRIM(ISNULL(j.HsnCode,'')) AS HsnCode,
+            ISNULL(j.CgstPer, 0)        AS CgstPer,
+            ISNULL(j.SgstPer, 0)        AS SgstPer,
+            ISNULL(j.IgstPer, 0)        AS IgstPer,
+            ISNULL(j.TcsPer,  0)        AS TcsPer,
+            RTRIM(ISNULL(j.CgstCode,'')) AS CgstCode,
+            RTRIM(ISNULL(j.SgstCode,'')) AS SgstCode,
+            RTRIM(ISNULL(j.IgstCode,'')) AS IgstCode,
+            j.SlotsJson
+        INTO #Lines
+        FROM OPENJSON(@LinesJson)
+        WITH (
+            PrNo      NUMERIC(6,0)  '$.prNo',
+            PrSno     NUMERIC(6,0)  '$.prSno',
+            ItemCode  VARCHAR(10)   '$.itemCode',
+            Rate      NUMERIC(13,4) '$.rate',
+            Qty       NUMERIC(12,3) '$.qty',
+            TaxCode   VARCHAR(10)   '$.taxCode',
+            HsnCode   VARCHAR(20)   '$.hsnCode',
+            CgstPer   NUMERIC(10,2) '$.cgstPer',
+            SgstPer   NUMERIC(10,2) '$.sgstPer',
+            IgstPer   NUMERIC(10,2) '$.igstPer',
+            TcsPer    NUMERIC(10,2) '$.tcsPer',
+            CgstCode  VARCHAR(10)   '$.cgstCode',
+            SgstCode  VARCHAR(10)   '$.sgstCode',
+            IgstCode  VARCHAR(10)   '$.igstCode',
+            SlotsJson NVARCHAR(MAX) '$.slots' AS JSON
+        ) j
+        WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
+
+        -- ── 5. Line-level validations ────────────────────────────────────────────
+        IF NOT EXISTS (SELECT 1 FROM #Lines)
+            RAISERROR('One item required to save the order', 16, 1);
+
+        -- BR-06: qty > 0
+        IF EXISTS (SELECT 1 FROM #Lines WHERE Qty <= 0)
+            RAISERROR('Order Quantity cannot be empty', 16, 1);
+
+        -- BR-07: rate > 0
+        IF EXISTS (SELECT 1 FROM #Lines WHERE Rate <= 0)
+            RAISERROR('Please Enter Order Rate', 16, 1);
+
+        -- BR-08: tax code not empty
+        IF EXISTS (SELECT 1 FROM #Lines WHERE TaxCode = '')
+            RAISERROR('TaxCode cannot be empty', 16, 1);
+
+        -- BR-10: HSN code not empty (check both JSON and item master)
+        DECLARE @HsnError NVARCHAR(500);
+        SELECT TOP 1 @HsnError =
+            'The HSN Code is not available for this Item : ' + RTRIM(ISNULL(i.itemname, l.ItemCode))
+        FROM #Lines l
+        INNER JOIN dbo.IN_ITEM i ON i.itemcode = l.ItemCode
+        WHERE l.HsnCode = '' AND RTRIM(ISNULL(i.hsncode, '')) = '';
+
+        IF @HsnError IS NOT NULL
+            RAISERROR(@HsnError, 16, 1);
+
+        -- BR-05: ordered qty <= PR balance (QTYREQD - QTYORD - enq_qty)
+        DECLARE @QtyError NVARCHAR(500);
+        SELECT TOP 1 @QtyError =
+            'The Ordered Quantity cannot be greater than ' +
+            LTRIM(STR(
+                ISNULL(prl.QTYREQD, 0) - ISNULL(prl.QTYORD, 0) - ISNULL(prl.enq_qty, 0),
+                12, 3))
+        FROM #Lines l
+        INNER JOIN dbo.PO_PRL prl
+            ON prl.divcode = @DivCode AND prl.prno = l.PrNo AND prl.prsno = l.PrSno
+        WHERE l.Qty > (ISNULL(prl.QTYREQD, 0) - ISNULL(prl.QTYORD, 0) - ISNULL(prl.enq_qty, 0));
+
+        IF @QtyError IS NOT NULL
+            RAISERROR(@QtyError, 16, 1);
+
+        -- ── 6. Allocate PO number (MAX+1, floored by PO_DOC_PARA.STDOCNO) ────────
+        DECLARE @StartDocNo NUMERIC(10,0) = 1;
+        SELECT @StartDocNo = ISNULL(STDOCNO, 1)
+        FROM dbo.PO_DOC_PARA
+        WHERE TC = 'PO';
+
+        SELECT @PoNo = ISNULL(MAX(PORDNO), 0) + 1
+        FROM dbo.PO_ORDH
+        WHERE DIVCODE = @DivCode
+          AND CAST(PORDDT AS DATE) BETWEEN @FDate AND @LDate;
+
+        IF @PoNo < @StartDocNo
+            SET @PoNo = @StartDocNo;
+
+        -- ── 7. Derived values ────────────────────────────────────────────────────
+        DECLARE @OrdVal NUMERIC(18,2);
+        SELECT @OrdVal = SUM(ROUND(Rate * Qty, 2)) FROM #Lines;
+
+        -- Supplier GSTIN + state code (authoritative from master, not client-sent)
+        DECLARE @SupGstin    VARCHAR(50)   = NULL;
+        DECLARE @SupGstState NUMERIC(10,0) = 0;
+        SELECT TOP 1
+            @SupGstin    = RTRIM(ISNULL(GSTINNO, '')),
+            @SupGstState = TRY_CAST(ISNULL(gststatecode, '0') AS NUMERIC(10,0))
+        FROM dbo.FA_SLMAS
+        WHERE RTRIM(slcode) = RTRIM(@Supplier);
+
+        DECLARE @CreatedDt VARCHAR(25) =
+            CONVERT(VARCHAR(10), GETDATE(), 103) + ' ' +
+            CONVERT(VARCHAR(8),  GETDATE(), 108) + ' ' +
+            RIGHT(CONVERT(VARCHAR(20), GETDATE(), 109), 2);
+
+        -- ── 8. INSERT PO_ORDH ────────────────────────────────────────────────────
+        INSERT INTO dbo.PO_ORDH
+        (
+            DIVCODE,   PORDNO,  PORDDT,  POGRP,    SLCODE,
+            CurrCode,  FCurRate, CARCODE, INSPECT,
+            Form_type, refno,   refDate, REMARKS,
+            DISPER, Cessper, FREIGHT, PCKPER, INSPER, SURPER, ADDTAXPER,
+            FILENO, FCACharg, FRTFLG,
+            PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS,
+            ADV_PER, ADV_AMT, advpaymenttype,
+            CHQNO, CHQDT, CRDDAYS,
+            Duedate, DEL_INS1, Billadd, SPL_INS, DEL_INS2,
+            Note, PriceTerm, RemarksPF, RemarksIns, RemarksFrt,
+            ORDVAL, roff,
+            cust_gstinno, cust_gststcode,
+            FirstlevelApp, Conflg, poprintflg,
+            createdby, createddt
+        )
+        VALUES
+        (
+            @DivCode, @PoNo, @PoDate, @OrderType, @Supplier,
+            @Currency,
+            ISNULL(@CurrRate, 1),
+            @Carrier,
+            CASE WHEN UPPER(RTRIM(ISNULL(@Inspect,''))) IN ('YES','Y') THEN 'YES' ELSE 'NO' END,
+            NULLIF(RTRIM(ISNULL(@FormType,'')),     ''),
+            NULLIF(RTRIM(ISNULL(@RefNo,'')),        ''),
+            @RefDate,
+            NULLIF(RTRIM(ISNULL(@Remarks,'')),      ''),
+            ISNULL(@DiscPer,      0),
+            ISNULL(@CessPer,      0),
+            ISNULL(@FreightAmt,   0),
+            ISNULL(@PackPer,      0),
+            ISNULL(@InsurPer,     0),
+            ISNULL(@SurchargePer, 0),
+            ISNULL(@AddTaxPer,    0),
+            NULLIF(RTRIM(ISNULL(@FileNo,'')),       ''),
+            ISNULL(@FcaFob, 0),
+            CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE '' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
+            NULLIF(RTRIM(ISNULL(@DirectInstr,'')),  ''),
+            NULLIF(RTRIM(ISNULL(@BankCode,'')),     ''),
+            NULLIF(RTRIM(ISNULL(@PaymentTerms,'')), ''),
+            ISNULL(@AdvPer, 0),
+            ISNULL(@AdvAmt, 0),
+            NULLIF(RTRIM(ISNULL(@ModeOfPayment,'')), ''),
+            NULLIF(RTRIM(ISNULL(@ChequeNo,'')),     ''),
+            @ChequeDate,
+            ISNULL(@CreditDays, 0),
+            @DeliveryDate,
+            NULLIF(RTRIM(ISNULL(@DeliveryLocation,'')), ''),
+            NULLIF(RTRIM(ISNULL(@BillingAddress,'')),   ''),
+            NULLIF(RTRIM(ISNULL(@SpecialInstr,'')),     ''),
+            NULLIF(RTRIM(ISNULL(@Despatch,'')),         ''),
+            NULLIF(RTRIM(ISNULL(@Purpose,'')),          ''),
+            NULLIF(RTRIM(ISNULL(@PricingTerms,'')),     ''),
+            NULLIF(RTRIM(ISNULL(@PackForwarding,'')),   ''),
+            NULLIF(RTRIM(ISNULL(@Insurance,'')),        ''),
+            NULLIF(RTRIM(ISNULL(@Freight,'')),          ''),
+            ISNULL(@OrdVal, 0),
+            0,                        -- roff: round-off (computed by client, stored as 0 here)
+            @SupGstin,
+            @SupGstState,
+            'N',                      -- FirstlevelApp: requires manual approval
+            'N',                      -- Conflg: unconfirmed until approval
+            'N',                      -- poprintflg
+            @UserId,
+            @CreatedDt
+        );
+
+        -- ── 9. INSERT PO_ORDL (one row per line) ─────────────────────────────────
+        --    taxper = CgstPer + SgstPer + IgstPer (total GST %)
+        --    Amounts computed from Rate × Qty × per% / 100
+        INSERT INTO dbo.PO_ORDL
+        (
+            DIVCODE,  PORDNO,  PORDDT, PORDSNO, POGRP,
+            ITEMCODE, PRNO,    PRDATE, PRSNO,
+            Rate,     ORDqty,  ORDVAL,
+            Tax_code, taxper,  Taxamt,
+            hsncode,
+            cgstper,  cgstamt,  cgst_tax_code,
+            sgstper,  sgstamt,  sgst_tax_code,
+            igstper,  igstamt,  igst_tax_code,
+            Tcs_per,  Tcs_amt
+        )
+        SELECT
+            @DivCode, @PoNo, @PoDate, l.PORDSNO, @OrderType,
+            l.ItemCode,
+            l.PrNo,
+            prl.prdate,
+            l.PrSno,
+            l.Rate,
+            l.Qty,
+            ROUND(l.Rate * l.Qty, 2),
+            l.TaxCode,
+            l.CgstPer + l.SgstPer + l.IgstPer,
+            ROUND((l.Rate * l.Qty) * (l.CgstPer + l.SgstPer + l.IgstPer) / 100.0, 2),
+            l.HsnCode,
+            l.CgstPer,
+            ROUND((l.Rate * l.Qty) * l.CgstPer / 100.0, 2),
+            l.CgstCode,
+            l.SgstPer,
+            ROUND((l.Rate * l.Qty) * l.SgstPer / 100.0, 2),
+            l.SgstCode,
+            l.IgstPer,
+            ROUND((l.Rate * l.Qty) * l.IgstPer / 100.0, 2),
+            l.IgstCode,
+            l.TcsPer,
+            ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2)
+        FROM #Lines l
+        INNER JOIN dbo.PO_PRL prl
+            ON prl.divcode = @DivCode AND prl.prno = l.PrNo AND prl.prsno = l.PrSno;
+
+        -- ── 10. INSERT PO_ORDL_DETL (delivery slots, up to 4 per line) ────────────
+        --     OPENJSON(NULL) safely returns 0 rows, so no extra NULL guard needed.
+        INSERT INTO dbo.PO_ORDL_DETL
+        (divcode, pordno, porddt, pordsno, pogrp, itemcode, shdate, Quantity)
+        SELECT
+            @DivCode, @PoNo, @PoDate,
+            l.PORDSNO,
+            @OrderType,
+            l.ItemCode,
+            TRY_CAST(NULLIF(RTRIM(ISNULL(s.shDate, '')), '') AS DATE),
+            s.qty
+        FROM #Lines l
+        CROSS APPLY OPENJSON(l.SlotsJson)
+        WITH (
+            shDate  NVARCHAR(10)  '$.shDate',
+            qty     NUMERIC(12,3) '$.qty'
+        ) s
+        WHERE s.qty > 0;
+
+        -- ── 11. UPDATE PO_PRL — increment QTYORD, mark as ordered ────────────────
+        UPDATE prl
+        SET
+            QTYORD   = ISNULL(prl.QTYORD, 0) + l.Qty,
+            PRSTATUS = 'O'
+        FROM dbo.PO_PRL prl
+        INNER JOIN #Lines l
+            ON prl.divcode = @DivCode AND prl.prno = l.PrNo AND prl.prsno = l.PrSno;
+
+        DROP TABLE #Lines;
+
+        COMMIT TRANSACTION;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        IF OBJECT_ID('tempdb..#Lines') IS NOT NULL
+            DROP TABLE #Lines;
+
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        DECLARE @ErrSev INT            = ERROR_SEVERITY();
+        RAISERROR(@ErrMsg, @ErrSev, 1);
+    END CATCH
+END;
+GO
+
+-- ============================================================
+-- ksp_PO_DeletePO
+-- Deletes a PO (FULL mode for PR→PO Transfer screen).
+-- Flow:
+--   1. BR-03: GRN guard — blocks delete if GRN raised (IN_TRNTAIL).
+--      RAISERROR contains "GRN" — C# catches this and returns HTTP 409.
+--   2. BR-04: All line delete reasons must be non-empty.
+--   3. Write audit row to LogDet_PO.
+--   4. Reverse QTYORD on PO_PRL (restore PR balance).
+--   5. Cascade delete: PO_ORDL_DETL → PO_ORDL → PO_ORDH.
+-- All steps in one atomic transaction (THROW re-raises on error).
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_DeletePO
+(
+    @DivCode         VARCHAR(2),
+    @PoNo            NUMERIC(10,0),
+    @PoDate          DATE,
+    @DeleteMode      VARCHAR(10),
+    @DefaultReason   NVARCHAR(500),
+    @LineReasonsJson NVARCHAR(MAX),
+    @UserId          VARCHAR(20),
+    @HostName        VARCHAR(100) = NULL,
+    @IpAddress       VARCHAR(50)  = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- BR-03: GRN guard — "GRN" in message triggers HTTP 409 in C#
+    IF EXISTS (
+        SELECT 1 FROM dbo.IN_TRNTAIL
+        WHERE DIVCODE = @DivCode AND PORDNO = @PoNo
+    )
+    BEGIN
+        RAISERROR('SORRY - ALREADY GRN IS RAISED FOR THIS PURCHASE ORDER', 16, 1);
+        RETURN;
+    END
+
+    -- BR-04: Every line reason must be non-empty
+    IF EXISTS (
+        SELECT 1
+        FROM OPENJSON(@LineReasonsJson)
+        WITH (prSno INT '$.prSno', deleteReason NVARCHAR(500) '$.deleteReason')
+        WHERE ISNULL(RTRIM(deleteReason), '') = ''
+    )
+    BEGIN
+        RAISERROR('Delete Reason Cannot be Empty', 16, 1);
+        RETURN;
+    END
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Update delete reason on each PO line from JSON array
+        UPDATE l
+        SET    l.deletereason = j.deleteReason
+        FROM   dbo.PO_ORDL l
+        INNER JOIN OPENJSON(@LineReasonsJson)
+            WITH (prSno INT '$.prSno', deleteReason NVARCHAR(500) '$.deleteReason') j
+            ON l.PRSNO = j.prSno
+        WHERE  l.DIVCODE = @DivCode
+          AND  l.PORDNO  = @PoNo
+          AND  CAST(l.PORDDT AS DATE) = @PoDate;
+
+        -- Audit log — one row per PO delete using confirmed LogDet_PO columns
+        INSERT INTO dbo.LogDet_PO
+            (divcode, prno, prdate, depcode,
+             username, Trans_date, Trans_UserId,
+             Trans_Name, Trans_Mod,
+             Trans_IPADD, Trans_Host)
+        VALUES
+            (@DivCode, @PoNo, @PoDate, '',
+             @UserId, GETDATE(), @UserId,
+             'Purchase Order Delete', 'DELETE',
+             @IpAddress, @HostName);
+
+        -- Reverse QTYORD on PR lines (restore PR balance)
+        UPDATE prl
+        SET    prl.qtyord = ISNULL(prl.qtyord, 0) - ISNULL(pol.ORDqty, 0)
+        FROM   dbo.PO_PRL prl
+        INNER JOIN dbo.PO_ORDL pol
+            ON  pol.DIVCODE = prl.divcode
+            AND pol.PRNO    = prl.prno
+            AND CAST(pol.PRDATE AS DATE) = CAST(prl.prdate AS DATE)
+            AND pol.PRSNO   = prl.prsno
+        WHERE  pol.DIVCODE = @DivCode
+          AND  pol.PORDNO  = @PoNo
+          AND  CAST(pol.PORDDT AS DATE) = @PoDate;
+
+        -- Cascade delete: child tables first
+        DELETE FROM dbo.PO_ORDL_DETL
+        WHERE  DIVCODE = @DivCode
+          AND  PORDNO  = @PoNo
+          AND  CAST(PORDDT AS DATE) = @PoDate;
+
+        DELETE FROM dbo.PO_ORDL
+        WHERE  DIVCODE = @DivCode
+          AND  PORDNO  = @PoNo
+          AND  CAST(PORDDT AS DATE) = @PoDate;
+
+        DELETE FROM dbo.PO_ORDH
+        WHERE  DIVCODE = @DivCode
+          AND  PORDNO  = @PoNo
+          AND  CAST(PORDDT AS DATE) = @PoDate;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+-- ============================================================
+-- ksp_PO_SetPrintFlag
+-- Sets poprintflg='Y' on PO_ORDH after a successful PDF print.
+-- Called by Print action (FSD §3.18) only after PDF bytes generated.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_SetPrintFlag
+(
+    @DivCode VARCHAR(2),
+    @PoNo    NUMERIC(10,0),
+    @PoDate  DATE
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.PO_ORDH
+    SET    poprintflg = 'Y'
+    WHERE  DIVCODE = @DivCode
+      AND  PORDNO  = @PoNo
+      AND  CAST(PORDDT AS DATE) = @PoDate;
+END;
+GO
 

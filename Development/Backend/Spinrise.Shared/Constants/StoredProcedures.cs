@@ -82,6 +82,7 @@ public static class StoredProcedures
         public const string DeletePo           = "ksp_PO_DeletePO";
         public const string GetAddresses       = "ksp_PO_GetAddresses";
         public const string GetPrintData       = "ksp_PO_GetPrint";
+        public const string SetPrintFlag       = "ksp_PO_SetPrintFlag";
     }
 
     public static class Pr

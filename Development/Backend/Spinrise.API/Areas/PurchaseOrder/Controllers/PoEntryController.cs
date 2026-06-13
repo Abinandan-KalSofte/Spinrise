@@ -165,11 +165,16 @@ public class PoEntryController : BaseApiController
     [HttpGet("{poNo}/print")]
     public async Task<IActionResult> Print(decimal poNo, [FromQuery] string divCode, [FromQuery] DateOnly poDate)
     {
+        var parameters = await _service.GetParametersAsync(divCode);
         var po = await _service.GetPrintDataAsync(divCode, poNo, poDate);
         if (po is null)
             return NotFoundResponse("No records to print.");
 
+        if (parameters?.PoPrintApp == "Y" && po.Conflg == "N")
+            return FailResponse("Approval Not Complete For This PO", 403);
+
         var pdfBytes = PurchaseOrderDocument.Generate(po);
+        await _service.UpdatePrintFlagAsync(divCode, poNo, poDate);
         return File(pdfBytes, "application/pdf", $"PO-{(long)poNo:D6}.pdf");
     }
 

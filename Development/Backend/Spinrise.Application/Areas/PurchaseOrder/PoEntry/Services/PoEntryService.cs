@@ -75,4 +75,7 @@ public class PoEntryService : IPoEntryService
 
     public Task<PoPrintDto?> GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate) =>
         _repo.GetPrintDataAsync(divCode, poNo, poDate);
+
+    public Task UpdatePrintFlagAsync(string divCode, decimal poNo, DateOnly poDate) =>
+        _repo.UpdatePrintFlagAsync(divCode, poNo, poDate);
 }
