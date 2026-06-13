@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, InputNumber, Modal } from 'antd'
 import type { PoLine, LineTaxDetail, ScreenMode } from '../types'
+import { modalTh } from '@/shared/styles/erpTable'
 import { notificationService } from '@/shared/lib/notification'
 
 // ── GST & Tax Details modal (HTML #gst-modal-overlay) ────────────────────────
@@ -144,11 +145,11 @@ export function GstTaxDetailsModal({
       width: '100%', borderCollapse: 'collapse', border: '1px solid #e2e2e2',
       borderRadius: 6, overflow: 'hidden', marginBottom: 8,
     }}>
-      <thead style={{ background: '#fafaf8' }}>
+      <thead>
         <tr>
-          <th style={{ ...thLite, textAlign: 'left' }}>Tax Type</th>
-          <th style={{ ...thLite, textAlign: 'left' }}>Rate %</th>
-          <th style={{ ...thLite, textAlign: 'right' }}>{amtHeader}</th>
+          <th style={modalTh({ textAlign: 'left' })}>Tax Type</th>
+          <th style={modalTh({ textAlign: 'left' })}>Rate %</th>
+          <th style={modalTh({ textAlign: 'right' })}>{amtHeader}</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
@@ -326,7 +327,3 @@ function FooterTotal({ label, value, color, bold }: {
 const fieldCol: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 3 }
 const fieldLbl: React.CSSProperties = { fontSize: 10, fontWeight: 500, color: '#888' }
 const divider:  React.CSSProperties = { height: 1, background: '#e2e2e2', margin: '10px 0 12px' }
-const thLite:   React.CSSProperties = {
-  padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#4a4a4a',
-  borderBottom: '1px solid #e2e2e2', whiteSpace: 'nowrap',
-}
