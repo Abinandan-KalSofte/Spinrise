@@ -52,6 +52,10 @@ public class PoEntryService : IPoEntryService
         string divCode, string? orderType, string? search, int page, int pageSize) =>
         _repo.GetEligiblePrLinesAsync(divCode, orderType, search, page, pageSize);
 
+    public Task<IEnumerable<PoSummaryDto>> GetListAsync(
+        string divCode, DateOnly fDate, DateOnly lDate, string? search, string? supplier, int page, int pageSize) =>
+        _repo.GetListAsync(divCode, fDate, lDate, search, supplier, page, pageSize);
+
     public Task<PoHeaderDto?> GetByIdAsync(string divCode, decimal poNo, DateOnly poDate) =>
         _repo.GetByIdAsync(divCode, poNo, poDate);
 

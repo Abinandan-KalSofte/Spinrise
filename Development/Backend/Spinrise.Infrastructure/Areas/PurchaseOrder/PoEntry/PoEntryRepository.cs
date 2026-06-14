@@ -118,6 +118,15 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
     }
 
+    public async Task<IEnumerable<PoSummaryDto>> GetListAsync(
+        string divCode, DateOnly fDate, DateOnly lDate, string? search, string? supplier, int page, int pageSize)
+    {
+        return await _uow.Connection.QueryAsync<PoSummaryDto>(
+            StoredProcedures.Po.GetList,
+            new { DivCode = divCode, FDate = fDate, LDate = lDate, Search = search, Supplier = supplier, Page = page, PageSize = pageSize },
+            commandType: CommandType.StoredProcedure);
+    }
+
     public async Task<PoHeaderDto?> GetByIdAsync(string divCode, decimal poNo, DateOnly poDate)
     {
         using var multi = await _uow.Connection.QueryMultipleAsync(

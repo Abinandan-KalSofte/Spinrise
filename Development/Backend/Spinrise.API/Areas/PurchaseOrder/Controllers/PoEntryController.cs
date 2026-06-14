@@ -143,6 +143,20 @@ public class PoEntryController : BaseApiController
         return OkResponse(result);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> GetList(
+        [FromQuery] string   divCode,
+        [FromQuery] DateOnly fDate,
+        [FromQuery] DateOnly lDate,
+        [FromQuery] string?  search,
+        [FromQuery] string?  supplier,
+        [FromQuery] int      page     = 1,
+        [FromQuery] int      pageSize = 50)
+    {
+        var result = await _service.GetListAsync(divCode, fDate, lDate, search, supplier, page, pageSize);
+        return OkResponse(result);
+    }
+
     // ── Save ───────────────────────────────────────────────────────────────────
 
     [HttpPost]

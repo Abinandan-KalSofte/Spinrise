@@ -276,6 +276,7 @@ export interface PoSummary {
 export interface SavePoLineRequest {
   prNo:         number
   prSno:        number
+  prDate:       string       // required for PO_PRL 4-column key (divcode, prno, prdate, prsno)
   itemCode:     string
   rate:         number
   qty:          number

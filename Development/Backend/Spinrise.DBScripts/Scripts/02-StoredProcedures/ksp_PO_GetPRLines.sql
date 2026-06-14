@@ -50,8 +50,12 @@ BEGIN
         ON d.divcode = l.divcode AND d.depcode = h.depcode
     LEFT JOIN dbo.In_Scc scc
         ON scc.SCCCODE = l.CCCODE AND scc.Divcode = l.divcode
-    LEFT JOIN dbo.PR_EMP e
-        ON TRY_CAST(h.REQNAME AS DECIMAL(5,0)) = e.empno
+    OUTER APPLY (
+        SELECT TOP 1 e.ename
+        FROM dbo.PR_EMP e
+        WHERE TRY_CAST(h.REQNAME AS DECIMAL(5,0)) = e.empno
+        ORDER BY CASE WHEN e.divcode = @DivCode THEN 0 ELSE 1 END, e.empno
+    ) e
     WHERE l.divcode = @DivCode
       AND ISNULL(l.DirectApp, 'N') = 'Y'
       AND ISNULL(l.FClosed,   'N') <> 'Y'

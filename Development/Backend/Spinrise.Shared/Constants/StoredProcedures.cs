@@ -77,6 +77,7 @@ public static class StoredProcedures
         public const string GetById            = "ksp_PO_GetPOHeader";
         public const string GetLines           = "ksp_PO_GetPOLines";
         public const string GetDeliverySchedule= "ksp_PO_GetDeliverySchedule";
+        public const string GetList            = "ksp_PO_GetPOList";
         public const string GetLastRecord      = "ksp_PO_GetLastPO";
         public const string SaveEntry          = "ksp_PO_SaveEntry";
         public const string DeletePo           = "ksp_PO_DeletePO";

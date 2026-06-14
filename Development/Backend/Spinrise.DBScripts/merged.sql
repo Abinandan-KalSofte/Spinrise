@@ -4447,8 +4447,12 @@ BEGIN
         ON d.divcode = l.divcode AND d.depcode = h.depcode
     LEFT JOIN dbo.In_Scc scc
         ON scc.SCCCODE = l.CCCODE AND scc.Divcode = l.divcode
-    LEFT JOIN dbo.PR_EMP e
-        ON TRY_CAST(h.REQNAME AS DECIMAL(5,0)) = e.empno
+    OUTER APPLY (
+        SELECT TOP 1 e.ename
+        FROM dbo.PR_EMP e
+        WHERE TRY_CAST(h.REQNAME AS DECIMAL(5,0)) = e.empno
+        ORDER BY CASE WHEN e.divcode = @DivCode THEN 0 ELSE 1 END, e.empno
+    ) e
     WHERE l.divcode = @DivCode
       AND ISNULL(l.DirectApp, 'N') = 'Y'
       AND ISNULL(l.FClosed,   'N') <> 'Y'
@@ -4541,7 +4545,7 @@ BEGIN
         RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
         RTRIM(ISNULL(h.cust_gstinno, ''))                           AS Gstin,
         CAST(ISNULL(h.cust_gststcode, 0) AS VARCHAR(50))            AS GstState,
-        RTRIM(ISNULL(h.INSPECT, 'NO'))                              AS Inspect,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.INSPECT, 'N'))) = 'Y' THEN 'YES' ELSE 'NO' END AS Inspect,
         ISNULL(h.roff, 0)                                           AS RoundOff,
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
         RTRIM(ISNULL(h.Form_type, ''))                              AS FormType,
@@ -4746,7 +4750,7 @@ BEGIN
         RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
         RTRIM(ISNULL(h.cust_gstinno, ''))                           AS Gstin,
         CAST(ISNULL(h.cust_gststcode, 0) AS VARCHAR(50))            AS GstState,
-        RTRIM(ISNULL(h.INSPECT, 'NO'))                              AS Inspect,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.INSPECT, 'N'))) = 'Y' THEN 'YES' ELSE 'NO' END AS Inspect,
         ISNULL(h.roff, 0)                                           AS RoundOff,
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
         RTRIM(ISNULL(h.Form_type, ''))                              AS FormType,
@@ -5019,6 +5023,22 @@ GO
 
 
 -- ============================================================
+-- PREREQUISITE: PO Number Sequence (CEO confirmed 07-Jun-2026)
+-- Run ONCE on JAT DB before deploying ksp_PO_SaveEntry.
+-- If the sequence already exists, this is a no-op.
+-- ============================================================
+IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE name = 'seq_PO_AllocatePONo' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+    -- Seed the sequence from the current MAX PORDNO so no gaps or conflicts occur.
+    DECLARE @SeqStart BIGINT = 1;
+    SELECT @SeqStart = ISNULL(MAX(PORDNO), 0) + 1 FROM dbo.PO_ORDH;
+    DECLARE @sql NVARCHAR(500) = N'CREATE SEQUENCE dbo.seq_PO_AllocatePONo AS BIGINT START WITH ' + CAST(@SeqStart AS NVARCHAR(20)) + N' INCREMENT BY 1 NO CACHE;';
+    EXEC sp_executesql @sql;
+END
+GO
+
+
+-- ============================================================
 -- ksp_PO_SaveEntry
 -- Converts approved PR lines into a Purchase Order (ADD only).
 -- Atomic transaction: header + lines + delivery slots + PR update.
@@ -5131,21 +5151,16 @@ BEGIN
             AND RTRIM(ISNULL(@PricingTerms, '')) = ''
             RAISERROR('Pricing Term Cannot be empty', 16, 1);
 
-        -- ── 3. BR-01: Backdate check ─────────────────────────────────────────────
+        -- ── 3. BR-01: Backdate check (FSD §4.6) ─────────────────────────────────
+        -- When BACKDATE='N', PO date must strictly equal the system processing date.
         DECLARE @BackDate CHAR(1) = 'Y';
         SELECT TOP 1 @BackDate = ISNULL(UPPER(RTRIM(BACKDATE)), 'Y') FROM dbo.IN_PARA;
 
         IF @BackDate <> 'Y'
         BEGIN
-            DECLARE @MaxExPoDate DATE;
-            SELECT @MaxExPoDate = CAST(MAX(PORDDT) AS DATE)
-            FROM dbo.PO_ORDH
-            WHERE DIVCODE = @DivCode
-              AND ISNULL(CANFLG, '') = ''
-              AND CAST(PORDDT AS DATE) BETWEEN @FDate AND @LDate;
-
-            IF @MaxExPoDate IS NOT NULL AND @PoDate < @MaxExPoDate
-                RAISERROR('Date should be Equal to Current Date Or Max Purchase Order Date', 16, 1);
+            DECLARE @ProcessingDate DATE = CAST(GETDATE() AS DATE);
+            IF @PoDate <> @ProcessingDate
+                RAISERROR('PO Date must be equal to today''s processing date.', 16, 1);
         END
 
         -- ── 4. Parse lines JSON into temp table (one row per line) ───────────────
@@ -5154,6 +5169,7 @@ BEGIN
             CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS NUMERIC(4,0)) AS PORDSNO,
             j.PrNo,
             j.PrSno,
+            j.PrDate,
             RTRIM(j.ItemCode)           AS ItemCode,
             j.Rate,
             j.Qty,
@@ -5172,6 +5188,7 @@ BEGIN
         WITH (
             PrNo      NUMERIC(6,0)  '$.prNo',
             PrSno     NUMERIC(6,0)  '$.prSno',
+            PrDate    DATE          '$.prDate',
             ItemCode  VARCHAR(10)   '$.itemCode',
             Rate      NUMERIC(13,4) '$.rate',
             Qty       NUMERIC(12,3) '$.qty',
@@ -5224,25 +5241,41 @@ BEGIN
                 12, 3))
         FROM #Lines l
         INNER JOIN dbo.PO_PRL prl
-            ON prl.divcode = @DivCode AND prl.prno = l.PrNo AND prl.prsno = l.PrSno
+            ON prl.divcode = @DivCode AND prl.prno = l.PrNo
+           AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno
         WHERE l.Qty > (ISNULL(prl.QTYREQD, 0) - ISNULL(prl.QTYORD, 0) - ISNULL(prl.enq_qty, 0));
 
         IF @QtyError IS NOT NULL
             RAISERROR(@QtyError, 16, 1);
 
-        -- ── 6. Allocate PO number (MAX+1, floored by PO_DOC_PARA.STDOCNO) ────────
+        -- ── 6. Allocate PO number (atomic SEQUENCE — CEO confirmed 07-Jun-2026) ──
+        -- SEQUENCE guarantees uniqueness under concurrent users (no race condition).
+        -- Prerequisite: dbo.seq_PO_AllocatePONo must exist in JAT DB.
+        --   CREATE SEQUENCE dbo.seq_PO_AllocatePONo START WITH 1 INCREMENT BY 1;
+        SET @PoNo = NEXT VALUE FOR dbo.seq_PO_AllocatePONo;
+
+        -- Floor to PO_DOC_PARA.STDOCNO if the sequence has not yet reached the starting number.
         DECLARE @StartDocNo NUMERIC(10,0) = 1;
         SELECT @StartDocNo = ISNULL(STDOCNO, 1)
         FROM dbo.PO_DOC_PARA
-        WHERE TC = 'PO';
-
-        SELECT @PoNo = ISNULL(MAX(PORDNO), 0) + 1
-        FROM dbo.PO_ORDH
-        WHERE DIVCODE = @DivCode
-          AND CAST(PORDDT AS DATE) BETWEEN @FDate AND @LDate;
+        WHERE TC = 'PURCHASE ORDER';
 
         IF @PoNo < @StartDocNo
             SET @PoNo = @StartDocNo;
+
+        -- ── 7a. Division approval parameters (FSD §5.8 / §5.9) ────────────────
+        -- BR-09: If PoFirstLevelApp='N', auto-approve first level on save.
+        -- Conflg: If PoConf='N' (no confirmation step required), auto-confirm.
+        DECLARE @PoFirstLevelApp CHAR(1) = 'Y';
+        DECLARE @PoConf          CHAR(1) = 'N';
+        SELECT TOP 1
+            @PoFirstLevelApp = ISNULL(UPPER(RTRIM(PoFirstLevelApp)), 'Y'),
+            @PoConf          = ISNULL(UPPER(RTRIM(Po_Confirm)),       'N')
+        FROM dbo.PO_PARA
+        WHERE divcode = @DivCode;
+
+        DECLARE @FirstLevelApp VARCHAR(1) = CASE WHEN @PoFirstLevelApp = 'N' THEN 'Y' ELSE 'N' END;
+        DECLARE @Conflg        VARCHAR(1) = CASE WHEN @PoConf          = 'N' THEN 'Y' ELSE 'N' END;
 
         -- ── 7. Derived values ────────────────────────────────────────────────────
         DECLARE @OrdVal NUMERIC(18,2);
@@ -5257,10 +5290,7 @@ BEGIN
         FROM dbo.FA_SLMAS
         WHERE RTRIM(slcode) = RTRIM(@Supplier);
 
-        DECLARE @CreatedDt VARCHAR(25) =
-            CONVERT(VARCHAR(10), GETDATE(), 103) + ' ' +
-            CONVERT(VARCHAR(8),  GETDATE(), 108) + ' ' +
-            RIGHT(CONVERT(VARCHAR(20), GETDATE(), 109), 2);
+        DECLARE @CreatedDt DATETIME = GETDATE();
 
         -- ── 8. INSERT PO_ORDH ────────────────────────────────────────────────────
         INSERT INTO dbo.PO_ORDH
@@ -5286,7 +5316,7 @@ BEGIN
             @Currency,
             ISNULL(@CurrRate, 1),
             @Carrier,
-            CASE WHEN UPPER(RTRIM(ISNULL(@Inspect,''))) IN ('YES','Y') THEN 'YES' ELSE 'NO' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(@Inspect,''))) IN ('YES','Y') THEN 'Y' ELSE 'N' END,
             NULLIF(RTRIM(ISNULL(@FormType,'')),     ''),
             NULLIF(RTRIM(ISNULL(@RefNo,'')),        ''),
             @RefDate,
@@ -5325,12 +5355,18 @@ BEGIN
             0,                        -- roff: round-off (computed by client, stored as 0 here)
             @SupGstin,
             @SupGstState,
-            'N',                      -- FirstlevelApp: requires manual approval
-            'N',                      -- Conflg: unconfirmed until approval
+            @FirstLevelApp,           -- 'Y' if PoFirstLevelApp='N' (BR-09), else 'N'
+            @Conflg,                  -- 'Y' if PoConf='N' (auto-confirm), else 'N'
             'N',                      -- poprintflg
             @UserId,
             @CreatedDt
         );
+
+        -- ── 8b. Read back actual PORDDT after any triggers/defaults on PO_ORDH.
+        --       PO_ORDL/DETL must use the exact same datetime so insposup trigger
+        --       (join: pordno + porddt + divcode + pogrp) can find the PO_ORDH row.
+        DECLARE @ActualPoDt DATETIME;
+        SELECT @ActualPoDt = PORDDT FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
 
         -- ── 9. INSERT PO_ORDL (one row per line) ─────────────────────────────────
         --    taxper = CgstPer + SgstPer + IgstPer (total GST %)
@@ -5348,7 +5384,7 @@ BEGIN
             Tcs_per,  Tcs_amt
         )
         SELECT
-            @DivCode, @PoNo, @PoDate, l.PORDSNO, @OrderType,
+            @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
             l.ItemCode,
             l.PrNo,
             prl.prdate,
@@ -5356,31 +5392,32 @@ BEGIN
             l.Rate,
             l.Qty,
             ROUND(l.Rate * l.Qty, 2),
-            l.TaxCode,
+            LEFT(l.TaxCode,  5),  -- PO_ORDL.TAX_CODE is varchar(5)
             l.CgstPer + l.SgstPer + l.IgstPer,
             ROUND((l.Rate * l.Qty) * (l.CgstPer + l.SgstPer + l.IgstPer) / 100.0, 2),
-            l.HsnCode,
+            LEFT(l.HsnCode,  8),  -- PO_ORDL.hsncode is varchar(8)
             l.CgstPer,
             ROUND((l.Rate * l.Qty) * l.CgstPer / 100.0, 2),
-            l.CgstCode,
+            LEFT(l.CgstCode, 5),  -- PO_ORDL.cgst_tax_code is varchar(5)
             l.SgstPer,
             ROUND((l.Rate * l.Qty) * l.SgstPer / 100.0, 2),
-            l.SgstCode,
+            LEFT(l.SgstCode, 5),  -- PO_ORDL.sgst_tax_code is varchar(5)
             l.IgstPer,
             ROUND((l.Rate * l.Qty) * l.IgstPer / 100.0, 2),
-            l.IgstCode,
+            LEFT(l.IgstCode, 5),  -- PO_ORDL.igst_tax_code is varchar(5)
             l.TcsPer,
             ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2)
         FROM #Lines l
         INNER JOIN dbo.PO_PRL prl
-            ON prl.divcode = @DivCode AND prl.prno = l.PrNo AND prl.prsno = l.PrSno;
+            ON prl.divcode = @DivCode AND prl.prno = l.PrNo
+           AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno;
 
         -- ── 10. INSERT PO_ORDL_DETL (delivery slots, up to 4 per line) ────────────
         --     OPENJSON(NULL) safely returns 0 rows, so no extra NULL guard needed.
         INSERT INTO dbo.PO_ORDL_DETL
         (divcode, pordno, porddt, pordsno, pogrp, itemcode, shdate, Quantity)
         SELECT
-            @DivCode, @PoNo, @PoDate,
+            @DivCode, @PoNo, @ActualPoDt,
             l.PORDSNO,
             @OrderType,
             l.ItemCode,
@@ -5392,7 +5429,8 @@ BEGIN
             shDate  NVARCHAR(10)  '$.shDate',
             qty     NUMERIC(12,3) '$.qty'
         ) s
-        WHERE s.qty > 0;
+        WHERE s.qty > 0
+          AND TRY_CAST(NULLIF(RTRIM(ISNULL(s.shDate, '')), '') AS DATE) IS NOT NULL;
 
         -- ── 11. UPDATE PO_PRL — increment QTYORD, mark as ordered ────────────────
         UPDATE prl
@@ -5401,7 +5439,8 @@ BEGIN
             PRSTATUS = 'O'
         FROM dbo.PO_PRL prl
         INNER JOIN #Lines l
-            ON prl.divcode = @DivCode AND prl.prno = l.PrNo AND prl.prsno = l.PrSno;
+            ON prl.divcode = @DivCode AND prl.prno = l.PrNo
+           AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno;
 
         DROP TABLE #Lines;
 
@@ -5556,6 +5595,60 @@ BEGIN
     WHERE  DIVCODE = @DivCode
       AND  PORDNO  = @PoNo
       AND  CAST(PORDDT AS DATE) = @PoDate;
+END;
+GO
+
+-- ============================================================
+-- ksp_PO_GetPOList
+-- Paginated PO search for the Find modal and nav-index build.
+-- Returns: divCode, poNo, poDate, orderType, supplier,
+--          supplierName, orderValue, approvalStatus, totalLines.
+-- Excludes cancelled POs. Ordered newest first.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPOList
+(
+    @DivCode   VARCHAR(2),
+    @FDate     DATE,
+    @LDate     DATE,
+    @Search    VARCHAR(100) = NULL,
+    @Supplier  VARCHAR(10)  = NULL,
+    @Page      INT          = 1,
+    @PageSize  INT          = 50
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        RTRIM(h.DIVCODE)                                            AS DivCode,
+        h.PORDNO                                                    AS PoNo,
+        CONVERT(varchar(10), CAST(h.PORDDT AS DATE), 120)          AS PoDate,
+        RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
+        RTRIM(ISNULL(h.SLCODE, ''))                                 AS Supplier,
+        RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
+        ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
+        CASE WHEN ISNULL(h.Conflg, 'N') = 'Y' THEN 'CONFIRMED' ELSE 'PENDING' END AS ApprovalStatus,
+        (
+            SELECT COUNT(*) FROM dbo.PO_ORDL l
+            WHERE l.DIVCODE = h.DIVCODE
+              AND l.PORDNO  = h.PORDNO
+              AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)
+        )                                                           AS TotalLines
+    FROM dbo.PO_ORDH h
+    LEFT JOIN dbo.FA_SLMAS sl ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    WHERE h.DIVCODE = @DivCode
+      AND CAST(h.PORDDT AS DATE) BETWEEN @FDate AND @LDate
+      AND ISNULL(h.CANFLG, '') = ''
+      AND (
+            @Search IS NULL OR @Search = ''
+            OR CAST(h.PORDNO AS VARCHAR(20)) LIKE '%' + @Search + '%'
+            OR RTRIM(ISNULL(h.SLCODE,  '')) LIKE '%' + @Search + '%'
+            OR RTRIM(ISNULL(sl.slname, '')) LIKE '%' + @Search + '%'
+          )
+      AND (@Supplier IS NULL OR @Supplier = '' OR RTRIM(h.SLCODE) = RTRIM(@Supplier))
+    ORDER BY h.PORDDT DESC, h.PORDNO DESC
+    OFFSET (@Page - 1) * @PageSize ROWS
+    FETCH NEXT @PageSize ROWS ONLY;
 END;
 GO
 
