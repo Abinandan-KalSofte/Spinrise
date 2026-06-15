@@ -4446,6 +4446,7 @@ BEGIN
     FROM dbo.PO_PRL l
     INNER JOIN dbo.PO_PRH h
         ON h.divcode = l.divcode AND h.prno = l.prno
+       AND CAST(h.prdate AS DATE) = CAST(l.prdate AS DATE)
     INNER JOIN dbo.IN_ITEM i
         ON i.itemcode = l.itemcode
     LEFT JOIN dbo.IN_DEP d
