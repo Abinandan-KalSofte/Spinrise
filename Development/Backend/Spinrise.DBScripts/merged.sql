@@ -5468,6 +5468,13 @@ BEGIN
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo
            AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno;
 
+        -- Guard: every line in #Lines must have produced an insert row.
+        -- A mismatch means the PO_PRL join found no match (divcode/prdate mismatch).
+        DECLARE @LinesInserted INT = @@ROWCOUNT;
+        DECLARE @LinesExpected INT = (SELECT COUNT(*) FROM #Lines);
+        IF @LinesInserted <> @LinesExpected
+            RAISERROR('PO line save incomplete: %d of %d PR lines were matched in PO_PRL. Refresh the PR picker and retry.', 16, 1, @LinesInserted, @LinesExpected);
+
         -- ── 10. INSERT PO_ORDL_DETL (delivery slots, up to 4 per line) ────────────
         --     OPENJSON(NULL) safely returns 0 rows, so no extra NULL guard needed.
 
