@@ -45,17 +45,17 @@ export function OrderDetailsTab({
   return (
     <TabPanel>
       <Row gutter={[12, 0]}>
-        <Col span={6}>
+        <Col span={4}>
         <Form.Item name="poNo" label="PO No." style={mb}>
           <Input readOnly placeholder="Auto-generated on save" style={{ fontFamily: 'monospace', color: '#185FA5' }} />
         </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="poDate" label="PO Date" style={mb}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} allowClear={false} />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="orderType" label="Order Type" required
             rules={[{ required: true, message: 'Order Type is required' }]} style={mb}>
             <Select
@@ -64,7 +64,7 @@ export function OrderDetailsTab({
             />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="supplier" label="Supplier" required
             rules={[{ required: true, message: 'Supplier is required' }]} style={mb}>
             <Select
@@ -75,68 +75,61 @@ export function OrderDetailsTab({
             />
           </Form.Item>
         </Col>
-      </Row>
-
-      <Row gutter={[12, 0]}>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="gstin" label="GSTIN" style={mb}>
             <Input readOnly placeholder="Auto-filled from supplier" style={{ fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="gstState" label="GST State" style={mb}>
             <Input readOnly placeholder="Auto" style={{ fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="inspect" label="Inspect" style={mb}>
             <Select disabled={disabled} options={[{ value: 'YES', label: 'YES' }, { value: 'NO', label: 'NO' }]} />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
         <Form.Item name="poValue" label="Order Value (₹)" style={mb}>
           <Input readOnly style={{ fontFamily: 'monospace', color: '#185FA5' }} />
         </Form.Item>
         </Col>
-      </Row>
 
-      <Row gutter={[12, 0]}>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="formType" label="Form Type" style={mb}>
             <Select allowClear placeholder="03 — NONE" disabled={disabled} optionFilterProp="label"
               options={formTypes.map((f) => ({ value: f.formCode, label: `${f.formCode} — ${f.formName}` }))} />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="refNo" label="Ref. No." style={mb}>
             <Input placeholder="Optional" disabled={disabled} />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="refDate" label="Ref. Date" style={mb}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="roundOff" label="Round Off" style={mb}>
             <InputNumber readOnly precision={2} controls={false} style={{ ...full, fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
-      </Row>
 
-      <Row gutter={[12, 0]}>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="currency" label="Currency" required
             rules={[{ required: true, message: 'Currency is required' }]} style={mb}>
             <Input disabled={disabled} style={{ fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="currRate" label="Curr. Rate" style={mb}>
             <InputNumber disabled precision={4} controls={false} style={{ ...full, fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <Form.Item name="remarks" label="Remarks" style={mb}>
             <Input placeholder="Optional remarks" disabled={disabled} />
           </Form.Item>

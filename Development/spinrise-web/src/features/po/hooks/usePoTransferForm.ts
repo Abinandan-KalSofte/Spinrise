@@ -37,6 +37,15 @@ import type {
 const round2 = (n: number) => Math.round(n * 100) / 100
 const round3 = (n: number) => Math.round(n * 1000) / 1000
 const fmtDate = (d: Dayjs | null | undefined) => (d ? d.format('YYYY-MM-DD') : null)
+// Normalise a PR date string (ISO, or display form like '01-Jun-26') to
+// 'YYYY-MM-DD' for the save payload. Returns '' when missing/unparseable so the
+// save-time guard can block it (B1 — server validates PR balance against prDate).
+const toIsoDate = (d: string | null | undefined): string => {
+  if (!d) return ''
+  if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10)   // already ISO
+  const p = dayjs(d)
+  return p.isValid() ? p.format('YYYY-MM-DD') : ''
+}
 
 // ── Pure line recompute ──────────────────────────────────────────────────────
 // Line value excludes pre-GST charges (D-11 — not in SPINRISE line model).
@@ -83,19 +92,15 @@ export interface PoHeaderFormValues {
   igstPer:       number
   tcsPer:        number
   discPer:       number
-  cessPer:       number         // ⚠ header pre-GST applicability vs D-11 unconfirmed
-  aedPer:        number         // ⚠ idem
   freightAmt:    number
   packPer:       number
   insurPer:      number
-  surchargePer:  number         // ⚠ idem
   addTaxPer:     number
   fileNo:        string
   fcaFob:        number
   freightType:   'PAID' | 'TOPAY'
   discApp:       'BEFORE' | 'AFTER'
   packApp:       'BEFORE' | 'AFTER'
-  cessApp:       'BEFORE' | 'AFTER'
   // Payment
   payMode:       'DIRECT' | 'BANK'
   directInstr:   string
@@ -197,16 +202,18 @@ export function usePoTransferForm() {
     setLookupsLoading(true)
     setLookupsError(null)
     try {
-      const [params, types, cars, forms] = await Promise.all([
+      const [params, types, cars, forms, bankList] = await Promise.all([
         poApi.getParameters(divCode),
         poApi.getOrderTypes(),
         poApi.getCarriers(),
         poApi.getFormTypes(),
+        poApi.getBanks(),
       ])
       setParameters(params)
       setOrderTypes(types)
       setCarriers(cars)
       setFormTypes(forms)
+      setBanks(bankList)
       setLookupsLoaded(true)
     } catch {
       setLookupsError('Failed to load reference data. Click Retry to reload.')
@@ -215,8 +222,14 @@ export function usePoTransferForm() {
     }
   }, [divCode])
 
+  // Fetch the lookup set once per division. The ref persists across React
+  // StrictMode's dev-only setup→cleanup→setup cycle, so this yields exactly one
+  // network call per divCode while still re-fetching if the division changes.
+  const lookupsDivRef = useRef<string | null>(null)
   useEffect(() => {
     if (!divCode) return
+    if (lookupsDivRef.current === divCode) return
+    lookupsDivRef.current = divCode
     void loadLookups()
   }, [divCode, loadLookups])
 
@@ -230,9 +243,8 @@ export function usePoTransferForm() {
       suppliersLoadedRef.current = true
     } catch { /* surfaced by caller */ }
   }, [divCode])
-  const loadBanks = useCallback(async (search?: string) => {
-    try { setBanks(await poApi.getBanks(search)) } catch { /* noop */ }
-  }, [])
+  // Banks are loaded once with the rest of the reference data in loadLookups so
+  // a loaded PO's bankCode resolves to its name in VIEW (no dropdown open needed).
 
   // ── Pre-add checks (FSD §4.1) ──────────────────────────────────────────────
   const runPreChecks = useCallback(async (): Promise<PoPreAddChecks | null> => {
@@ -390,7 +402,6 @@ export function usePoTransferForm() {
     freightType: 'PAID',
     discApp:     'BEFORE',
     packApp:     'BEFORE',
-    cessApp:     'BEFORE',
     payMode:     'DIRECT',
     cancelled:   false,
   })
@@ -454,7 +465,6 @@ export function usePoTransferForm() {
       freightType:   po.freightType,
       discApp:       po.discApp,
       packApp:       po.packApp,
-      cessApp:       po.cessApp,
       payMode:       po.payMode,
       directInstr:   po.directInstr,
       bankCode:      po.bankCode,
@@ -520,7 +530,7 @@ export function usePoTransferForm() {
     if (!divCode) return
     const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
     try {
-      const list = await poApi.getList(divCode, yfDate, ylDate, { pageSize: 2000 })
+      const list = await poApi.getList(divCode, yfDate, ylDate, { pageSize: 50 })
       setNavList(
         [...list].sort((a, b) => a.poNo - b.poNo).map((s) => ({ poNo: s.poNo, poDate: s.poDate })),
       )
@@ -564,6 +574,13 @@ export function usePoTransferForm() {
       notificationService.warning('Mandatory Fields Missing', `HSN Code is required for: ${noHsn.map((l) => l.itemCode).join(', ')}. Configure it in Item Master.`)
       return false
     }
+    // B1 PR Date mandatory — server validates PR balance against it; an empty or
+    // unresolvable date would silently validate against the wrong PR records.
+    const noPrDate = working.filter((l) => !toIsoDate(l.prDate))
+    if (noPrDate.length) {
+      notificationService.warning('PR Date Missing', `PR date could not be resolved for: ${noPrDate.map((l) => l.itemCode).join(', ')}. Remove and re-select the line from the PR Picker.`)
+      return false
+    }
     // UX-01 delivery reconciliation — block over-allocation; under is allowed.
     const overSched = deliveryLines.filter((d) =>
       round3(d.slots.reduce((s, x) => s + (Number(x.qty) || 0), 0)) > round3(d.poQty),
@@ -604,7 +621,9 @@ export function usePoTransferForm() {
         .filter((s) => (Number(s.qty) || 0) > 0 || s.shDate)
 
     const reqLines: SavePoLineRequest[] = working.map((l) => ({
+      prNo:     l.prNo,
       prSno:    l.prSno,
+      prDate:   toIsoDate(l.prDate),   // ISO 'YYYY-MM-DD' (B1)
       itemCode: l.itemCode,
       rate:     l.rate,
       qty:      l.qty,
@@ -645,10 +664,10 @@ export function usePoTransferForm() {
         currRate:      v.currRate,
         remarks:       v.remarks,
         cgstPer:       v.cgstPer, sgstPer: v.sgstPer, igstPer: v.igstPer, tcsPer: v.tcsPer,
-        discPer:       v.discPer, cessPer: v.cessPer, aedPer: v.aedPer,
+        discPer:       v.discPer,
         freightAmt:    v.freightAmt, packPer: v.packPer, insurPer: v.insurPer,
-        surchargePer:  v.surchargePer, addTaxPer: v.addTaxPer, fileNo: v.fileNo, fcaFob: v.fcaFob,
-        freightType:   v.freightType, discApp: v.discApp, packApp: v.packApp, cessApp: v.cessApp,
+        addTaxPer:     v.addTaxPer, fileNo: v.fileNo, fcaFob: v.fcaFob,
+        freightType:   v.freightType, discApp: v.discApp, packApp: v.packApp,
         payMode:       v.payMode, directInstr: v.directInstr, bankCode: v.bankCode,
         paymentTerms:  v.paymentTerms, advPer: v.advPer, advAmt: 0,
         modeOfPayment: v.modeOfPayment, payRef: v.payRef, payRefDate: fmtDate(v.payRefDate),
@@ -818,7 +837,7 @@ export function usePoTransferForm() {
     parameters, preChecks,
     orderTypes, carriers, formTypes, suppliers, banks,
     lookupsLoaded, lookupsLoading, lookupsError,
-    loadLookups, loadSuppliers, loadBanks, runPreChecks,
+    loadLookups, loadSuppliers, runPreChecks,
     // line ops
     addPrLines, updateLineRateQty, removeDraftLine, applyGstDetail,
     setDefaultDeleteReason, setLineDeleteReason,

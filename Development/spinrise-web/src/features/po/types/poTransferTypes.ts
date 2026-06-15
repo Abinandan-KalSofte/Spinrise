@@ -179,27 +179,23 @@ export interface PoHeader {
   currRate:     number
   remarks:      string
 
-  // Tax / Discount (header-level)
-  // ⚠ aedPer / surchargePer / cessPer header applicability is UNCONFIRMED vs
-  //   D-11 (pre-GST). Modelled to match the HTML; confirm in FSD before wiring.
+  // Tax / Discount (header-level) — GST-based taxation only.
+  // Pre-GST AED / Surcharge / Cess columns (D-11) are NOT FOR SPINRISE and are
+  // intentionally absent; never re-add them.
   cgstPer:      number
   sgstPer:      number
   igstPer:      number
   tcsPer:       number
   discPer:      number
-  cessPer:      number
-  aedPer:       number
   freightAmt:   number
   packPer:      number
   insurPer:     number
-  surchargePer: number
   addTaxPer:    number
   fileNo:       string
   fcaFob:       number
   freightType:  'PAID' | 'TOPAY'
   discApp:      'BEFORE' | 'AFTER'
   packApp:      'BEFORE' | 'AFTER'
-  cessApp:      'BEFORE' | 'AFTER'
 
   // Payment
   payMode:      'DIRECT' | 'BANK'   // BR-15 when BANK
@@ -274,7 +270,9 @@ export interface PoSummary {
 // ── Request types (provisional — Q7) ─────────────────────────────────────────
 
 export interface SavePoLineRequest {
+  prNo:         number       // PR back-reference — server validates PR balance
   prSno:        number
+  prDate:       string       // "YYYY-MM-DD" — MANDATORY (server PR-balance validation)
   itemCode:     string
   rate:         number
   qty:          number

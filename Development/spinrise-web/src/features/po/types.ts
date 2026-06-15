@@ -18,6 +18,9 @@ export const PO_ROUTE_BADGE: Record<string, { color: string; bg: string }> = {
 }
 
 export const PO_APPROVAL_BADGE: Record<string, { color: string; bg: string }> = {
+  // GET /api/v1/po returns approvalStatus as 'CONFIRMED' | 'PENDING' (handover §1).
+  'CONFIRMED':  { color: '#3B6D11', bg: '#EAF3DE' },   // green
+  'PENDING':    { color: '#BA7517', bg: '#FAEEDA' },   // amber
   'PENDING L1': { color: '#BA7517', bg: '#FAEEDA' },
   'PENDING L2': { color: '#BA7517', bg: '#FAEEDA' },
   'PENDING CEO':{ color: '#BA7517', bg: '#FAEEDA' },

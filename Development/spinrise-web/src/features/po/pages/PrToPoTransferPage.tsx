@@ -42,8 +42,13 @@ export default function PrToPoTransferPage() {
   const [printBlobUrl,  setPrintBlobUrl]  = useState<string | null>(null)
   const [printFilename, setPrintFilename] = useState('')
 
-  // Load the latest PO + the navigation index on mount (VIEW).
+  // Load the latest PO + the navigation index on mount (VIEW). Guarded so React
+  // StrictMode's dev-only double-invoke issues exactly one /po/last + /po(list)
+  // call. Save/Delete refresh the nav index via their own paths — not gated here.
+  const didInitRef = useRef(false)
   useEffect(() => {
+    if (didInitRef.current) return
+    didInitRef.current = true
     void f.loadLastRecord()
     void f.loadNavList()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

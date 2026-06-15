@@ -17,28 +17,25 @@ export function CancelStatusTab({ disabled }: CancelStatusTabProps) {
   return (
     <TabPanel>
       <Row gutter={[12, 0]} align="bottom">
-        <Col span={8}><Form.Item name="reminder" label="Reminder" style={mb}><Input disabled={disabled} /></Form.Item></Col>
+        <Col span={4}><Form.Item name="reminder" label="Reminder" style={mb}><Input disabled={disabled} /></Form.Item></Col>
         <Col span={4}><Form.Item name="status" label="Status" style={mb}><Input disabled={disabled} style={{ fontFamily: 'monospace' }} /></Form.Item></Col>
-        <Col span={4}>
+        <Col span={2}>
           <Form.Item name="cancelled" valuePropName="checked" label=" " colon={false} style={mb}>
             <Checkbox disabled={disabled}>Cancelled</Checkbox>
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="cancelDate" label="Cancellation Date" style={mb}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled || !cancelled} />
           </Form.Item>
         </Col>
-      </Row>
-
-      <Row gutter={[12, 0]}>
-        <Col span={10}><Form.Item name="cancelReason" label="Reason" style={mb}><Input disabled={disabled} placeholder="Enter cancellation reason" /></Form.Item></Col>
-        <Col span={5}>
+        <Col span={4}><Form.Item name="cancelReason" label="Reason" style={mb}><Input disabled={disabled} placeholder="Enter cancellation reason" /></Form.Item></Col>
+        <Col span={4}>
           <Form.Item name="approved" label="Approved" style={mb}>
             <Select disabled={disabled} options={[{ value: 'NO', label: 'NO' }, { value: 'YES', label: 'YES' }]} />
           </Form.Item>
         </Col>
-        <Col span={9}><Form.Item name="approvedBy" label="Approved By" style={mb}><Input disabled={disabled} /></Form.Item></Col>
+        <Col span={4}><Form.Item name="approvedBy" label="Approved By" style={mb}><Input disabled={disabled} /></Form.Item></Col>
       </Row>
     </TabPanel>
   )
