@@ -3,7 +3,7 @@ import { Button, Checkbox, Input, Modal, Tag, Typography, type InputRef } from '
 import { SearchOutlined } from '@ant-design/icons'
 import * as poApi from '../api/poTransferApi'
 import type { EligiblePrLine } from '../types'
-import { LOOKUP_TH as TH, LOOKUP_TD as TD } from '@/shared/styles/erpTable'
+import { MODAL_TH as TH, MODAL_TD as TD } from '@/shared/styles/erpTable'
 
 // ── PR Picker (HTML #pr-overlay — VB6 FpSpdInd / delmodok_Click) ─────────────
 // Browses approved PR lines and multi-selects them into the PO. The list is
@@ -75,7 +75,12 @@ export function PrPickerModal({ open, divCode, onLoad, onCancel }: PrPickerModal
   }
 
   const selCount = selected.size
-  const allChecked = rows.length > 0 && selCount === rows.length
+  // "All selected" = every CURRENTLY VISIBLE row is in the selection. Comparing
+  // sizes (`selCount === rows.length`) is fragile: the Map is keyed by row.id,
+  // so any duplicate/coincident id dedupes and the size never reaches rows.length
+  // — leaving the header stuck "indeterminate", where a click re-selects instead
+  // of clearing. `every` is the correct, dedupe-safe definition.
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id))
 
   return (
     <Modal
@@ -102,12 +107,12 @@ export function PrPickerModal({ open, divCode, onLoad, onCancel }: PrPickerModal
 
       {/* Table */}
       <div style={{ maxHeight: 340, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="erp-modal-table">
           <thead>
             <tr>
-              <th style={{ ...TH, width: 36 }}>
+              <th className="erp-th-plain" style={{ ...TH, width: 36, textAlign: 'center' }}>
                 <Checkbox checked={allChecked} indeterminate={selCount > 0 && !allChecked}
-                  onChange={(e) => toggleAll(e.target.checked)} />
+                  onChange={() => toggleAll(!allChecked)} />
               </th>
               <th style={{ ...TH, width: 110 }}>PR No.</th>
               <th style={{ ...TH, width: 90 }}>PR Date</th>

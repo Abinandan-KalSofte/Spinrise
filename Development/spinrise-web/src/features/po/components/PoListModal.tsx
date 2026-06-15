@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Modal, Table, Input, Spin, type TableColumnsType } from 'antd'
+import { Modal, Table, Input, Spin, ConfigProvider, type TableColumnsType } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { PoSummary } from '../types'
 import { formatPoNo, PO_APPROVAL_BADGE } from '../types'
+import { modalTableTheme } from '@/shared/styles/erpTable'
 import { getList } from '../api/poTransferApi'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 
@@ -161,19 +162,22 @@ export default function PoListModal({ open, fDate, lDate, onSelect, onClose }: P
       </div>
 
       <div style={{ maxHeight: 360, overflowY: 'auto' }} onScroll={handleScroll}>
-        <Table<PoSummary>
-          dataSource={items}
-          columns={columns}
-          rowKey={(r) => `${r.poNo}-${r.poDate}`}
-          loading={loading}
-          size="small"
-          pagination={false}
-          locale={{ emptyText: search ? `No POs match "${search}"` : 'No purchase orders found.' }}
-          onRow={(record) => ({
-            onClick: () => { onSelect(record); onClose() },
-            style:   { cursor: 'pointer' },
-          })}
-        />
+        <ConfigProvider theme={modalTableTheme}>
+          <Table<PoSummary>
+            className="erp-modal-anttable"
+            dataSource={items}
+            columns={columns}
+            rowKey={(r) => `${r.poNo}-${r.poDate}`}
+            loading={loading}
+            size="small"
+            pagination={false}
+            locale={{ emptyText: search ? `No POs match "${search}"` : 'No purchase orders found.' }}
+            onRow={(record) => ({
+              onClick: () => { onSelect(record); onClose() },
+              style:   { cursor: 'pointer' },
+            })}
+          />
+        </ConfigProvider>
         {loadingMore && (
           <div style={{ textAlign: 'center', padding: '12px 0', color: '#888', fontSize: 12 }}>
             <Spin size="small" style={{ marginRight: 8 }} />

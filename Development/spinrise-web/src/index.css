@@ -49,6 +49,52 @@ body {
 }
 .ant-message-info .ant-message-notice-content .anticon { color: #fff !important; }
 
+/* ── Sidebar navigation (AppShell) — modern ERP styling ───────── */
+/* Thin, subtle scrollbar that only shows on the dark sider. */
+.spinrise-nav-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
+.spinrise-nav-scroll::-webkit-scrollbar { width: 6px; }
+.spinrise-nav-scroll::-webkit-scrollbar-track { background: transparent; }
+.spinrise-nav-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 3px; }
+.spinrise-nav-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
+
+/* Parent group titles + Dashboard get stronger emphasis than child leaves. */
+.spinrise-nav.ant-menu > .ant-menu-item,
+.spinrise-nav .ant-menu-submenu > .ant-menu-submenu-title { font-weight: 600; }
+
+/* Modern active indicator: left accent bar (replaces AntD's default right border). */
+.spinrise-nav .ant-menu-item::after { display: none !important; }
+.spinrise-nav .ant-menu-item,
+.spinrise-nav .ant-menu-submenu-title {
+  transition: background-color .18s ease, color .18s ease;
+}
+.spinrise-nav .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 7px; bottom: 7px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #3b82f6;
+}
+/* Highlight the ancestor group when a child route is active. */
+.spinrise-nav .ant-menu-submenu-selected > .ant-menu-submenu-title { color: #ffffff; }
+/* Collapsed rail: no left accent inside the icon-only strip / flyout. */
+.spinrise-nav.ant-menu-inline-collapsed .ant-menu-item-selected::before { display: none; }
+
+/* Raw <table> modal grids: MODAL_TH/MODAL_TD supply the blue sticky header; these
+   rules add consistent row-hover + a sort-icon placeholder on data headers (mark
+   non-sortable headers, e.g. a checkbox column, with .erp-th-plain). */
+.erp-modal-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+.erp-modal-table tbody tr { transition: background-color .12s ease; }
+.erp-modal-table tbody tr:hover { background: #E6F1FB !important; }
+
+/* AntD <Table> modal grids (wrapped in <ConfigProvider theme={modalTableTheme}>):
+   coloured header sticky inside the modal's scroll container + matching placeholder. */
+.erp-modal-anttable .ant-table-thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
 /* ── Login screen ─────────────────────────────────────────────── */
 
 /* Root — bg.jpg + dark overlay */

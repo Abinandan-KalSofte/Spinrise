@@ -37,6 +37,14 @@ export interface LineTaxDetail {
   sgstPer:   number          // PO_ORDL.sgstper (74)
   igstPer:   number          // PO_ORDL.igstper (76)
   tcsPer:    number          // PO_ORDL.Tcs_per (81)
+  // Commercial charges (Section B) + Additional Tax (Section A) — GST modal.
+  discPer:       number      // Discount %
+  packingPer:    number      // Packing & Forwarding %
+  freightPer:    number      // Freight %
+  insurancePer:  number      // Insurance %
+  fcaFob:        number      // FCA / FOB charges
+  addTaxCode:    string      // Additional Tax code (reuses GST tax-code master)
+  addTaxPer:     number      // Additional Tax %
 }
 
 /** Live totals shown in the GST modal footer (all computed display values). */

@@ -6,10 +6,8 @@ import { TabPanel, Section } from './_fieldKit'
 // SERVER (D-05 / Q5) via the hook's propagateHeaderTax handler — this tab only
 // binds the input values; it runs NO client-side propagation or calculation.
 //
-// TODO[D-11/FSD Confirmation]: cessPer, aedPer and surchargePer are PRE-GST
-//   columns flagged NOT-FOR-SPINRISE at the line level (D-11). They are kept as
-//   pass-through header inputs to match the approved mockup, with NO calculation
-//   logic, pending business confirmation of header-level applicability.
+// GST-based taxation only. Pre-GST AED / Surcharge / Cess inputs (D-11) are NOT
+// FOR SPINRISE and have been removed.
 
 interface TaxDiscountTabProps { disabled: boolean }
 
@@ -21,54 +19,41 @@ export function TaxDiscountTab({ disabled }: TaxDiscountTabProps) {
     <TabPanel>
       <Section label="Tax Rates" />
       <Row gutter={[12, 0]}>
-        <Col span={4}><Form.Item name="cgstPer" label="CGST %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="sgstPer" label="SGST %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="igstPer" label="IGST %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="tcsPer"  label="TCS %"  style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="cgstPer" label="CGST %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="sgstPer" label="SGST %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="igstPer" label="IGST %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="tcsPer"  label="TCS %"  style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
       </Row>
 
       <Section label="Deductions & Charges" />
       <Row gutter={[12, 0]}>
-        <Col span={4}><Form.Item name="discPer" label="Discount %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        {/* TODO[D-11/FSD Confirmation] — pre-GST cess; pass-through only, no calc */}
-        <Col span={4}><Form.Item name="cessPer" label="Cess %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        {/* TODO[D-11/FSD Confirmation] — pre-GST additional excise; pass-through only */}
-        <Col span={4}><Form.Item name="aedPer" label="AED %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="freightAmt" label="Freight Amt." style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="packPer" label="Packing %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="insurPer" label="Insurance %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        {/* TODO[D-11/FSD Confirmation] — pre-GST surcharge; pass-through only */}
-        <Col span={4}><Form.Item name="surchargePer" label="Surcharge %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="addTaxPer" label="Add. Tax %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="fileNo" label="File No." style={mb}><Input disabled={disabled} style={{ fontFamily: 'monospace' }} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="fcaFob" label="FCA / FOB" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="discPer" label="Discount %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="freightAmt" label="Freight Amt." style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="packPer" label="Packing %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="insurPer" label="Insurance %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="addTaxPer" label="Add. Tax %" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="fileNo" label="File No." style={mb}><Input disabled={disabled} style={{ fontFamily: 'monospace' }} /></Form.Item></Col>
+        <Col span={3}><Form.Item name="fcaFob" label="FCA / FOB" style={mb}><InputNumber {...pct} disabled={disabled} /></Form.Item></Col>
       </Row>
 
       <Section label="Applicability" />
       <Row gutter={[12, 0]}>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="freightType" label="Freight" style={mb}>
             <Radio.Group disabled={disabled}>
               <Radio value="PAID">Paid</Radio><Radio value="TOPAY">To Pay</Radio>
             </Radio.Group>
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="discApp" label="Discount Application" style={mb}>
             <Radio.Group disabled={disabled}>
               <Radio value="BEFORE">Before Tax</Radio><Radio value="AFTER">After Tax</Radio>
             </Radio.Group>
           </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col span={4}>
           <Form.Item name="packApp" label="Packing Charge" style={mb}>
-            <Radio.Group disabled={disabled}>
-              <Radio value="BEFORE">Before Tax</Radio><Radio value="AFTER">After Tax</Radio>
-            </Radio.Group>
-          </Form.Item>
-        </Col>
-        <Col span={6}>
-          <Form.Item name="cessApp" label="Cess Application" style={mb}>
             <Radio.Group disabled={disabled}>
               <Radio value="BEFORE">Before Tax</Radio><Radio value="AFTER">After Tax</Radio>
             </Radio.Group>

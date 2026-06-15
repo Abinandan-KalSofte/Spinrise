@@ -54,7 +54,7 @@ export function PoToolbar({
 
       <TbSep />
 
-      <TbBtn icon={<SaveOutlined />} label={saveLabel} kbd={isDelete ? 'F8' : 'F4'}
+      <TbBtn icon={<SaveOutlined />} label={saveLabel} kbd={isDelete ? 'F8' : 'ctrl+s'}
         variant={isDelete ? 'danger-filled' : 'primary'}
         disabled={isView || busy} onClick={onSave} />
       <TbBtn icon={<CloseOutlined />} label="Cancel" kbd="F6"

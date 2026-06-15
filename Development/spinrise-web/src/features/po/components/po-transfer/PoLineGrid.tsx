@@ -13,7 +13,7 @@ import type { PoLine, ScreenMode } from '../../types'
 // (line.route, Q4) — the grid only renders the resulting CGST/SGST vs IGST split.
 
 const TH = erpTh({ zIndex: 10 })
-const TD_TXT = { ...TD, fontSize: 11, color: '#1e293b' } as React.CSSProperties
+const TD_TXT = { ...TD, fontSize: 11, color: '#1e293b', textAlign: 'right' } as React.CSSProperties
 
 const fmt2 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmt3 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
@@ -222,8 +222,8 @@ export function PoLineGrid({
               <th style={{ ...TH, width: 80, textAlign: 'right' }}>IGST Amount</th>
               <th style={{ ...TH, width: 60, textAlign: 'right' }}>TCS %</th>
               <th style={{ ...TH, width: 80, textAlign: 'right' }}>TCS Amount</th>
-              <th style={{ ...TH, width: 90 }}>Requester ID</th>
-              <th style={{ ...TH, width: 120 }}>Requester Name</th>
+              <th style={{ ...TH, width: 90 , textAlign: 'right' }}>Requester ID</th>
+              <th style={{ ...TH, width: 120 , textAlign: 'right' }}>Requester Name</th>
               {isDelete && <th style={{ ...TH, minWidth: 160 }}>Delete Reason</th>}
               {isAdd && <th style={{ ...TH, width: 40 }} />}
             </tr>

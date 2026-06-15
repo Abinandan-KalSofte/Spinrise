@@ -2,14 +2,20 @@ import { useState } from 'react'
 import { Layout, Menu, Button, Dropdown, ConfigProvider } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
-  DashboardOutlined,
-  FileTextOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ShoppingCartOutlined,
   LogoutOutlined,
   UserOutlined,
   DownOutlined,
+  LayoutOutlined,        // or AppstoreOutlined for Dashboard
+  FileDoneOutlined,      // PR sub-group
+  FormOutlined,          // PR Amendment
+  LockOutlined,          // PR Foreclosure
+  CloseCircleOutlined,   // PR Cancellation
+  CheckCircleOutlined,   // PR First Level Approval
+  SafetyCertificateOutlined, // PR Final Level Approval
+  RetweetOutlined, 
 } from '@ant-design/icons'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { authApi } from '@/features/auth/api/authApi'
@@ -44,19 +50,19 @@ const PR_PATHS = [
 ]
 
 const NAV_ITEMS: MenuItem[] = [
-  mk('/dashboard', 'Dashboard', <DashboardOutlined />),
+  mk('/dashboard', 'Dashboard', <LayoutOutlined />),
   { type: 'divider', style: { borderColor: 'rgba(255,255,255,0.08)', margin: '8px 16px' } } as MenuItem,
-  mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined />, [
-    mk('grp-pr', wrapLabel('Purchase Requisition (PR)'), <FileTextOutlined />, [
-      mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)')),
-      mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment')),
-      mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure')),
-      mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation')),
-      mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval')),
-      mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval')),
+  mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined  />, [
+    mk('grp-pr', wrapLabel('Purchase Requisition (PR)'), '', [
+      mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)'), <FileDoneOutlined />),
+      mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment'),    <FormOutlined />),
+      mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure'),  <LockOutlined />),
+      mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'), <CloseCircleOutlined />),
+      mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval'),           <CheckCircleOutlined />),
+      mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval'),           <SafetyCertificateOutlined />),
     ]),
-    mk('grp-transfer', wrapLabel('PR to PO Transfer'), <FileTextOutlined />, [
-      mk('/po/transfer', wrapLabel('PR to PO Transfer')),
+    mk('grp-transfer', wrapLabel('PR to PO Transfer'), '', [
+      mk('/po/transfer', wrapLabel('PR to PO Transfer'), <RetweetOutlined />),
     ]),
   ]),
 ]
@@ -100,57 +106,87 @@ export default function AppShell() {
       {/* ── Sidebar ── */}
       <Sider
         collapsed={collapsed}
-        width={260}
-        collapsedWidth={52}
+        width={270}
+        collapsedWidth={64}
+        breakpoint="lg"
+        onBreakpoint={(broken) => setCollapsed(broken)}
         style={{
-          background: '#1a2236',
+          background: '#0f172a',
           height: '100vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          boxShadow: '2px 0 12px rgba(0,0,0,0.18)',
+          zIndex: 20,
         }}
         trigger={null}
       >
-        {/* Logo */}
+        {/* Brand */}
         <div
           style={{
-            height: 48,
+            height: 56,
             display: 'flex',
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? 0 : '0 16px',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-            gap: 10,
+            padding: collapsed ? 0 : '0 10px',
+            borderBottom: '1px solid rgba(255,255,255,0.07)',
+            gap: 11,
             flexShrink: 0,
             cursor: 'pointer',
           }}
           onClick={() => navigate('/dashboard')}
         >
           <div style={{
-            width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
             background: 'linear-gradient(135deg, #185FA5, #1677ff)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(22,119,255,0.35)',
           }}>
-            <span style={{ color: '#fff', fontSize: 13, fontWeight: 800 }}>S</span>
+            <span style={{ color: '#fff', fontSize: 15, fontWeight: 800 }}>S</span>
           </div>
           {!collapsed && (
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden' }}>
               Spinrise ERP
             </span>
           )}
         </div>
 
         {/* Navigation menu */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          <Menu
-            mode="inline"
-            theme="dark"
-            selectedKeys={selectedKeys}
-            defaultOpenKeys={getOpenKeys(location.pathname)}
-            items={NAV_ITEMS}
-            style={{ background: '#1a2236', borderRight: 'none' }}
-            onClick={({ key }) => { if (key.startsWith('/')) navigate(key) }}
-          />
+        <div className="spinrise-nav-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '10px 0' }}>
+          <ConfigProvider
+            theme={{
+              components: {
+                Menu: {
+                  darkItemBg: 'transparent',
+                  darkSubMenuItemBg: 'transparent',
+                  darkPopupBg: '#0f172a',
+                  darkItemColor: 'rgba(255,255,255,0.68)',
+                  darkItemHoverColor: '#ffffff',
+                  darkItemHoverBg: 'rgba(255,255,255,0.06)',
+                  darkItemSelectedBg: 'rgba(56,132,255,0.22)',
+                  darkItemSelectedColor: '#ffffff',
+                  itemHeight: 35,
+                  itemMarginInline: 10,
+                  itemMarginBlock: 4,
+                  itemBorderRadius: 8,
+                  iconSize: 16,
+                  fontSize: 13,
+                },
+              },
+            }}
+          >
+            <Menu
+              className="spinrise-nav"
+              mode="inline"
+              theme="dark"
+              inlineIndent={12}
+              selectedKeys={selectedKeys}
+              defaultOpenKeys={getOpenKeys(location.pathname)}
+              items={NAV_ITEMS}
+              style={{ background: 'transparent', borderRight: 'none' }}
+              onClick={({ key }) => { if (key.startsWith('/')) navigate(key) }}
+            />
+          </ConfigProvider>
         </div>
 
       </Sider>
@@ -161,7 +197,7 @@ export default function AppShell() {
         {/* Header */}
         <Header style={{
           height: 48, lineHeight: '48px',
-          padding: '0 16px',
+          padding: '0 10px',
           background: '#fff',
           borderBottom: '1px solid #e8e8e8',
           display: 'flex',

@@ -126,6 +126,20 @@ export interface PoLine {
   cgstCode:      string       // (78) cgst_tax_code — BR-09
   sgstCode:      string       // (79) sgst_tax_code — BR-09
   igstCode:      string       // (80) igst_tax_code — BR-09
+  // ── Commercial charges (per-line; GST & Tax modal) — seeded from header ─────
+  discPer:       number       // Discount %
+  packingPer:    number       // Packing & Forwarding %
+  freightPer:    number       // Freight %
+  insurancePer:  number       // Insurance %
+  fcaFob:        number       // FCA / FOB charges (pass-through; not in net)
+  // ── Additional Tax (GST-family; code reuses the GST tax-code master) ────────
+  addTaxCode:    string       // Additional Tax code
+  addTaxPer:     number       // Additional Tax %
+  addTaxAmt:     number       // Additional Tax amount (2dp, computed)
+  // ── Computed money fields (recalcLine) ─────────────────────────────────────
+  taxableValue:  number       // 2dp — Rate × Qty (GST base)
+  netAmount:     number       // 2dp — taxable − disc + charges + all taxes
+  taxSaved:      boolean      // true once the GST & Tax modal is saved for this line
   requesterId:   string       // (83) RO
   requesterName: string       // (84) RO
   route:         GstRoute     // server-driven (Q4); UI displays, never computes
@@ -179,27 +193,23 @@ export interface PoHeader {
   currRate:     number
   remarks:      string
 
-  // Tax / Discount (header-level)
-  // ⚠ aedPer / surchargePer / cessPer header applicability is UNCONFIRMED vs
-  //   D-11 (pre-GST). Modelled to match the HTML; confirm in FSD before wiring.
+  // Tax / Discount (header-level) — GST-based taxation only.
+  // Pre-GST AED / Surcharge / Cess columns (D-11) are NOT FOR SPINRISE and are
+  // intentionally absent; never re-add them.
   cgstPer:      number
   sgstPer:      number
   igstPer:      number
   tcsPer:       number
   discPer:      number
-  cessPer:      number
-  aedPer:       number
   freightAmt:   number
   packPer:      number
   insurPer:     number
-  surchargePer: number
   addTaxPer:    number
   fileNo:       string
   fcaFob:       number
   freightType:  'PAID' | 'TOPAY'
   discApp:      'BEFORE' | 'AFTER'
   packApp:      'BEFORE' | 'AFTER'
-  cessApp:      'BEFORE' | 'AFTER'
 
   // Payment
   payMode:      'DIRECT' | 'BANK'   // BR-15 when BANK
@@ -274,9 +284,9 @@ export interface PoSummary {
 // ── Request types (provisional — Q7) ─────────────────────────────────────────
 
 export interface SavePoLineRequest {
-  prNo:         number
+  prNo:         number       // PR back-reference — server validates PR balance
   prSno:        number
-  prDate:       string       // required for PO_PRL 4-column key (divcode, prno, prdate, prsno)
+  prDate:       string       // "YYYY-MM-DD" — MANDATORY (server PR-balance validation)
   itemCode:     string
   rate:         number
   qty:          number

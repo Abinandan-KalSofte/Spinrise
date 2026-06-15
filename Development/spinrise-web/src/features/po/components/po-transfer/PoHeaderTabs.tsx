@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import dayjs from 'dayjs'
 import { OrderDetailsTab } from './tabs/OrderDetailsTab'
 import { TaxDiscountTab } from './tabs/TaxDiscountTab'
@@ -29,14 +29,20 @@ interface PoHeaderTabsProps {
   carriers:         CarrierOption[]
   formTypes:        FormTypeOption[]
   banks:            BankOption[]
+  headerTabResetKey: number
   onSupplierChange: (s: SupplierOption | null) => void
   onSupplierOpen:   () => void
 }
 
 export function PoHeaderTabs(props: PoHeaderTabsProps) {
   const { mode, poNo, orderValue, currentPo, orderTypes, suppliers, carriers, formTypes, banks,
-    onSupplierChange, onSupplierOpen } = props
+    headerTabResetKey, onSupplierChange, onSupplierOpen } = props
+  // Default landing tab is the Header (Order Details) tab. The hook bumps
+  // headerTabResetKey on Add / Find→Load / Load Last / record nav (never on
+  // Save), so those operations return the user here while manual tab clicks and
+  // Save leave the active tab untouched.
   const [active, setActive] = useState<TabKey>('order')
+  useEffect(() => { setActive('order') }, [headerTabResetKey])
   const disabled = mode !== 'ADD'
 
   const tabs: { key: TabKey; label: string; hideInAdd?: boolean }[] = [
