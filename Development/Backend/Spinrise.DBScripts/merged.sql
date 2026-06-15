@@ -4246,25 +4246,30 @@ GO
 
 -- ============================================================
 -- ksp_PO_GetBanks
--- Returns bank lookup for the Payment tab (BR-15).
--- ⚠ VERIFY: table name FA_BANKMAS and column names BANKCODE, BANKNAME.
+-- Returns active bank list for the Payment tab (BR-15).
+-- Table: pr_Bank (confirmed 15-Jun-2026)
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetBanks
 (
-    @Search VARCHAR(100) = NULL
+    @DivCode VARCHAR(2),
+    @Search  VARCHAR(100) = NULL
 )
 AS
 BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        RTRIM(b.BANKCODE) AS BankCode,  -- ⚠ VERIFY: column name BANKCODE
-        RTRIM(b.BANKNAME) AS BankName   -- ⚠ VERIFY: column name BANKNAME
-    FROM dbo.FA_BANKMAS b               -- ⚠ VERIFY: table name FA_BANKMAS
-    WHERE @Search IS NULL
-       OR RTRIM(b.BANKCODE) LIKE @Search + '%'
-       OR RTRIM(b.BANKNAME) LIKE '%' + @Search + '%'
-    ORDER BY b.BANKNAME;
+        RTRIM(b.Bank_Code) AS BankCode,
+        RTRIM(b.bank_Name) AS BankName
+    FROM dbo.pr_Bank b
+    WHERE b.Active = 'Y'
+      AND b.Divcode = @DivCode
+      AND (
+            @Search IS NULL OR @Search = ''
+            OR b.Bank_Code LIKE '%' + @Search + '%'
+            OR b.bank_Name LIKE '%' + @Search + '%'
+          )
+    ORDER BY b.bank_Name;
 END;
 GO
 

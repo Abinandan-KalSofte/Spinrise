@@ -9,7 +9,6 @@ public class DeletePoRequest
     [Required] public string   DeleteMode    { get; init; } = "FULL";
     [Required] public string   DefaultReason { get; init; } = "";
 
-    [MinLength(1)]
     public List<PoLineDeleteReasonRequest> LineReasons { get; init; } = [];
 }
 

@@ -33,8 +33,8 @@ public class PoEntryService : IPoEntryService
     public Task<IEnumerable<CarrierOptionDto>> GetCarriersAsync(string? search) =>
         _repo.GetCarriersAsync(search);
 
-    public Task<IEnumerable<BankOptionDto>> GetBanksAsync(string? search) =>
-        _repo.GetBanksAsync(search);
+    public Task<IEnumerable<BankOptionDto>> GetBanksAsync(string divCode, string? search) =>
+        _repo.GetBanksAsync(divCode, search);
 
     public Task<IEnumerable<FormTypeOptionDto>> GetFormTypesAsync() =>
         _repo.GetFormTypesAsync();

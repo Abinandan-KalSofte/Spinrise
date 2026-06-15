@@ -70,11 +70,11 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
     }
 
-    public async Task<IEnumerable<BankOptionDto>> GetBanksAsync(string? search)
+    public async Task<IEnumerable<BankOptionDto>> GetBanksAsync(string divCode, string? search)
     {
         return await _uow.Connection.QueryAsync<BankOptionDto>(
             StoredProcedures.Po.GetBanks,
-            new { Search = search },
+            new { DivCode = divCode, Search = search },
             commandType: CommandType.StoredProcedure);
     }
 

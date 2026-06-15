@@ -104,7 +104,7 @@ mkdir "%DB_OUT%"
 :: ================================================================
 echo [1/3] Building frontend (npm run build)...
 cd /d "%FRONTEND_SRC%"
-call npm run build
+@REM call npm run build
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Frontend build failed. Fix errors above and retry.

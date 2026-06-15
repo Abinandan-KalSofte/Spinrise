@@ -71,9 +71,9 @@ public class PoEntryController : BaseApiController
     }
 
     [HttpGet("banks")]
-    public async Task<IActionResult> GetBanks([FromQuery] string? search)
+    public async Task<IActionResult> GetBanks([FromQuery] string divCode, [FromQuery] string? search)
     {
-        var result = await _service.GetBanksAsync(search);
+        var result = await _service.GetBanksAsync(divCode, search);
         return OkResponse(result);
     }
 

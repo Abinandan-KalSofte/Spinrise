@@ -925,9 +925,12 @@
               "request": {
                 "method": "GET",
                 "url": {
-                  "raw": "{{baseUrl}}/api/v1/po/banks?search=",
+                  "raw": "{{baseUrl}}/api/v1/po/banks?divCode={{divCode}}&search=",
                   "host": ["{{baseUrl}}"], "path": ["api","v1","po","banks"],
-                  "query": [{ "key": "search", "value": "" }]
+                  "query": [
+                    { "key": "divCode", "value": "{{divCode}}" },
+                    { "key": "search", "value": "" }
+                  ]
                 }
               }
             },

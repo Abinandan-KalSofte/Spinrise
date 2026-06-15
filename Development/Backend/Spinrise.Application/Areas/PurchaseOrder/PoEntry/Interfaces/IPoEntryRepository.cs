@@ -10,7 +10,7 @@ public interface IPoEntryRepository
     Task<IEnumerable<SupplierOptionDto>>  GetSuppliersAsync(string divCode, string? search);
     Task<IEnumerable<OrderTypeOptionDto>> GetOrderTypesAsync(bool activeOnly);
     Task<IEnumerable<CarrierOptionDto>>   GetCarriersAsync(string? search);
-    Task<IEnumerable<BankOptionDto>>      GetBanksAsync(string? search);
+    Task<IEnumerable<BankOptionDto>>      GetBanksAsync(string divCode, string? search);
     Task<IEnumerable<FormTypeOptionDto>>  GetFormTypesAsync();
     Task<IEnumerable<GstTaxCodeOptionDto>>  GetGstTaxCodesAsync(string? search);
     Task<IEnumerable<AddressOptionDto>>     GetAddressesAsync(string divCode, string kind, string? search);
