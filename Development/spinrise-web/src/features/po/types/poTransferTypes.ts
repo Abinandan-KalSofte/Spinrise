@@ -126,6 +126,20 @@ export interface PoLine {
   cgstCode:      string       // (78) cgst_tax_code — BR-09
   sgstCode:      string       // (79) sgst_tax_code — BR-09
   igstCode:      string       // (80) igst_tax_code — BR-09
+  // ── Commercial charges (per-line; GST & Tax modal) — seeded from header ─────
+  discPer:       number       // Discount %
+  packingPer:    number       // Packing & Forwarding %
+  freightPer:    number       // Freight %
+  insurancePer:  number       // Insurance %
+  fcaFob:        number       // FCA / FOB charges (pass-through; not in net)
+  // ── Additional Tax (GST-family; code reuses the GST tax-code master) ────────
+  addTaxCode:    string       // Additional Tax code
+  addTaxPer:     number       // Additional Tax %
+  addTaxAmt:     number       // Additional Tax amount (2dp, computed)
+  // ── Computed money fields (recalcLine) ─────────────────────────────────────
+  taxableValue:  number       // 2dp — Rate × Qty (GST base)
+  netAmount:     number       // 2dp — taxable − disc + charges + all taxes
+  taxSaved:      boolean      // true once the GST & Tax modal is saved for this line
   requesterId:   string       // (83) RO
   requesterName: string       // (84) RO
   route:         GstRoute     // server-driven (Q4); UI displays, never computes

@@ -222,6 +222,7 @@ export default function PrToPoTransferPage() {
               carriers={f.carriers}
               formTypes={f.formTypes}
               banks={f.banks}
+              headerTabResetKey={f.headerTabResetKey}
               onSupplierChange={(s) => void f.onSupplierChange(s)}
               onSupplierOpen={() => void f.loadSuppliers()}
             />
@@ -305,6 +306,8 @@ export default function PrToPoTransferPage() {
         open={f.gstLineNo !== null}
         line={gstLine}
         mode={f.mode}
+        gstTaxCodes={f.gstTaxCodes}
+        headerDefaults={f.gstHeaderDefaults}
         onApply={(lineNo, { detail, deleteReason: dr }) => {
           f.applyGstDetail(lineNo, detail)
           if (dr !== undefined) f.setLineDeleteReason(lineNo, dr)

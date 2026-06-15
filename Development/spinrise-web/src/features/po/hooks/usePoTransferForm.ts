@@ -30,8 +30,20 @@ import type {
   PoHeader, PoLine, PoParameters, PoPreAddChecks,
   SupplierOption, OrderTypeOption, CarrierOption, BankOption, FormTypeOption,
   EligiblePrLine, DeliveryScheduleLine, AddPoRequest, SavePoLineRequest,
-  GstRoute, LineTaxDetail,
+  GstRoute, LineTaxDetail, GstTaxCodeOption,
 } from '../types'
+
+// Per-line charge / additional-tax defaults sourced from the header tab. Re-read
+// live on each GST-modal open so unsaved lines pick up the latest header values.
+export interface GstHeaderDefaults {
+  discPer:      number
+  packingPer:   number
+  freightPer:   number
+  insurancePer: number
+  addTaxPer:    number
+  tcsPer:       number
+  fcaFob:       number
+}
 
 // ── Numeric helpers (project precision: Value/Amt 2dp, Qty 3dp) ──────────────
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -48,22 +60,52 @@ const toIsoDate = (d: string | null | undefined): string => {
 }
 
 // ── Pure line recompute ──────────────────────────────────────────────────────
-// Line value excludes pre-GST charges (D-11 — not in SPINRISE line model).
-// GST split honours the SERVER-supplied route (Q4); the UI never decides it.
+// GST-based engine derived from the legacy Tax-Calculation reference (reproduces
+// its Net Amount). Pre-GST excise/cess/surcharge (D-11) are NOT FOR SPINRISE and
+// are absent. GST split honours the SERVER-supplied route (Q4); UI never decides.
+//
+//   Taxable Value  = Rate × Qty                         (GST base)
+//   Discount       = Taxable × disc%
+//   Packing        = (Taxable − Discount) × packing%
+//   Freight        = Taxable × freight%
+//   Insurance      = Taxable × insurance%
+//   CGST/SGST/IGST = Taxable × rate%   (route-driven)
+//   Additional Tax = Taxable × addTax%
+//   TCS            = Taxable × tcs%
+//   Net Amount     = Taxable − Discount + Packing + Freight + Insurance
+//                    + CGST + SGST + IGST + Additional Tax + TCS
+// FCA/FOB is a pass-through reference value and is not folded into Net.
 const calcLineValue = (rate: number, qty: number) => round2((rate || 0) * (qty || 0))
+const pctOf = (base: number, pct: number) => round2((base * (pct || 0)) / 100)
 
 const recalcLine = (line: PoLine): PoLine => {
-  const value   = calcLineValue(line.rate, line.qty)
+  const taxable = calcLineValue(line.rate, line.qty)
   const isLocal = line.route === 'LOCAL'
-  const cgstAmt = isLocal ? round2((value * (line.cgstPer || 0)) / 100) : 0
-  const sgstAmt = isLocal ? round2((value * (line.sgstPer || 0)) / 100) : 0
-  const igstAmt = isLocal ? 0 : round2((value * (line.igstPer || 0)) / 100)
-  const tcsAmt  = round2((value * (line.tcsPer || 0)) / 100)
+
+  const discountAmt  = pctOf(taxable, line.discPer)
+  const packingAmt   = pctOf(taxable - discountAmt, line.packingPer)   // packing on net-of-discount (legacy)
+  const freightAmt   = pctOf(taxable, line.freightPer)
+  const insuranceAmt = pctOf(taxable, line.insurancePer)
+
+  const cgstAmt = isLocal ? pctOf(taxable, line.cgstPer) : 0
+  const sgstAmt = isLocal ? pctOf(taxable, line.sgstPer) : 0
+  const igstAmt = isLocal ? 0 : pctOf(taxable, line.igstPer)
+  const addTaxAmt = pctOf(taxable, line.addTaxPer)
+  const tcsAmt    = pctOf(taxable, line.tcsPer)
+
+  const gstTotal = round2(cgstAmt + sgstAmt + igstAmt)
+  const totalTax = round2(gstTotal + addTaxAmt + tcsAmt)
+  const netAmount = round2(
+    taxable - discountAmt + packingAmt + freightAmt + insuranceAmt + totalTax,
+  )
+
   return {
     ...line,
-    value,
-    cgstAmt, sgstAmt, igstAmt, tcsAmt,
-    taxAmt: round2(cgstAmt + sgstAmt + igstAmt),
+    value: taxable,
+    taxableValue: taxable,
+    cgstAmt, sgstAmt, igstAmt, tcsAmt, addTaxAmt,
+    netAmount,
+    taxAmt: gstTotal,
     taxPer: isLocal ? (line.cgstPer || 0) + (line.sgstPer || 0) : (line.igstPer || 0),
   }
 }
@@ -170,6 +212,11 @@ export function usePoTransferForm() {
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [navLoading, setNavLoading] = useState(false)
+  // Bumped by the operations that must land the user on the Header (Order
+  // Details) tab — Add, Find→Load, Load Last, record navigation — but NOT by
+  // Save. PoHeaderTabs resets its active tab to 'order' when this changes.
+  const [headerTabResetKey, setHeaderTabResetKey] = useState(0)
+  const resetToHeaderTab = useCallback(() => setHeaderTabResetKey((k) => k + 1), [])
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   const [parameters,  setParameters]  = useState<PoParameters | null>(null)
@@ -182,6 +229,7 @@ export function usePoTransferForm() {
   const [formTypes,  setFormTypes]  = useState<FormTypeOption[]>([])
   const [suppliers,  setSuppliers]  = useState<SupplierOption[]>([])
   const [banks,      setBanks]      = useState<BankOption[]>([])
+  const [gstTaxCodes, setGstTaxCodes] = useState<GstTaxCodeOption[]>([])
   const [lookupsLoaded,  setLookupsLoaded]  = useState(false)
   const [lookupsLoading, setLookupsLoading] = useState(false)
   const [lookupsError,   setLookupsError]   = useState<string | null>(null)
@@ -196,24 +244,45 @@ export function usePoTransferForm() {
     [mode, currentPo, draftLines],
   )
 
+  // Live header-tab values → defaults for a line's GST/charge fields. Watched so
+  // an unsaved line opened in the GST modal reflects the LATEST header values
+  // (§7). Header freight is an amount (not a %), so line freight% defaults to 0.
+  const hDiscPer   = Form.useWatch('discPer',   headerForm)
+  const hPackPer   = Form.useWatch('packPer',   headerForm)
+  const hInsurPer  = Form.useWatch('insurPer',  headerForm)
+  const hAddTaxPer = Form.useWatch('addTaxPer', headerForm)
+  const hTcsPer    = Form.useWatch('tcsPer',    headerForm)
+  const hFcaFob    = Form.useWatch('fcaFob',    headerForm)
+  const gstHeaderDefaults = useMemo<GstHeaderDefaults>(() => ({
+    discPer:      hDiscPer   ?? 0,
+    packingPer:   hPackPer   ?? 0,
+    freightPer:   0,
+    insurancePer: hInsurPer  ?? 0,
+    addTaxPer:    hAddTaxPer  ?? 0,
+    tcsPer:       hTcsPer     ?? 0,
+    fcaFob:       hFcaFob     ?? 0,
+  }), [hDiscPer, hPackPer, hInsurPer, hAddTaxPer, hTcsPer, hFcaFob])
+
   // ── Load lookups on mount ───────────────────────────────────────────────────
   const loadLookups = useCallback(async () => {
     if (!divCode) return
     setLookupsLoading(true)
     setLookupsError(null)
     try {
-      const [params, types, cars, forms, bankList] = await Promise.all([
+      const [params, types, cars, forms, bankList, taxCodes] = await Promise.all([
         poApi.getParameters(divCode),
         poApi.getOrderTypes(),
         poApi.getCarriers(),
         poApi.getFormTypes(),
-        poApi.getBanks(),
+        poApi.getBanks(divCode),
+        poApi.getGstTaxCodes(),
       ])
       setParameters(params)
       setOrderTypes(types)
       setCarriers(cars)
       setFormTypes(forms)
       setBanks(bankList)
+      setGstTaxCodes(taxCodes)
       setLookupsLoaded(true)
     } catch {
       setLookupsError('Failed to load reference data. Click Retry to reload.')
@@ -330,11 +399,23 @@ export function usePoTransferForm() {
       sgstAmt:       0,
       igstPer:       pr.igstPer,
       igstAmt:       0,
-      tcsPer:        0,
+      tcsPer:        gstHeaderDefaults.tcsPer,
       tcsAmt:        0,
       cgstCode:      '',
       sgstCode:      '',
       igstCode:      '',
+      // Commercial charges + additional tax — seeded from the header (§3/§7).
+      discPer:       gstHeaderDefaults.discPer,
+      packingPer:    gstHeaderDefaults.packingPer,
+      freightPer:    gstHeaderDefaults.freightPer,
+      insurancePer:  gstHeaderDefaults.insurancePer,
+      fcaFob:        gstHeaderDefaults.fcaFob,
+      addTaxCode:    '',
+      addTaxPer:     gstHeaderDefaults.addTaxPer,
+      addTaxAmt:     0,
+      taxableValue:  0,
+      netAmount:     0,
+      taxSaved:      false,
       requesterId:   pr.requesterId,
       requesterName: pr.requesterName,
       route:         gstRoute,          // server-resolved route (Q4)
@@ -376,11 +457,12 @@ export function usePoTransferForm() {
     }
   }
 
-  // GST modal apply → merge tax detail, recompute, refresh row.
+  // GST modal apply → merge tax detail, recompute, refresh ONLY this row (§4).
+  // taxSaved flips true so later opens load the saved row, not header defaults (§7).
   const applyGstDetail = (lineNo: number, detail: LineTaxDetail) => {
     const target = draftLines.find((l) => l.lineNo === lineNo)
     if (!target) return
-    updateDraftLine(lineNo, recalcLine({ ...target, ...detail }))
+    updateDraftLine(lineNo, recalcLine({ ...target, ...detail, taxSaved: true }))
     closeGstModal()
   }
 
@@ -419,6 +501,7 @@ export function usePoTransferForm() {
     setDeliveryLines([])
     setGstRoute('LOCAL')
     setMode('ADD')
+    resetToHeaderTab()   // Add Mode opens the Header (Order Details) tab
   }
 
   const enterDeleteMode = () => {
@@ -428,10 +511,12 @@ export function usePoTransferForm() {
     setDraftLines(currentPo.lines.map((l) => ({ ...l, deleteReason: '' })))
     setDeliveryLines(currentPo.delivery ?? [])
     setMode('DELETE')
+    resetToHeaderTab()
   }
 
   const cancelMode = () => {
     resetToView()
+    resetToHeaderTab()
     if (currentPo) fillHeaderFromPo(currentPo)
     notificationService.info('Operation Cancelled', 'The current operation was cancelled.')
   }
@@ -506,6 +591,7 @@ export function usePoTransferForm() {
       setCurrentPo(po)
       fillHeaderFromPo(po)
       setMode('VIEW')
+      resetToHeaderTab()   // Find→Load / record navigation opens the Header tab
     } catch (err) {
       notificationService.error('Failed to Load Record', getErrorMessage(err))
     } finally {
@@ -519,7 +605,7 @@ export function usePoTransferForm() {
     setNavLoading(true)
     try {
       const po = await poApi.getLastRecord(divCode, yfDate, ylDate)
-      if (po) { setCurrentPo(po); fillHeaderFromPo(po) }
+      if (po) { setCurrentPo(po); fillHeaderFromPo(po); resetToHeaderTab() }
     } catch { /* empty list is fine */ }
     finally { setNavLoading(false) }
   }, [divCode, processingDate]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -762,18 +848,30 @@ export function usePoTransferForm() {
 
   // ── Totals (KPI strip + header Order Value / Total Order Value) ─────────────
   const totals = useMemo(() => {
-    let orderValue = 0, totalGst = 0, totalTcs = 0
+    let orderValue = 0, totalGst = 0, totalTcs = 0, totalAddTax = 0, totalNet = 0
     const qtyByUom: Record<string, number> = {}
     for (const l of lines) {
-      const v = mode === 'VIEW' ? l.value : calcLineValue(l.rate, l.qty)
-      orderValue += v
-      totalGst   += (l.cgstAmt || 0) + (l.sgstAmt || 0) + (l.igstAmt || 0)
-      totalTcs   += l.tcsAmt || 0
+      // Taxable (Order Value, "Before GST", UI-03) = Rate × Qty.
+      const taxable = mode === 'VIEW'
+        ? (l.taxableValue || l.value || calcLineValue(l.rate, l.qty))
+        : calcLineValue(l.rate, l.qty)
+      const gst    = (l.cgstAmt || 0) + (l.sgstAmt || 0) + (l.igstAmt || 0)
+      const tcs    = l.tcsAmt || 0
+      const addTax = l.addTaxAmt || 0
+      // Net includes commercial charges; fall back for legacy/VIEW lines w/o netAmount.
+      const net    = (l.netAmount && l.netAmount > 0) ? l.netAmount : round2(taxable + gst + tcs + addTax)
+      orderValue  += taxable
+      totalGst    += gst
+      totalTcs    += tcs
+      totalAddTax += addTax
+      totalNet    += net
       if (l.uom) qtyByUom[l.uom] = (qtyByUom[l.uom] || 0) + (l.qty || 0)
     }
-    orderValue = round2(orderValue)
-    totalGst   = round2(totalGst)
-    totalTcs   = round2(totalTcs)
+    orderValue  = round2(orderValue)
+    totalGst    = round2(totalGst)
+    totalTcs    = round2(totalTcs)
+    totalAddTax = round2(totalAddTax)
+    totalNet    = round2(totalNet)
     // Round-off is server-authoritative (TaxOK_Click, §5.5); 0 pre-save.
     const roundOff = currentPo?.roundOff ?? 0
     return {
@@ -781,8 +879,10 @@ export function usePoTransferForm() {
       orderValue,
       totalGst,
       totalTcs,
+      totalAddTax,
       roundOff,
-      totalOrderValue: round2(orderValue + totalGst + totalTcs + roundOff),
+      // Grand total = Σ per-line Net (charges + all taxes) + round-off.
+      totalOrderValue: round2(totalNet + roundOff),
       qtyByUom,
     }
   }, [lines, mode, currentPo])
@@ -832,10 +932,11 @@ export function usePoTransferForm() {
     mode, setMode, pageBusy, saving, deleting, navLoading,
     deleteModalOpen, setDeleteModalOpen,
     // data
-    currentPo, lines, draftLines, deliveryLines, gstRoute,
+    currentPo, lines, draftLines, deliveryLines, gstRoute, headerTabResetKey,
     // lookups
     parameters, preChecks,
-    orderTypes, carriers, formTypes, suppliers, banks,
+    orderTypes, carriers, formTypes, suppliers, banks, gstTaxCodes,
+    gstHeaderDefaults,
     lookupsLoaded, lookupsLoading, lookupsError,
     loadLookups, loadSuppliers, runPreChecks,
     // line ops

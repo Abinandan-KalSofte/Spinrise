@@ -42,8 +42,8 @@ export const getCarriers = (search?: string) => {
   return apiHelpers.get<CarrierOption[]>(`${BASE}/carriers?${p}`)
 }
 
-export const getBanks = (search?: string) => {
-  const p = new URLSearchParams()
+export const getBanks = (divCode: string, search?: string) => {
+  const p = new URLSearchParams({ divCode })
   if (search) p.set('search', search)
   return apiHelpers.get<BankOption[]>(`${BASE}/banks?${p}`)
 }
