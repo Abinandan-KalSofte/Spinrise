@@ -300,6 +300,7 @@ export interface SavePoLineRequest {
   sgstCode:     string
   igstCode:     string
   route:        GstRoute
+  landCost:     number           // pre-computed by client tax engine (Sasi 15-Jun-2026)
   slots:        DeliverySlot[]   // unlimited delivery rows per item (OQ-NEW B)
 }
 

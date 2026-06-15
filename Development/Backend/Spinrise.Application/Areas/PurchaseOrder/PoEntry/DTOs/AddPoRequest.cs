@@ -100,6 +100,7 @@ public class AddPoLineRequest
     public string  Route         { get; init; } = "LOCAL";
     public string  RequesterId   { get; init; } = "";
     public string  RequesterName { get; init; } = "";
+    public decimal LandCost      { get; init; }
 
     [MinLength(0)]
     public List<DeliverySlotRequest> Slots { get; init; } = [];

@@ -725,6 +725,7 @@ export function usePoTransferForm() {
       route:         l.route,
       requesterId:   l.requesterId,
       requesterName: l.requesterName,
+      landCost:      l.netAmount,
       slots:         slotsFor(l.lineNo),
     }))
 

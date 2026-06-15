@@ -36,9 +36,11 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @FileNo           VARCHAR(20)    = NULL,
     @FcaFob           NUMERIC(13,2)  = 0,
     @FreightType      VARCHAR(10)    = 'PAID',
-    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- accepted, not yet stored
-    @PackApp          VARCHAR(10)    = 'BEFORE',
-    @CessApp          VARCHAR(10)    = 'BEFORE',
+    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- DISFLG: stored as LEFT(@DiscApp,1) → 'B'/'A'
+    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG
+    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg
+    @FrtFlg           VARCHAR(1)     = 'B',       -- FRT_FLG: 'B'=Before-tax / 'A'=After-tax
+    @InsFlg           VARCHAR(1)     = 'B',       -- INS_FLG: 'B'=Before-tax / 'A'=After-tax
     -- Payment
     @PayMode          VARCHAR(10)    = 'DIRECT',
     @DirectInstr      VARCHAR(200)   = NULL,
@@ -148,6 +150,7 @@ BEGIN
             RTRIM(ISNULL(j.IgstCode,''))     AS IgstCode,
             RTRIM(ISNULL(j.RequesterId,''))  AS RequesterId,
             RTRIM(ISNULL(j.RequesterName,'')) AS RequesterName,
+            ISNULL(j.LandCost, 0)            AS LandCost,
             j.SlotsJson
         INTO #Lines
         FROM OPENJSON(@LinesJson)
@@ -169,6 +172,7 @@ BEGIN
             IgstCode      VARCHAR(10)    '$.igstCode',
             RequesterId   VARCHAR(20)    '$.requesterId',
             RequesterName VARCHAR(100)   '$.requesterName',
+            LandCost      DECIMAL(18,2)  '$.landCost',
             SlotsJson     NVARCHAR(MAX)  '$.slots' AS JSON
         ) j
         WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
@@ -299,6 +303,7 @@ BEGIN
             Form_type, refno,   refDate, REMARKS,
             DISPER, Cessper, FREIGHT, PCKPER, INSPER, SURPER, ADDTAXPER,
             FILENO, FCACharg, FRTFLG,
+            DISFLG, PACK_FLG, FRT_FLG, INS_FLG, Cess_Flg,
             PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS,
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
@@ -331,6 +336,11 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@FileNo,'')),       ''),
             ISNULL(@FcaFob, 0),
             CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE '' END,
+            LEFT(ISNULL(UPPER(RTRIM(@DiscApp)),  'B'), 1),   -- DISFLG:    'B'=Before / 'A'=After
+            LEFT(ISNULL(UPPER(RTRIM(@PackApp)),  'B'), 1),   -- PACK_FLG:  'B'=Before / 'A'=After
+            ISNULL(@FrtFlg, 'B'),                            -- FRT_FLG:   'B'=Before / 'A'=After
+            ISNULL(@InsFlg, 'B'),                            -- INS_FLG:   'B'=Before / 'A'=After
+            LEFT(ISNULL(UPPER(RTRIM(@CessApp)),  'B'), 1),   -- Cess_Flg:  'B'=Before / 'A'=After
             CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
             NULLIF(RTRIM(ISNULL(@DirectInstr,'')),  ''),
             NULLIF(RTRIM(ISNULL(@BankCode,'')),     ''),
@@ -390,7 +400,8 @@ BEGIN
             sgstper,  sgstamt,  sgst_tax_code,
             igstper,  igstamt,  igst_tax_code,
             Tcs_per,  Tcs_amt,
-            reqidpo,  reqnamepo
+            reqidpo,  reqnamepo,
+            LandCost
         )
         SELECT
             @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
@@ -417,7 +428,8 @@ BEGIN
             l.TcsPer,
             ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2),
             NULLIF(l.RequesterId, ''),
-            NULLIF(l.RequesterName, '')
+            NULLIF(l.RequesterName, ''),
+            l.LandCost
         FROM #Lines l
         INNER JOIN dbo.PO_PRL prl
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo
