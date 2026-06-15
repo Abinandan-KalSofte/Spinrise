@@ -97,7 +97,9 @@ public class AddPoLineRequest
     public string  CgstCode  { get; init; } = "";
     public string  SgstCode  { get; init; } = "";
     public string  IgstCode  { get; init; } = "";
-    public string  Route     { get; init; } = "LOCAL";
+    public string  Route         { get; init; } = "LOCAL";
+    public string  RequesterId   { get; init; } = "";
+    public string  RequesterName { get; init; } = "";
 
     [MinLength(0)]
     public List<DeliverySlotRequest> Slots { get; init; } = [];

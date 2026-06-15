@@ -5190,27 +5190,31 @@ BEGIN
             ISNULL(j.TcsPer,  0)        AS TcsPer,
             RTRIM(ISNULL(j.CgstCode,'')) AS CgstCode,
             RTRIM(ISNULL(j.SgstCode,'')) AS SgstCode,
-            RTRIM(ISNULL(j.IgstCode,'')) AS IgstCode,
+            RTRIM(ISNULL(j.IgstCode,''))     AS IgstCode,
+            RTRIM(ISNULL(j.RequesterId,''))  AS RequesterId,
+            RTRIM(ISNULL(j.RequesterName,'')) AS RequesterName,
             j.SlotsJson
         INTO #Lines
         FROM OPENJSON(@LinesJson)
         WITH (
-            PrNo      NUMERIC(6,0)  '$.prNo',
-            PrSno     NUMERIC(6,0)  '$.prSno',
-            PrDate    DATE          '$.prDate',
-            ItemCode  VARCHAR(10)   '$.itemCode',
-            Rate      NUMERIC(13,4) '$.rate',
-            Qty       NUMERIC(12,3) '$.qty',
-            TaxCode   VARCHAR(10)   '$.taxCode',
-            HsnCode   VARCHAR(20)   '$.hsnCode',
-            CgstPer   NUMERIC(10,2) '$.cgstPer',
-            SgstPer   NUMERIC(10,2) '$.sgstPer',
-            IgstPer   NUMERIC(10,2) '$.igstPer',
-            TcsPer    NUMERIC(10,2) '$.tcsPer',
-            CgstCode  VARCHAR(10)   '$.cgstCode',
-            SgstCode  VARCHAR(10)   '$.sgstCode',
-            IgstCode  VARCHAR(10)   '$.igstCode',
-            SlotsJson NVARCHAR(MAX) '$.slots' AS JSON
+            PrNo          NUMERIC(6,0)   '$.prNo',
+            PrSno         NUMERIC(6,0)   '$.prSno',
+            PrDate        DATE           '$.prDate',
+            ItemCode      VARCHAR(10)    '$.itemCode',
+            Rate          NUMERIC(13,4)  '$.rate',
+            Qty           NUMERIC(12,3)  '$.qty',
+            TaxCode       VARCHAR(10)    '$.taxCode',
+            HsnCode       VARCHAR(20)    '$.hsnCode',
+            CgstPer       NUMERIC(10,2)  '$.cgstPer',
+            SgstPer       NUMERIC(10,2)  '$.sgstPer',
+            IgstPer       NUMERIC(10,2)  '$.igstPer',
+            TcsPer        NUMERIC(10,2)  '$.tcsPer',
+            CgstCode      VARCHAR(10)    '$.cgstCode',
+            SgstCode      VARCHAR(10)    '$.sgstCode',
+            IgstCode      VARCHAR(10)    '$.igstCode',
+            RequesterId   VARCHAR(20)    '$.requesterId',
+            RequesterName VARCHAR(100)   '$.requesterName',
+            SlotsJson     NVARCHAR(MAX)  '$.slots' AS JSON
         ) j
         WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
 
@@ -5310,8 +5314,16 @@ BEGIN
         DECLARE @Conflg        VARCHAR(1) = CASE WHEN @PoConf          = 'N' THEN 'Y' ELSE 'N' END;
 
         -- ── 7. Derived values ────────────────────────────────────────────────────
-        DECLARE @OrdVal NUMERIC(18,2);
-        SELECT @OrdVal = SUM(ROUND(Rate * Qty, 2)) FROM #Lines;
+        DECLARE @OrdVal  NUMERIC(18,2);
+        DECLARE @CgstAmt NUMERIC(18,2);
+        DECLARE @SgstAmt NUMERIC(18,2);
+        DECLARE @IgstAmt NUMERIC(18,2);
+        SELECT
+            @OrdVal  = SUM(ROUND(Rate * Qty, 2)),
+            @CgstAmt = SUM(ROUND((Rate * Qty) * CgstPer / 100.0, 2)),
+            @SgstAmt = SUM(ROUND((Rate * Qty) * SgstPer / 100.0, 2)),
+            @IgstAmt = SUM(ROUND((Rate * Qty) * IgstPer / 100.0, 2))
+        FROM #Lines;
 
         -- Supplier GSTIN + state code (authoritative from master, not client-sent)
         DECLARE @SupGstin    VARCHAR(50)   = NULL;
@@ -5338,6 +5350,7 @@ BEGIN
             Duedate, DEL_INS1, Billadd, SPL_INS, DEL_INS2,
             Note, PriceTerm, RemarksPF, RemarksIns, RemarksFrt,
             ORDVAL, roff,
+            CGSTAMT, SGSTAMT, IGSTAMT,
             cust_gstinno, cust_gststcode,
             FirstlevelApp, Conflg, poprintflg,
             createdby, createddt
@@ -5385,6 +5398,9 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@Freight,'')),          ''),
             ISNULL(@OrdVal, 0),
             0,                        -- roff: round-off (computed by client, stored as 0 here)
+            ISNULL(@CgstAmt, 0),
+            ISNULL(@SgstAmt, 0),
+            ISNULL(@IgstAmt, 0),
             @SupGstin,
             @SupGstState,
             @FirstLevelApp,           -- 'Y' if PoFirstLevelApp='N', else 'N'
@@ -5418,7 +5434,8 @@ BEGIN
             cgstper,  cgstamt,  cgst_tax_code,
             sgstper,  sgstamt,  sgst_tax_code,
             igstper,  igstamt,  igst_tax_code,
-            Tcs_per,  Tcs_amt
+            Tcs_per,  Tcs_amt,
+            reqidpo,  reqnamepo
         )
         SELECT
             @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
@@ -5443,7 +5460,9 @@ BEGIN
             ROUND((l.Rate * l.Qty) * l.IgstPer / 100.0, 2),
             LEFT(l.IgstCode, 5),  -- PO_ORDL.igst_tax_code is varchar(5)
             l.TcsPer,
-            ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2)
+            ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2),
+            NULLIF(l.RequesterId, ''),
+            NULLIF(l.RequesterName, '')
         FROM #Lines l
         INNER JOIN dbo.PO_PRL prl
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo
