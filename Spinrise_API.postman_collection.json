@@ -1,0 +1,2230 @@
+{
+  "info": {
+    "name": "Spinrise ERP V2",
+    "description": "All API endpoints for Spinrise ERP V2. Set {{token}} by running the Login request first.\nBase URL: http://localhost:5000 (dev) | http://172.16.16.40:5001 (server)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "divCode",
+      "value": "01",
+      "type": "string"
+    },
+    {
+      "key": "dbName",
+      "value": "JAT",
+      "type": "string"
+    },
+    {
+      "key": "fDate",
+      "value": "2026-04-01",
+      "type": "string"
+    },
+    {
+      "key": "lDate",
+      "value": "2026-06-30",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 — Security",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.data && json.data.accessToken) {",
+                      "    pm.collectionVariables.set('token', json.data.accessToken);",
+                      "    pm.collectionVariables.set('refreshToken', json.data.refreshToken);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-DB-Name",
+                    "value": "{{dbName}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"KSL\",\n  \"password\": \"your_password\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "login"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Refresh Token",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/refresh",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "refresh"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/logout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "logout"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Databases",
+          "item": [
+            {
+              "name": "Get Databases",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/databases",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "databases"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Companies",
+          "item": [
+            {
+              "name": "Get Active Companies",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/companies/active?db={{dbName}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "companies",
+                    "active"
+                  ],
+                  "query": [
+                    {
+                      "key": "db",
+                      "value": "{{dbName}}"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Divisions",
+          "item": [
+            {
+              "name": "Get Active Divisions",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/divisions/active?db={{dbName}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "divisions",
+                    "active"
+                  ],
+                  "query": [
+                    {
+                      "key": "db",
+                      "value": "{{dbName}}"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Purchase Requisition",
+      "item": [
+        {
+          "name": "Screen Init",
+          "item": [
+            {
+              "name": "Get Permissions",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/permissions?divCode={{divCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "permissions"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Parameters",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/parameters?divCode={{divCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "parameters"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Pre-Add Checks",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/pre-add-checks?divCode={{divCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "pre-add-checks"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lookups",
+          "item": [
+            {
+              "name": "Get Departments",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/departments?divCode={{divCode}}&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "departments"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Employees",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/employees?divCode={{divCode}}&empCommon=N&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "employees"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "empCommon",
+                      "value": "N"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get PR Types",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/pr-types?activeOnly=true",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "pr-types"
+                  ],
+                  "query": [
+                    {
+                      "key": "activeOnly",
+                      "value": "true"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Items",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/items?divCode={{divCode}}&search=&itemGrpCode=&page=1&pageSize=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "items"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    },
+                    {
+                      "key": "itemGrpCode",
+                      "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "50"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Item Detail",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/items/ITEM001/detail?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}&pDate={{fDate}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "items",
+                    "ITEM001",
+                    "detail"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "fDate",
+                      "value": "{{fDate}}"
+                    },
+                    {
+                      "key": "lDate",
+                      "value": "{{lDate}}"
+                    },
+                    {
+                      "key": "pDate",
+                      "value": "{{fDate}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Machine Lookup",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/machine-lookup?divCode={{divCode}}&depCode=01&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "machine-lookup"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "depCode",
+                      "value": "01"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Cost Centre Lookup",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/cost-centre-lookup?divCode={{divCode}}&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "cost-centre-lookup"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Check Pending Order",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/items/ITEM001/pending-order?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}&depCode=01",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "items",
+                    "ITEM001",
+                    "pending-order"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "fDate",
+                      "value": "{{fDate}}"
+                    },
+                    {
+                      "key": "lDate",
+                      "value": "{{lDate}}"
+                    },
+                    {
+                      "key": "depCode",
+                      "value": "01"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "PR Data",
+          "item": [
+            {
+              "name": "Get Last Record",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/last?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "last"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "fDate",
+                      "value": "{{fDate}}"
+                    },
+                    {
+                      "key": "lDate",
+                      "value": "{{lDate}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get By ID",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/12345?divCode={{divCode}}&prDate=2026-06-01",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "12345"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "prDate",
+                      "value": "2026-06-01"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get List",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}&mode=FIND&page=1&pageSize=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "fDate",
+                      "value": "{{fDate}}"
+                    },
+                    {
+                      "key": "lDate",
+                      "value": "{{lDate}}"
+                    },
+                    {
+                      "key": "mode",
+                      "value": "FIND"
+                    },
+                    {
+                      "key": "depCode",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "reqName",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "poGrp",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "50"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CRUD",
+          "item": [
+            {
+              "name": "Add PR",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"prDate\": \"2026-06-13\",\n  \"prType\": \"GN\",\n  \"depCode\": \"01\",\n  \"reqName\": \"1\",\n  \"remarks\": \"\",\n  \"lines\": [\n    {\n      \"itemCode\": \"ITEM001\",\n      \"qty\": 10,\n      \"rate\": 0,\n      \"remarks\": \"\",\n      \"macNo\": \"\",\n      \"ccCode\": \"\"\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "fDate",
+                      "value": "{{fDate}}"
+                    },
+                    {
+                      "key": "lDate",
+                      "value": "{{lDate}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Modify PR",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"prNo\": 12345,\n  \"prDate\": \"2026-06-13\",\n  \"prType\": \"GN\",\n  \"depCode\": \"01\",\n  \"reqName\": \"1\",\n  \"remarks\": \"Updated\",\n  \"lines\": [\n    {\n      \"prSno\": 1,\n      \"itemCode\": \"ITEM001\",\n      \"qty\": 15,\n      \"rate\": 0,\n      \"remarks\": \"\",\n      \"macNo\": \"\",\n      \"ccCode\": \"\"\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "fDate",
+                      "value": "{{fDate}}"
+                    },
+                    {
+                      "key": "lDate",
+                      "value": "{{lDate}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Delete PR",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"prNo\": 12345,\n  \"prDate\": \"2026-06-13\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr?divCode={{divCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Print & Image",
+          "item": [
+            {
+              "name": "Print PR (PDF)",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/12345/print?divCode={{divCode}}&prDate=2026-06-01",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "12345",
+                    "print"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "prDate",
+                      "value": "2026-06-01"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Item Image",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/pr/items/ITEM001/image",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "pr",
+                    "items",
+                    "ITEM001",
+                    "image"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — PR First Level Approval",
+      "item": [
+        {
+          "name": "Get PO Para",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-first-approval/po-para?divCode={{divCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-first-approval",
+                "po-para"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Departments (for user)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-first-approval/departments?divCode={{divCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-first-approval",
+                "departments"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Pending List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-first-approval/pending?divCode={{divCode}}&dep=01&yfDate={{fDate}}&ylDate={{lDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-first-approval",
+                "pending"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                },
+                {
+                  "key": "dep",
+                  "value": "01"
+                },
+                {
+                  "key": "yfDate",
+                  "value": "{{fDate}}"
+                },
+                {
+                  "key": "ylDate",
+                  "value": "{{lDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Approved List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-first-approval/approved?divCode={{divCode}}&yfDate={{fDate}}&ylDate={{lDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-first-approval",
+                "approved"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                },
+                {
+                  "key": "yfDate",
+                  "value": "{{fDate}}"
+                },
+                {
+                  "key": "ylDate",
+                  "value": "{{lDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get PR Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-first-approval/detail?divCode={{divCode}}&prNo=12345&prDate=2026-06-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-first-approval",
+                "detail"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                },
+                {
+                  "key": "prNo",
+                  "value": "12345"
+                },
+                {
+                  "key": "prDate",
+                  "value": "2026-06-01"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prNo\": 12345,\n  \"prDate\": \"2026-06-01\",\n  \"lines\": [\n    { \"prSno\": 1, \"approved\": true }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-first-approval/approve?divCode={{divCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-first-approval",
+                "approve"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Approval",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prNo\": 12345,\n  \"prDate\": \"2026-06-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-first-approval/delete-approval?divCode={{divCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-first-approval",
+                "delete-approval"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Print Approval Report (PDF)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-first-approval/12345/print?divCode={{divCode}}&prDate=2026-06-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-first-approval",
+                "12345",
+                "print"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                },
+                {
+                  "key": "prDate",
+                  "value": "2026-06-01"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 — PR Final Level Approval",
+      "item": [
+        {
+          "name": "Get Pending PRs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/finallevel-pr?dbName={{dbName}}&divCode={{divCode}}&bypass=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "finallevel-pr"
+              ],
+              "query": [
+                {
+                  "key": "dbName",
+                  "value": "{{dbName}}"
+                },
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                },
+                {
+                  "key": "bypass",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Save Approvals",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dbName\": \"{{dbName}}\",\n  \"divCode\": \"{{divCode}}\",\n  \"items\": [\n    { \"prNo\": 12345, \"prSno\": 1, \"approved\": true }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/finallevel-pr/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "finallevel-pr",
+                "approve"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Companies",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/finallevel-pr/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "finallevel-pr",
+                "companies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Divisions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/finallevel-pr/divisions?dbName={{dbName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "finallevel-pr",
+                "divisions"
+              ],
+              "query": [
+                {
+                  "key": "dbName",
+                  "value": "{{dbName}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Item Purchase History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/finallevel-pr/items/ITEM001/purchase-history?divCode={{divCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "finallevel-pr",
+                "items",
+                "ITEM001",
+                "purchase-history"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 — PR Cancellation",
+      "item": [
+        {
+          "name": "Get Cancellable PRs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-cancellation/cancellable?yfDate={{fDate}}&ylDate={{lDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-cancellation",
+                "cancellable"
+              ],
+              "query": [
+                {
+                  "key": "yfDate",
+                  "value": "{{fDate}}"
+                },
+                {
+                  "key": "ylDate",
+                  "value": "{{lDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get PR Detail for Cancellation",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-cancellation/detail?prNo=12345&prDate=2026-06-01&depCode=01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-cancellation",
+                "detail"
+              ],
+              "query": [
+                {
+                  "key": "prNo",
+                  "value": "12345"
+                },
+                {
+                  "key": "prDate",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "depCode",
+                  "value": "01"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel PR",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prNo\": 12345,\n  \"prDate\": \"2026-06-01\",\n  \"cancelReason\": \"Not required\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-cancellation/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-cancellation",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cancelled PRs (for Undo)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-cancellation/cancelled-for-undo?yfDate={{fDate}}&ylDate={{lDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-cancellation",
+                "cancelled-for-undo"
+              ],
+              "query": [
+                {
+                  "key": "yfDate",
+                  "value": "{{fDate}}"
+                },
+                {
+                  "key": "ylDate",
+                  "value": "{{lDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Undo Cancellation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prNo\": 12345,\n  \"prDate\": \"2026-06-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-cancellation/undo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-cancellation",
+                "undo"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 — PR Foreclosure",
+      "item": [
+        {
+          "name": "Get Open Lines",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-foreclosure/open-lines?fDate={{fDate}}&lDate={{lDate}}&prNoFilter=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-foreclosure",
+                "open-lines"
+              ],
+              "query": [
+                {
+                  "key": "fDate",
+                  "value": "{{fDate}}"
+                },
+                {
+                  "key": "lDate",
+                  "value": "{{lDate}}"
+                },
+                {
+                  "key": "prNoFilter",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Save Foreclosure",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    { \"prNo\": 12345, \"prSno\": 1, \"reason\": \"Stock available\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-foreclosure/save",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-foreclosure",
+                "save"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 — PR Amendment",
+      "item": [
+        {
+          "name": "Get Amendment List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-amendment?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}&page=1&pageSize=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-amendment"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                },
+                {
+                  "key": "fDate",
+                  "value": "{{fDate}}"
+                },
+                {
+                  "key": "lDate",
+                  "value": "{{lDate}}"
+                },
+                {
+                  "key": "prNo",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get PR for New Amendment",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-amendment/for-new/12345/2026-06-01?divCode={{divCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-amendment",
+                "for-new",
+                "12345",
+                "2026-06-01"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Amendment By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-amendment/12345/2026-06-01/1?divCode={{divCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-amendment",
+                "12345",
+                "2026-06-01",
+                "1"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Amendment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prNo\": 12345,\n  \"prDate\": \"2026-06-01\",\n  \"amendReason\": \"Qty change\",\n  \"lines\": [\n    { \"prSno\": 1, \"newQty\": 20 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-amendment?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-amendment"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                },
+                {
+                  "key": "fDate",
+                  "value": "{{fDate}}"
+                },
+                {
+                  "key": "lDate",
+                  "value": "{{lDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Print Amendment (PDF)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pr-amendment/12345/2026-06-01/1/print?divCode={{divCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pr-amendment",
+                "12345",
+                "2026-06-01",
+                "1",
+                "print"
+              ],
+              "query": [
+                {
+                  "key": "divCode",
+                  "value": "{{divCode}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 — PO Entry",
+      "item": [
+        {
+          "name": "Screen Init",
+          "item": [
+            {
+              "name": "Get Parameters",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/parameters?divCode={{divCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "parameters"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Pre-Add Checks",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/pre-add-checks?divCode={{divCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "pre-add-checks"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Permissions",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/permissions?divCode={{divCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "permissions"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lookups",
+          "item": [
+            {
+              "name": "Get Suppliers",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/suppliers?divCode={{divCode}}&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "suppliers"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Order Types",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/order-types?activeOnly=true",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "order-types"
+                  ],
+                  "query": [
+                    {
+                      "key": "activeOnly",
+                      "value": "true"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Carriers",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/carriers?search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "carriers"
+                  ],
+                  "query": [
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Banks",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/banks?divCode={{divCode}}&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "banks"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Form Types",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/form-types",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "form-types"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get GST Tax Codes",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/gst-tax-codes?search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "gst-tax-codes"
+                  ],
+                  "query": [
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get GST Routing",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/gst-routing?divCode={{divCode}}&supplier=CO 0003",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "gst-routing"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "supplier",
+                      "value": "CO 0003"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Addresses (Delivery)",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/addresses?divCode={{divCode}}&kind=delivery&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "addresses"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "kind",
+                      "value": "delivery"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Addresses (Billing)",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/addresses?divCode={{divCode}}&kind=billing&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "addresses"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "kind",
+                      "value": "billing"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Eligible PR Lines",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/eligible-pr-lines?divCode={{divCode}}&orderType=&search=&page=1&pageSize=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "eligible-pr-lines"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "orderType",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "50"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "PO Data",
+          "item": [
+            {
+              "name": "Get Last PO",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/last?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "last"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "fDate",
+                      "value": "{{fDate}}"
+                    },
+                    {
+                      "key": "lDate",
+                      "value": "{{lDate}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get PO By ID",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/6?divCode={{divCode}}&poDate=2026-06-02",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "6"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "poDate",
+                      "value": "2026-06-02"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CRUD",
+          "item": [
+            {
+              "name": "Add PO",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"poDate\": \"2026-06-15\",\n  \"header\": {\n    \"orderType\": \"AD\",\n    \"orderTypeDesc\": \"ADVANCE PAYMENT\",\n    \"supplier\": \"CO 0003\",\n    \"supplierName\": \"L.S. MILLS LIMITED\",\n    \"gstin\": \"\",\n    \"gstState\": \"33 - TAMIL NADU\",\n    \"currency\": \"INR\",\n    \"currRate\": 1,\n    \"carrier\": \"15\",\n    \"inspect\": \"YES\",\n    \"formType\": \"03\",\n    \"refNo\": \"\",\n    \"refDate\": null,\n    \"remarks\": \"\",\n    \"cgstPer\": 0,\n    \"sgstPer\": 0,\n    \"igstPer\": 0,\n    \"tcsPer\": 0,\n    \"discPer\": 0,\n    \"freightAmt\": 0,\n    \"packPer\": 0,\n    \"insurPer\": 0,\n    \"addTaxPer\": 0,\n    \"fileNo\": \"\",\n    \"fcaFob\": 0,\n    \"freightType\": \"PAID\",\n    \"discApp\": \"BEFORE\",\n    \"packApp\": \"BEFORE\",\n    \"payMode\": \"DIRECT\",\n    \"directInstr\": \"\",\n    \"bankCode\": \"\",\n    \"paymentTerms\": \"\",\n    \"advPer\": 0,\n    \"advAmt\": 0,\n    \"modeOfPayment\": \"\",\n    \"payRef\": \"\",\n    \"payRefDate\": null,\n    \"chequeNo\": \"\",\n    \"chequeDate\": null,\n    \"creditDays\": 0,\n    \"deliveryDate\": null,\n    \"deliveryLocation\": \"\",\n    \"billingAddress\": \"\",\n    \"specialInstr\": \"\",\n    \"despatch\": \"\",\n    \"purpose\": \"\",\n    \"otherLevies\": \"\",\n    \"pricingTerms\": \"\",\n    \"packForwarding\": \"\",\n    \"insurance\": \"\",\n    \"freight\": \"\",\n    \"roundOff\": 0,\n    \"orderValue\": 0,\n    \"reminder\": \"\",\n    \"status\": \"\",\n    \"cancelled\": false,\n    \"cancelDate\": null,\n    \"cancelReason\": \"\",\n    \"approved\": \"\",\n    \"approvedBy\": \"\"\n  },\n  \"lines\": [\n    {\n      \"prNo\": 36,\n      \"prSno\": 1,\n      \"prDate\": \"2026-05-23\",\n      \"itemCode\": \"1204003\",\n      \"rate\": 100.0,\n      \"qty\": 30,\n      \"taxCode\": \"G18\",\n      \"hsnCode\": \"731900\",\n      \"cgstPer\": 9,\n      \"sgstPer\": 9,\n      \"igstPer\": 0,\n      \"tcsPer\": 0,\n      \"cgstCode\": \"G18\",\n      \"sgstCode\": \"G18\",\n      \"igstCode\": \"\",\n      \"route\": \"LOCAL\",\n      \"requesterId\": \"100\",\n      \"requesterName\": \"LUKASH TAPNA\",\n      \"slots\": [\n        { \"slotNo\": 1, \"shDate\": \"2026-06-30\", \"qty\": 30, \"remarks\": \"\" }\n      ]\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po?divCode={{divCode}}&fDate={{fDate}}&lDate={{lDate}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "fDate",
+                      "value": "{{fDate}}"
+                    },
+                    {
+                      "key": "lDate",
+                      "value": "{{lDate}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Delete PO",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"poNo\": 6,\n  \"poDate\": \"2026-06-02\",\n  \"deleteMode\": \"HEADER\",\n  \"defaultReason\": \"Entry error\",\n  \"lineReasons\": []\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po?divCode={{divCode}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Print",
+          "item": [
+            {
+              "name": "Print PO (PDF)",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/6/print?divCode={{divCode}}&poDate=2026-06-02",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "po",
+                    "6",
+                    "print"
+                  ],
+                  "query": [
+                    {
+                      "key": "divCode",
+                      "value": "{{divCode}}"
+                    },
+                    {
+                      "key": "poDate",
+                      "value": "2026-06-02"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

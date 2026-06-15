@@ -689,11 +689,11 @@ export function usePoTransferForm() {
     if (v.orderType === HO_TYPE && !v.pricingTerms?.trim()) {
       notificationService.warning('Mandatory Fields Missing', 'Pricing Terms is required for HO purchase type.'); return false
     }
-    // BR-01 backdate guard (client mirror; server re-enforces)
-    if (preChecks?.backDateFlag === 'N' && preChecks.maxPoDate && v.poDate) {
-      const maxDate = dayjs(preChecks.maxPoDate)
-      if (v.poDate.isBefore(maxDate, 'day')) {
-        notificationService.warning('Invalid PO Date', `PO date must be ${maxDate.format('DD-MMM-YYYY')} or later.`); return false
+    // BR-01 backdate guard: PO date must equal processing date when BACKDATE='N'
+    if (preChecks?.backDateFlag === 'N' && v.poDate && processingDate) {
+      const today = dayjs(processingDate)
+      if (!v.poDate.isSame(today, 'day')) {
+        notificationService.warning('Invalid PO Date', `PO date must equal today's processing date (${today.format('DD-MMM-YYYY')}).`); return false
       }
     }
     return true
@@ -722,8 +722,10 @@ export function usePoTransferForm() {
       cgstCode: l.cgstCode,
       sgstCode: l.sgstCode,
       igstCode: l.igstCode,
-      route:    l.route,
-      slots:    slotsFor(l.lineNo),
+      route:         l.route,
+      requesterId:   l.requesterId,
+      requesterName: l.requesterName,
+      slots:         slotsFor(l.lineNo),
     }))
 
     // Guard the PO date: fall back to the processing date / today if the form
