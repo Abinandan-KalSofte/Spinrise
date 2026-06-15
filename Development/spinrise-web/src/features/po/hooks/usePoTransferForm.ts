@@ -793,6 +793,7 @@ export function usePoTransferForm() {
       setCurrentPo(saved)
       fillHeaderFromPo(saved)
       resetToView()
+      resetToHeaderTab()
       void loadNavList()   // new PO joins the navigation index
       notificationService.success('Purchase Order Saved Successfully', `Purchase Order ${formatPoNo(result.poNo)} was created.`)
     } catch (err) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Modal, Spin, Result, Descriptions, Table } from 'antd'
+import { Modal, Result, Descriptions, Table } from 'antd'
+import { ModalLoader } from '@/components/common/loading'
 import type { ColumnsType } from 'antd/es/table'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { getById } from '../../api/prApi'
@@ -98,11 +99,7 @@ export default function PrViewModal({ prNo, prDate, onClose }: Props) {
       destroyOnClose
       styles={{ body: { paddingTop: 8, maxHeight: '80vh', overflowY: 'auto' } }}
     >
-      {loading && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-          <Spin size="large" />
-        </div>
-      )}
+      {loading && <ModalLoader message="Loading PR details…" rows={5} />}
 
       {error && !loading && (
         <Result

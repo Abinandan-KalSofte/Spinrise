@@ -1,9 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { Spin } from 'antd'
 import ProtectedRoute from './shared/components/ProtectedRoute'
 import AppShell from './shared/components/AppShell'
 import SessionExpiredModal from './shared/components/SessionExpiredModal'
+import { AppLoader } from './components/common/loading'
 
 const LoginPage               = lazy(() => import('./features/auth/pages/LoginPage'))
 const DashboardPage           = lazy(() => import('./pages/DashboardPage'))
@@ -19,7 +19,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <SessionExpiredModal />
-      <Suspense fallback={<Spin fullscreen />}>
+      <Suspense fallback={<AppLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route

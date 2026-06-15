@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Form, Row, Col, DatePicker, Select, Input, Spin } from 'antd'
+import { Form, Row, Col, DatePicker, Select, Input } from 'antd'
+import { LoadingOverlay } from '@/components/common/loading'
 import dayjs, { type Dayjs } from 'dayjs'
 import type { DepartmentOption, EmployeeOption, PrHeader, PrParameters, PrTypeOption, ScreenMode } from '../types'
 import { getDepartments, getEmployees, getPrTypes } from '../api/prApi'
@@ -100,7 +101,8 @@ export default function PrHeaderForm({ mode, parameters, initialPr, form, pDate 
     : {}
 
   return (
-    <Spin spinning={loading} size="small">
+    <div style={{ position: 'relative' }}>
+      <LoadingOverlay visible={loading} message="Loading…" />
       <Form form={form} layout="vertical" size="small">
         <Row gutter={12}>
           {/* PR Date */}
@@ -234,6 +236,6 @@ export default function PrHeaderForm({ mode, parameters, initialPr, form, pDate 
           )}
         </Row>
       </Form>
-    </Spin>
+    </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Modal, Spin } from 'antd'
+import { Modal } from 'antd'
+import { SectionLoader } from '@/components/common/loading'
 import { notifyError } from '@/shared/lib/notificationHelper'
 import { usePrAmendmentForm } from '../hooks/usePrAmendmentForm'
 import { PrAmendmentHeader } from '../components/amendment/PrAmendmentHeader'
@@ -328,8 +329,8 @@ export default function PrAmendmentPage() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Amendment Details header */}
-        <Spin spinning={loading}>
-          <PrAmendmentHeader
+        {loading && <SectionLoader message="Loading amendment…" height={120} />}
+        {!loading && <PrAmendmentHeader
             header={header}
             mode={mode}
             refNo={refNo}
@@ -343,8 +344,7 @@ export default function PrAmendmentPage() {
             onAmendReasonChange={(v) => { setAmendReason(v); if (v.trim()) setReasonError(false) }}
             onITypeChange={setIType}
             onFindPR={() => { if (mode === 'new') setPrPickerOpen(true) }}
-          />
-        </Spin>
+          />}
 
         {/* Grid section */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, ConfigProvider, Form, Skeleton, Spin } from 'antd'
+import { Alert, ConfigProvider, Form, Skeleton } from 'antd'
+import { PageLoader, ApiLoader } from '@/components/common/loading'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { usePageTitle } from '@/shared/hooks/usePageTitle'
@@ -143,11 +144,7 @@ export default function PrToPoTransferPage() {
   const gstLine = f.lines.find((l) => l.lineNo === f.gstLineNo) ?? null
 
   if (f.lookupsLoading) {
-    return (
-      <div style={{ padding: 32 }}>
-        <Spin tip="Loading reference data…"><Skeleton active paragraph={{ rows: 8 }} /></Spin>
-      </div>
-    )
+    return <PageLoader toolbarButtons={7} formRows={2} gridRows={8} />
   }
 
   return (
@@ -173,11 +170,7 @@ export default function PrToPoTransferPage() {
       />
 
       {/* Status / mode banners */}
-      {f.navLoading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 16px', background: '#e6f4ff', flexShrink: 0 }}>
-          <Spin size="small" /><span style={{ fontSize: 12, color: '#1677ff' }}>Loading record…</span>
-        </div>
-      )}
+      {f.navLoading && <ApiLoader message="Loading record…" />}
       {f.lookupsError && (
         <Alert type="error" showIcon banner message={f.lookupsError}
           action={<span style={{ fontSize: 12, color: '#185FA5', cursor: 'pointer' }} onClick={() => void f.loadLookups()}>Retry</span>} />

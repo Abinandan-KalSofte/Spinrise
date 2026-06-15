@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Button, Modal, Spin, Alert } from 'antd'
+import { Button, Modal, Alert } from 'antd'
+import { SectionLoader } from '@/components/common/loading'
 import { notifyError } from '@/shared/lib/notificationHelper'
 import {
   CheckOutlined, CloseOutlined, DeleteOutlined,
@@ -358,9 +359,7 @@ export default function PrFirstApprovalPage() {
             </div>
           </div>
         ) : loading ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin size="large" />
-          </div>
+          <SectionLoader message="Loading PR detail…" />
         ) : (
           <PrApprovalGrid lines={lines} mode={mode} />
         )}

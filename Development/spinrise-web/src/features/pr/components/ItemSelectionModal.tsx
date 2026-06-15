@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Modal, Input, Table, Spin, Tag } from 'antd'
+import { Modal, Input, Table, Tag } from 'antd'
+import { ModalLoader } from '@/components/common/loading'
 import { SearchOutlined } from '@ant-design/icons'
 import type { ItemLookup } from '../types'
 import { getItems } from '../api/prApi'
@@ -107,8 +108,9 @@ export default function ItemSelectionModal({ open, onSelect, onClose }: Props) {
         autoFocus
       />
 
-      <Spin spinning={loading}>
-        <Table<ItemLookup>
+      {loading && <ModalLoader message="Loading items…" rows={3} />}
+      <Table<ItemLookup>
+        style={{ display: loading ? 'none' : undefined }}
           dataSource={items}
           columns={columns}
           rowKey="itemCode"
@@ -127,7 +129,6 @@ export default function ItemSelectionModal({ open, onSelect, onClose }: Props) {
             style:         { cursor: 'pointer' },
           })}
         />
-      </Spin>
     </Modal>
   )
 }

@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Modal, Table, Input, Tag, Spin, type TableColumnsType } from 'antd'
+import { Modal, Table, Input, Tag, ConfigProvider, type TableColumnsType } from 'antd'
+import { ApiLoader } from '@/components/common/loading'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { PrSummary, ScreenMode } from '../types'
 import { getList } from '../api/prApi'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import PrStatusBadge from './PrStatusBadge'
+import { modalTableTheme } from '@/shared/styles/erpTable'
 
 interface Props {
   open:     boolean
@@ -96,14 +98,14 @@ export default function PrListModal({ open, mode, fDate, lDate, onSelect, onClos
     {
       title:     'PR No.',
       dataIndex: 'prNo',
-      width:     80,
-      render:    (v: number) => <strong style={{ color: '#185FA5' }}>{v}</strong>,
+      width:     90,
+      render:    (v: number) => <strong style={{ color: '#185FA5', fontFamily: 'monospace' }}>PR-{String(v).padStart(5, '0')}</strong>,
     },
     {
       title:     'PR Date',
       dataIndex: 'prDate',
-      width:     100,
-      render:    (v: string) => dayjs(v).format('DD/MM/YYYY'),
+      width:     110,
+      render:    (v: string) => dayjs(v).format('DD-MMM-YYYY'),
     },
     {
       title:     'Department',
@@ -146,6 +148,7 @@ export default function PrListModal({ open, mode, fDate, lDate, onSelect, onClos
       footer={null}
       width={900}
       styles={{ body: { padding: '12px 16px' } }}
+      destroyOnClose
     >
       <Input
         prefix={<SearchOutlined style={{ color: '#888' }} />}
@@ -165,24 +168,23 @@ export default function PrListModal({ open, mode, fDate, lDate, onSelect, onClos
         style={{ maxHeight: 360, overflowY: 'auto' }}
         onScroll={handleScroll}
       >
-        <Table<PrSummary>
-          dataSource={items}
-          columns={columns}
-          rowKey={(r) => `${r.prNo}-${r.prDate}`}
-          loading={loading}
-          size="small"
-          pagination={false}
-          onRow={(record) => ({
-            onClick: () => { onSelect(record); onClose() },
-            style:   { cursor: 'pointer' },
-          })}
-        />
-        {loadingMore && (
-          <div style={{ textAlign: 'center', padding: '12px 0', color: '#888', fontSize: 12 }}>
-            <Spin size="small" style={{ marginRight: 8 }} />
-            Loading more…
-          </div>
-        )}
+        <ConfigProvider theme={modalTableTheme}>
+          <Table<PrSummary>
+            className="erp-modal-anttable"
+            dataSource={items}
+            columns={columns}
+            rowKey={(r) => `${r.prNo}-${r.prDate}`}
+            loading={loading}
+            size="small"
+            pagination={false}
+            locale={{ emptyText: search ? `No PRs match "${search}"` : 'No purchase requisitions found.' }}
+            onRow={(record) => ({
+              onClick: () => { onSelect(record); onClose() },
+              style:   { cursor: 'pointer' },
+            })}
+          />
+        </ConfigProvider>
+        {loadingMore && <ApiLoader message="Loading more…" />}
         {!loading && !loadingMore && !hasMore && items.length > 0 && (
           <div style={{ textAlign: 'center', padding: '10px 0', color: '#bbb', fontSize: 12 }}>
             All records loaded

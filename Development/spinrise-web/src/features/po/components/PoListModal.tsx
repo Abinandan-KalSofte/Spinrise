@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Modal, Table, Input, Spin, ConfigProvider, type TableColumnsType } from 'antd'
+import { Modal, Table, Input, ConfigProvider, type TableColumnsType } from 'antd'
+import { ApiLoader } from '@/components/common/loading'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { PoSummary } from '../types'
@@ -178,12 +179,7 @@ export default function PoListModal({ open, fDate, lDate, onSelect, onClose }: P
             })}
           />
         </ConfigProvider>
-        {loadingMore && (
-          <div style={{ textAlign: 'center', padding: '12px 0', color: '#888', fontSize: 12 }}>
-            <Spin size="small" style={{ marginRight: 8 }} />
-            Loading more…
-          </div>
-        )}
+        {loadingMore && <ApiLoader message="Loading more…" />}
         {!loading && !loadingMore && !hasMore && items.length > 0 && (
           <div style={{ textAlign: 'center', padding: '10px 0', color: '#bbb', fontSize: 12 }}>
             All records loaded

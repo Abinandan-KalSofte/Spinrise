@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Input, Modal, Spin, Tag, Typography, type InputRef } from 'antd'
+import { Button, Input, Modal, Tag, Typography, type InputRef } from 'antd'
+import { ApiLoader } from '@/components/common/loading'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import * as prApi from '../../api/prApi'
@@ -336,7 +337,7 @@ export function ItemPickerModal({
                 })}
                 <tr ref={sentinelRef}>
                   <td colSpan={8} style={{ padding: '8px', textAlign: 'center' }}>
-                    {loadingMore && <Spin size="small" />}
+                    {loadingMore && <ApiLoader message="Loading more…" />}
                     {!loadingMore && !hasMore && items.length > 0 && (
                       <span style={{ fontSize: 11, color: '#cbd5e1' }}>All items loaded</span>
                     )}

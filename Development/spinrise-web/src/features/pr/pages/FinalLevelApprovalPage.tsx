@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
-import { Modal, Spin } from 'antd'
+import { Modal } from 'antd'
+import { SectionLoader } from '@/components/common/loading'
 import { notifyError, notifyInfo, notifySuccess, notifyWarning } from '@/shared/lib/notificationHelper'
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useFinalApprovalStore, selectEligibleLines } from '../store/useFinalApprovalStore'
@@ -179,9 +180,7 @@ export default function FinalLevelApprovalPage() {
             </div>
           </div>
         ) : loading ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin size="large" />
-          </div>
+          <SectionLoader message="Loading approval data…" />
         ) : (
           <FinalApprovalGrid />
         )}

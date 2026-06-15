@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, Spin } from 'antd'
+import { Modal } from 'antd'
+import { LoadingOverlay } from '@/components/common/loading'
 import type { PrCancelledPrDto } from '../../types'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -79,8 +80,8 @@ export default function UndoPickerModal({ open, list, loading, onSelect, onClose
         />
       </div>
 
-      <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-        <Spin spinning={loading}>
+      <div style={{ maxHeight: 380, overflowY: 'auto', position: 'relative' }}>
+        <LoadingOverlay visible={loading} message="Loading PRs…" />
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -132,7 +133,6 @@ export default function UndoPickerModal({ open, list, loading, onSelect, onClose
               )}
             </tbody>
           </table>
-        </Spin>
       </div>
 
       <div style={{

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Modal, Skeleton, Spin, Typography } from 'antd'
+import { Alert, Modal, Skeleton, Typography } from 'antd'
+import { PageLoader, ApiLoader } from '@/components/common/loading'
 import { notifyError, notifySuccess } from '@/shared/lib/notificationHelper'
 import {
   CheckOutlined, CloseOutlined, DeleteOutlined,
@@ -248,13 +249,7 @@ export default function PurchaseRequisitionPage() {
   const depName        = departments.find((d) => d.depCode === depCode)?.depName
 
   if (lookupsLoading) {
-    return (
-      <div style={{ padding: 32 }}>
-        <Spin tip="Loading reference data…">
-          <Skeleton active paragraph={{ rows: 8 }} />
-        </Spin>
-      </div>
-    )
+    return <PageLoader toolbarButtons={8} formRows={2} gridRows={8} />
   }
 
   return (
@@ -265,10 +260,10 @@ export default function PurchaseRequisitionPage() {
 
       {/* ── Toolbar ── */}
       <div style={{
-        background: '#fff', borderBottom: '1px solid #e2e2e2',
-        display: 'flex', alignItems: 'center', gap: 4,
-        padding: '0 12px', height: 44, flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: 3, padding: '5px 16px',
+        background: '#fff', borderBottom: '1px solid #e2e2e2', flexShrink: 0, flexWrap: 'wrap',
       }}>
+        {/* Primary actions */}
         <TbBtn
           variant="primary"
           icon={<PlusOutlined style={{ fontSize: 11 }} />}
@@ -283,6 +278,14 @@ export default function PurchaseRequisitionPage() {
           disabled={isEditing || pageBusy || isDeleteMode || !permissions.canModify}
           onClick={() => setPickerMode('modify')}
         />
+        <TbBtn
+          icon={<UnorderedListOutlined style={{ fontSize: 11 }} />}
+          label="Find"
+          disabled={isEditing || isDeleteMode}
+          onClick={() => setFindOpen(true)}
+        />
+        <TbSep />
+        {/* Delete actions */}
         <TbBtn
           variant="danger"
           icon={<DeleteOutlined style={{ fontSize: 11 }} />}
@@ -299,13 +302,31 @@ export default function PurchaseRequisitionPage() {
             onClick={handleDeleteClick}
           />
         )}
+        <TbSep />
+        {/* Save / Cancel */}
         <TbBtn
-          icon={<UnorderedListOutlined style={{ fontSize: 11 }} />}
-          label="Find"
-          disabled={isEditing || isDeleteMode}
-          onClick={() => setFindOpen(true)}
+          variant="success"
+          icon={<CheckOutlined style={{ fontSize: 11 }} />}
+          label="Save" kbd="Ctrl+S"
+          disabled={!isEditing || pageBusy}
+          onClick={() => void doSave()}
+        />
+        <TbBtn
+          icon={<CloseOutlined style={{ fontSize: 11 }} />}
+          label="Cancel" kbd="Alt+X"
+          disabled={!isEditing && !isDeleteMode}
+          onClick={handleCancel}
         />
         <TbSep />
+        {/* Document actions */}
+        <TbBtn
+          icon={<PrinterOutlined style={{ fontSize: 11 }} />}
+          label="Print"
+          disabled={isEditing || !savedPrNo || isDeleteMode || pageBusy}
+          onClick={() => void handlePrint()}
+        />
+        {/* Record navigation — far right (matches PO Transfer pattern) */}
+        <span style={{ flex: 1 }} />
         <TbBtn variant="icon" icon={<DoubleLeftOutlined style={{ fontSize: 10 }} />}
           disabled={isEditing || pageBusy || isDeleteMode}
           title="First record (Ctrl+Home)"
@@ -326,50 +347,30 @@ export default function PurchaseRequisitionPage() {
           title="Last record (Ctrl+End)"
           onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('LAST') })}
         />
-        <TbSep />
-        <TbBtn
-          variant="success"
-          icon={<CheckOutlined style={{ fontSize: 11 }} />}
-          label="Save" kbd="Ctrl+S"
-          disabled={!isEditing || pageBusy}
-          onClick={() => void doSave()}
-        />
-        <TbBtn
-          icon={<PrinterOutlined style={{ fontSize: 11 }} />}
-          label="Print"
-          disabled={isEditing || !savedPrNo || isDeleteMode || pageBusy}
-          onClick={() => void handlePrint()}
-        />
-        <TbBtn
-          icon={<CloseOutlined style={{ fontSize: 11 }} />}
-          label="Cancel" kbd="Alt+X"
-          disabled={!isEditing && !isDeleteMode}
-          onClick={handleCancel}
-        />
       </div>
 
       {/* ── Status bars ── */}
-      {navLoading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 16px', background: '#e6f4ff', flexShrink: 0 }}>
-          <Spin size="small" />
-          <span style={{ fontSize: 12, color: '#1677ff' }}>Loading record…</span>
-        </div>
-      )}
+      {navLoading && <ApiLoader message="Loading record…" />}
       {lookupsError && (
         <Alert type="error" showIcon banner message={lookupsError}
           action={<span style={{ fontSize: 12, color: '#185FA5', cursor: 'pointer' }} onClick={() => void loadAll()}>Retry</span>}
         />
       )}
       {preCheckMsg && <Alert type="warning" showIcon banner message={preCheckMsg} />}
-      {preCheckLoading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: '#fff', flexShrink: 0 }}>
-          <Spin size="small" />
-          <span style={{ fontSize: 12, color: '#888' }}>Running pre-checks…</span>
+      {preCheckLoading && <ApiLoader message="Running pre-checks…" />}
+      {mode === 'new' && (
+        <div style={{ background: '#E6F1FB', borderBottom: '2px solid #185FA5', padding: '5px 16px', fontSize: 11, color: '#185FA5', fontWeight: 600, flexShrink: 0 }}>
+          ADD MODE — Fill in the header fields and add item lines, then save to generate the PR.
+        </div>
+      )}
+      {mode === 'edit' && (
+        <div style={{ background: '#fffbf0', borderBottom: '2px solid #BA7517', padding: '5px 16px', fontSize: 11, color: '#BA7517', fontWeight: 600, flexShrink: 0 }}>
+          EDIT MODE — Modify the PR lines and save to apply changes.
         </div>
       )}
       {isDeleteMode && savedPrNo && (
         <div style={{
-          background: '#FCEBEB', borderBottom: '1px solid #fca5a5',
+          background: '#FCEBEB', borderBottom: '2px solid #A32D2D',
           padding: '6px 16px', color: '#A32D2D', fontWeight: 500, fontSize: 12, flexShrink: 0,
         }}>
           Delete mode — PR-{String(savedPrNo).padStart(5, '0')} · Click the red Delete button in the toolbar to confirm.

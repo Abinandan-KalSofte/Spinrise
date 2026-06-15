@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, Spin } from 'antd'
+import { Modal } from 'antd'
+import { LoadingOverlay } from '@/components/common/loading'
 import type { PrCancellablePrDto } from '../../types'
 
 interface Props {
@@ -71,8 +72,8 @@ export default function CancelPickerModal({ open, list, loading, onSelect, onClo
       </div>
 
       {/* Table */}
-      <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-        <Spin spinning={loading}>
+      <div style={{ maxHeight: 380, overflowY: 'auto', position: 'relative' }}>
+        <LoadingOverlay visible={loading} message="Loading PRs…" />
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -116,7 +117,6 @@ export default function CancelPickerModal({ open, list, loading, onSelect, onClo
               )}
             </tbody>
           </table>
-        </Spin>
       </div>
 
       {/* Footer */}

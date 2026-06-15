@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Input, Modal, Spin, Typography, type InputRef } from 'antd'
+import { Button, Input, Modal, Typography, type InputRef } from 'antd'
+import { ApiLoader } from '@/components/common/loading'
 import { FileTextOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import * as prApi from '../../api/prApi'
@@ -142,8 +143,8 @@ export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalP
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} style={{ textAlign: 'center', padding: '40px' }}>
-                  <Spin size="small" />
+                <td colSpan={5} style={{ padding: 0 }}>
+                  <ApiLoader message="Loading PRs…" />
                 </td>
               </tr>
             ) : rows.length === 0 ? (

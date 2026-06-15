@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Spin } from 'antd'
+import { LoadingOverlay } from '@/components/common/loading'
 import { TbBtn, TbSep } from '../pr-form/PRToolbar'
 import { usePrForeclosure } from '../../hooks/usePrForeclosure'
 import type { PrForeclosureLineDto } from '../../types'
@@ -138,15 +138,7 @@ export default function PrForeclosureGrid() {
 
       {/* ── Grid ─────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-        {loading && (
-          <div style={{
-            position: 'absolute', inset: 0, zIndex: 10,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(255,255,255,0.65)',
-          }}>
-            <Spin />
-          </div>
-        )}
+        <LoadingOverlay visible={loading} message="Loading PR lines…" />
           <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'auto' }}>
 
             {lines.length === 0 && !loading && !hasLoaded ? (

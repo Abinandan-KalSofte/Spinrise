@@ -1,4 +1,5 @@
-import { Drawer, Descriptions, Statistic, Tag, Divider, Image, Spin } from 'antd'
+import { Drawer, Descriptions, Statistic, Tag, Divider, Image } from 'antd'
+import { SectionLoader } from '@/components/common/loading'
 import type { ItemDetail } from '../types'
 
 interface Props {
@@ -18,8 +19,8 @@ export default function ItemDetailDrawer({ open, item, loading, onClose }: Props
       onClose={onClose}
       styles={{ body: { padding: '16px 20px' } }}
     >
-      <Spin spinning={loading}>
-        {item && (
+      {loading && <SectionLoader message="Loading item details…" />}
+      {!loading && item && (
           <>
             {item.itemImage && (
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
@@ -82,8 +83,7 @@ export default function ItemDetailDrawer({ open, item, loading, onClose }: Props
               </div>
             )}
           </>
-        )}
-      </Spin>
+      )}
     </Drawer>
   )
 }
