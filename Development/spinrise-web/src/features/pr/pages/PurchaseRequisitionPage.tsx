@@ -23,7 +23,7 @@ import type { PrSummary } from '../types'
 import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 export default function PurchaseRequisitionPage() {
-  usePageTitle('Purchase Requisition(PR)')
+  usePageTitle('Purchase Requisition')
   const [searchParams] = useSearchParams()
 
   const {

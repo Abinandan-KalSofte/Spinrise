@@ -25,8 +25,10 @@ using Spinrise.Infrastructure.Areas.Security.Auth;
 using Spinrise.Infrastructure.Areas.Security.Division;
 using Spinrise.Infrastructure.Areas.PurchaseOrder.PurchaseRequisition;
 using Spinrise.Infrastructure.Areas.PurchaseOrder.Amendment;
-using Spinrise.Infrastructure.Areas.PurchaseOrder.PurchaseRequisition;
 using Spinrise.Infrastructure.Areas.PurchaseOrder.FirstLevelApproval;
+using Spinrise.Application.Areas.PurchaseOrder.PoEntry.Interfaces;
+using Spinrise.Application.Areas.PurchaseOrder.PoEntry.Services;
+using Spinrise.Infrastructure.Areas.PurchaseOrder.PoEntry;
 using Dapper;
 using Spinrise.Infrastructure.Data;
 
@@ -129,6 +131,8 @@ builder.Services.AddScoped<IPrFirstApprovalService, PrFirstApprovalService>();
 builder.Services.AddScoped<IFinalLevelApprovalRepository, FinalLevelApprovalRepository>();
 builder.Services.AddScoped<IFinalLevelApprovalService, FinalLevelApprovalService>();
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
+builder.Services.AddScoped<IPoEntryRepository, PoEntryRepository>();
+builder.Services.AddScoped<IPoEntryService, PoEntryService>();
 
 // ══════════════════════════════════════════════════════════════════════════
 var app = builder.Build();
