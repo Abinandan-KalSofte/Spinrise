@@ -722,8 +722,10 @@ export function usePoTransferForm() {
       cgstCode: l.cgstCode,
       sgstCode: l.sgstCode,
       igstCode: l.igstCode,
-      route:    l.route,
-      slots:    slotsFor(l.lineNo),
+      route:         l.route,
+      requesterId:   l.requesterId,
+      requesterName: l.requesterName,
+      slots:         slotsFor(l.lineNo),
     }))
 
     // Guard the PO date: fall back to the processing date / today if the form
