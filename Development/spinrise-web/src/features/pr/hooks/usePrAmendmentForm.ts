@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { App } from 'antd'
+import { notifyError, notifySuccess } from '@/shared/lib/notificationHelper'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import { generateUUID } from '@/shared/lib/uuid'
@@ -15,7 +15,6 @@ export type AmendMode = 'none' | 'new' | 'view'
 
 
 export function usePrAmendmentForm() {
-  const { message } = App.useApp()
   const authUser       = useAuthStore((s) => s.user)
   const processingDate = useAuthStore((s) => s.processingDate)
   const divCode        = authUser?.divCode ?? ''
@@ -55,11 +54,11 @@ export function usePrAmendmentForm() {
       setLines(mapLines(data.lines))
       setMode('new')
     } catch (e: unknown) {
-      message.error((e as Error).message ?? 'Failed to load PR.')
+      notifyError((e as Error).message ?? 'Failed to load PR.')
     } finally {
       setLoading(false)
     }
-  }, [divCode, message]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [divCode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load existing amendment ───────────────────────────────────────────────
   const loadById = useCallback(async (
@@ -77,11 +76,11 @@ export function usePrAmendmentForm() {
       if (idx >= 0) setNavIdxSync(idx)
       setMode(targetMode)
     } catch (e: unknown) {
-      message.error((e as Error).message ?? 'Failed to load amendment.')
+      notifyError((e as Error).message ?? 'Failed to load amendment.')
     } finally {
       setLoading(false)
     }
-  }, [divCode, message, setNavIdxSync]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [divCode, setNavIdxSync]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Refresh nav list ──────────────────────────────────────────────────────
   const refreshNavList = useCallback(async (): Promise<AmendmentSummary[]> => {
@@ -143,11 +142,11 @@ export function usePrAmendmentForm() {
       setNavIdxSync(idx)
       setMode('view')
     } catch (e: unknown) {
-      message.error((e as Error).message ?? 'Navigation failed.')
+      notifyError((e as Error).message ?? 'Navigation failed.')
     } finally {
       setLoading(false)
     }
-  }, [divCode, message, setNavIdxSync]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [divCode, setNavIdxSync]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const navFirst = useCallback(() => void navTo(0), [navTo])
   const navPrev  = useCallback(() => void navTo(navIdxRef.current - 1), [navTo])
@@ -160,45 +159,45 @@ export function usePrAmendmentForm() {
     if (!hdr) return false
 
     if (!amendReason.trim()) {
-      message.error('Amendment Reason is required.')
+      notifyError('Amendment Reason is required.')
       return false
     }
     if (lines.length === 0) {
-      message.error('At least one line item is required.')
+      notifyError('At least one line item is required.')
       return false
     }
     const manualNoJust = lines.find((l) => l.rateSource === 'MANUAL' && !l.rateJustification?.trim())
     if (manualNoJust) {
-      message.error(`Rate Justification required for item ${manualNoJust.itemCode}.`)
+      notifyError(`Rate Justification required for item ${manualNoJust.itemCode}.`)
       return false
     }
     const qtyEmpty = lines.find((l) => !l.qtyInd || l.qtyInd <= 0)
     if (qtyEmpty) {
-      message.error(`Qty must be greater than 0 for item ${qtyEmpty.itemCode}.`)
+      notifyError(`Qty must be greater than 0 for item ${qtyEmpty.itemCode}.`)
       return false
     }
     const belowMin = lines.find((l) =>
       (l.minLevel ?? 0) > 0 && l.qtyInd > 0 && l.qtyInd < (l.minLevel ?? 0)
     )
     if (belowMin) {
-      message.error(`Qty for ${belowMin.itemCode} is below the minimum order level (min: ${belowMin.minLevel}).`)
+      notifyError(`Qty for ${belowMin.itemCode} is below the minimum order level (min: ${belowMin.minLevel}).`)
       return false
     }
     const aboveMax = lines.find((l) =>
       (l.maxLevel ?? 0) > 0 && l.qtyInd > 0 && l.qtyInd > (l.maxLevel ?? 0)
     )
     if (aboveMax) {
-      message.error(`Qty for ${aboveMax.itemCode} exceeds the maximum order level (max: ${aboveMax.maxLevel}).`)
+      notifyError(`Qty for ${aboveMax.itemCode} exceeds the maximum order level (max: ${aboveMax.maxLevel}).`)
       return false
     }
     const rateOverMax = lines.find((l) => (l.rate ?? 0) > 999_999_999)
     if (rateOverMax) {
-      message.error(`Rate for ${rateOverMax.itemCode} exceeds the maximum allowed value.`)
+      notifyError(`Rate for ${rateOverMax.itemCode} exceeds the maximum allowed value.`)
       return false
     }
     const costOverMax = lines.find((l) => l.appCost > 99_999_999_999)
     if (costOverMax) {
-      message.error(`Approx. value for ${costOverMax.itemCode} exceeds the maximum allowed value.`)
+      notifyError(`Approx. value for ${costOverMax.itemCode} exceeds the maximum allowed value.`)
       return false
     }
     const prDayjs = hdr.prDate
@@ -208,7 +207,7 @@ export function usePrAmendmentForm() {
       ? lines.find((l) => l.reqdDate && l.reqdDate < prDayjs)
       : null
     if (badDate) {
-      message.error(`Required Date for item ${badDate.itemCode} cannot be before the PR Date.`)
+      notifyError(`Required Date for item ${badDate.itemCode} cannot be before the PR Date.`)
       return false
     }
 
@@ -249,7 +248,7 @@ export function usePrAmendmentForm() {
     setSaving(true)
     try {
       const result = await api.addAmendment(divCode, yfDate, ylDate, request)
-      message.success(`Amendment No. ${result.amendNo} created.`)
+      notifySuccess(`Amendment No. ${result.amendNo} created.`)
       const list = await refreshNavList()
       const newIdx = list.findIndex(
         (n) => n.amendNo === result.amendNo && String(n.prNo) === String(hdr.prNo),
@@ -258,12 +257,12 @@ export function usePrAmendmentForm() {
       await loadById(hdr.prNo, hdr.prDate, result.amendNo, 'view')
       return true
     } catch (e: unknown) {
-      message.error((e as Error).message ?? 'Save failed.')
+      notifyError((e as Error).message ?? 'Save failed.')
       return false
     } finally {
       setSaving(false)
     }
-  }, [header, lines, divCode, yfDate, ylDate, loadById, refreshNavList, setNavIdxSync, message])
+  }, [header, lines, divCode, yfDate, ylDate, loadById, refreshNavList, setNavIdxSync])
 
   // ── Reset to blank ────────────────────────────────────────────────────────
   const resetForm = useCallback(() => {

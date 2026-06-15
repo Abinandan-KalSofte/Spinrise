@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Button, Modal, Spin, Alert, App } from 'antd'
+import { Button, Modal, Spin, Alert } from 'antd'
+import { notifyError } from '@/shared/lib/notificationHelper'
 import {
   CheckOutlined, CloseOutlined, DeleteOutlined,
   DoubleLeftOutlined, DoubleRightOutlined, LeftOutlined,
@@ -23,7 +24,6 @@ type LookupMode = 'APPROVE' | 'DELETE' | 'FIND'
 
 export default function PrFirstApprovalPage() {
   usePageTitle('First Level PR Approval')
-  const { message } = App.useApp()
   const user    = useAuthStore((s) => s.user)
   const divCode = user?.divCode ?? ''
 
@@ -187,11 +187,11 @@ export default function PrFirstApprovalPage() {
       setPrintFilename(filename)
     } catch (err) {
       setPrintOpen(false)
-      void message.error(err instanceof Error ? err.message : 'Failed to generate print.')
+      notifyError(err instanceof Error ? err.message : 'Failed to generate print.')
     } finally {
       setPrintLoading(false)
     }
-  }, [divCode, detail, message])
+  }, [divCode, detail])
 
   // ── Button states ──────────────────────────────────────────────────────────
   const hasDetail  = !!detail

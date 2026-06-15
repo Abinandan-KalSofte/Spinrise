@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { message } from 'antd'
+import { notifyError, notifyInfo, notifySuccess, notifyWarning } from '@/shared/lib/notificationHelper'
 import { prFirstApprovalApi } from '../api/prFirstApprovalApi'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import type {
@@ -64,7 +64,7 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
       const ylDate = pd && pd < poPara.ylDate ? pd : poPara.ylDate
       set({ poPara, yfDate: poPara.yfDate, ylDate })
     } catch {
-      message.error('Set User Level In Parameter Form')
+      notifyError('Set User Level In Parameter Form')
     }
   },
 
@@ -74,7 +74,7 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
       const depts = await prFirstApprovalApi.getDepartments(divCode)
       set({ depts })
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : 'Failed to load departments')
+      notifyError(e instanceof Error ? e.message : 'Failed to load departments')
     } finally {
       set({ loading: false })
     }
@@ -86,9 +86,9 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
     try {
       const pendingList = await prFirstApprovalApi.getPendingList(divCode, dep, yfDate, ylDate)
       set({ pendingList })
-      if (pendingList.length === 0) message.info('No Records Found')
+      if (pendingList.length === 0) notifyInfo('No Records Found')
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : 'Failed to load pending PRs')
+      notifyError(e instanceof Error ? e.message : 'Failed to load pending PRs')
     } finally {
       set({ loading: false })
     }
@@ -100,9 +100,9 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
     try {
       const approvedList = await prFirstApprovalApi.getApprovedList(divCode, yfDate, ylDate)
       set({ approvedList })
-      if (approvedList.length === 0) message.info('No Records Found')
+      if (approvedList.length === 0) notifyInfo('No Records Found')
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : 'Failed to load approved PRs')
+      notifyError(e instanceof Error ? e.message : 'Failed to load approved PRs')
     } finally {
       set({ loading: false })
     }
@@ -132,7 +132,7 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
       }))
       set({ detail, lines, mode })
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : 'Failed to load PR detail')
+      notifyError(e instanceof Error ? e.message : 'Failed to load PR detail')
     } finally {
       set({ loading: false })
     }
@@ -146,7 +146,7 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
         updated.calcValue = +(updated.editFirstAppQty * updated.editRate).toFixed(2)
         updated.hasError  = updated.editFirstAppQty > updated.qtyInd
         if (updated.hasError) {
-          message.warning(
+          notifyWarning(
             `First Approval Quantity must be less than or equal to Quantity Required — row ${l.prSno}`
           )
         }
@@ -175,7 +175,7 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
 
     const selectedLines = lines.filter((l) => l.selected)
     if (selectedLines.length === 0) {
-      message.error('Item is not Selected')
+      notifyError('Item is not Selected')
       return
     }
 
@@ -183,14 +183,14 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
     const invalidRows = selectedLines.filter((l) => l.hasError)
     if (invalidRows.length > 0) {
       const rowNums = invalidRows.map((l) => `row ${l.prSno}`).join(', ')
-      message.error(
+      notifyError(
         `First Approval Quantity exceeds Required Quantity for ${rowNums}. Please correct before saving.`
       )
       return
     }
 
     if (new Date(appDate) > new Date()) {
-      message.error('Date should be Equal to Current Date Or Max Purchase Requisition Date')
+      notifyError('Date should be Equal to Current Date Or Max Purchase Requisition Date')
       return
     }
 
@@ -236,11 +236,11 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
         // Refresh failed — SAVED mode already set; user sees last known approved state
       }
 
-      message.success(
+      notifySuccess(
         `PR-${String(detail.header.prNo).padStart(5, '0')} — First Level Approval saved.`
       )
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : 'Save failed')
+      notifyError(e instanceof Error ? e.message : 'Save failed')
     } finally {
       set({ saving: false })
     }
@@ -256,14 +256,14 @@ export const usePrFirstApprovalStore = create<PrFirstApprovalState>((set, get) =
         prNo:   detail.header.prNo,
         prDate: detail.header.prDate,
       })
-      message.success(
+      notifySuccess(
         `PR-${String(detail.header.prNo).padStart(5, '0')} — First Level Approval deleted. PRSTATUS → Requested.`
       )
       get().reset()
       // Restore FY dates so subsequent Find / loadApprovedList still works
       set({ yfDate, ylDate, poPara })
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : 'Delete failed')
+      notifyError(e instanceof Error ? e.message : 'Delete failed')
     } finally {
       set({ saving: false })
     }

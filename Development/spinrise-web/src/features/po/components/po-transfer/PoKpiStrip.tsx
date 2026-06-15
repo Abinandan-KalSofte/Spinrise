@@ -30,7 +30,7 @@ export function PoKpiStrip({ mode, totals, approvalStatus, approvalActor }: PoKp
       <Card accent="#185FA5" label="Total Lines" value={String(totals.totalLines)} sub="PO line items" />
 
       {!hideExtra && (
-        <Card label="Order Value" value={fmt2(totals.orderValue)} sub="Before GST" />
+        <Card accent="#185FA5" label="Order Value" value={fmt2(totals.orderValue)} sub="Before GST" />
       )}
       {!hideExtra && (
         <Card accent="#3B6D11" label="Total GST" value={fmt2(totals.totalGst)} valSmall sub="CGST + SGST / IGST" warning />

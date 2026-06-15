@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App as AntApp, Button, DatePicker, Form, Input, Select, Spin } from 'antd'
+import { Button, DatePicker, Form, Input, Select, Spin } from 'antd'
+import { notifyError, notifySuccess } from '@/shared/lib/notificationHelper'
 import {
   ApartmentOutlined,
   BankOutlined,
@@ -25,7 +26,6 @@ interface LoginFormValues extends LoginDto {
 
 export default function LoginPage() {
   usePageTitle('Login')
-  const { message } = AntApp.useApp()
   const [form] = Form.useForm<LoginFormValues>()
   const setAuthSession    = useAuthStore((s) => s.setAuthSession)
   const setProcessingDate = useAuthStore((s) => s.setProcessingDate)
@@ -120,10 +120,10 @@ export default function LoginPage() {
         tokens: session.tokens,
       })
       setProcessingDate(procDate)
-      void message.success(`Welcome, ${session.user.userName} — ${session.user.divName || session.user.divCode}`)
+      notifySuccess(`Welcome, ${session.user.userName} — ${session.user.divName || session.user.divCode}`)
       navigate('/dashboard', { replace: true })
     } catch (error) {
-      message.error(getErrorMessage(error))
+      notifyError(getErrorMessage(error))
     }
   }
 

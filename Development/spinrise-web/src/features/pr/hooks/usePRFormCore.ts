@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { App, Form } from 'antd'
+import { Form } from 'antd'
+import { notifyError, notifyInfo, notifySuccess } from '@/shared/lib/notificationHelper'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { generateUUID } from '@/shared/lib/uuid'
@@ -16,7 +17,6 @@ import type {
 export type PRFormMode = 'new' | 'view' | 'edit'
 
 export function usePRFormCore() {
-  const { message } = App.useApp()
   const [headerForm] = Form.useForm<PRHeaderFormValues>()
 
   const authUser        = useAuthStore((s) => s.user)
@@ -161,7 +161,7 @@ export function usePRFormCore() {
       clearDirty()
       return pr.prStatus
     } catch (err) {
-      void message.error(err instanceof Error ? err.message : 'Failed to load the requisition.')
+      notifyError(err instanceof Error ? err.message : 'Failed to load the requisition.')
       return null
     } finally {
       setNavLoading(false)
@@ -204,10 +204,10 @@ export function usePRFormCore() {
         ? all.findIndex((r) => r.prNo === savedPrNo && r.prDate === savedPr?.prDate)
         : -1
         if (direction === 'PREV') {
-          if (currIdx <= 0) { void message.info('Already at the first record.'); setNavLoading(false); return }
+          if (currIdx <= 0) { notifyInfo('Already at the first record.'); setNavLoading(false); return }
           targetIdx = currIdx - 1
         } else {
-          if (currIdx < 0 || currIdx >= all.length - 1) { void message.info('Already at the last record.'); setNavLoading(false); return }
+          if (currIdx < 0 || currIdx >= all.length - 1) { notifyInfo('Already at the last record.'); setNavLoading(false); return }
           targetIdx = currIdx + 1
         }
       }
@@ -216,7 +216,7 @@ export function usePRFormCore() {
       await loadRecord(target.prNo, target.prDate)
     } catch {
       setNavLoading(false)
-      void message.error('Navigation failed. Please try again.')
+      notifyError('Navigation failed. Please try again.')
     }
   }
 
@@ -235,11 +235,11 @@ export function usePRFormCore() {
   const doSave = async () => {
     let values: PRHeaderFormValues
     try { values = await headerForm.validateFields() }
-    catch { void message.error('Please fill in all required fields.'); return }
+    catch { notifyError('Please fill in all required fields.'); return }
 
     const validLines = items.filter((l) => l.itemCode.trim() !== '')
     if (validLines.length === 0) {
-      void message.error('Please add at least one item to the requisition before saving.')
+      notifyError('Please add at least one item to the requisition before saving.')
       return
     }
 
@@ -248,7 +248,7 @@ export function usePRFormCore() {
     for (const l of validLines) {
       const dupeKey = `${l.itemCode}|${l.macNo || ''}`
       if (seen.has(dupeKey)) {
-        void message.error(`Duplicate item found: ${l.itemCode}${l.macNo ? ` / Machine: ${l.macNo}` : ''}. Remove or change the machine number.`)
+        notifyError(`Duplicate item found: ${l.itemCode}${l.macNo ? ` / Machine: ${l.macNo}` : ''}. Remove or change the machine number.`)
         return
       }
       seen.add(dupeKey)
@@ -256,7 +256,7 @@ export function usePRFormCore() {
 
     const belowMin = validLines.filter((l) => (l.qtyInd ?? 0) <= 0)
     if (belowMin.length > 0) {
-      void message.error(`Quantity must be greater than 0 for: ${belowMin.map((l) => l.itemCode).join(', ')}.`)
+      notifyError(`Quantity must be greater than 0 for: ${belowMin.map((l) => l.itemCode).join(', ')}.`)
       return
     }
 
@@ -265,7 +265,7 @@ export function usePRFormCore() {
       (l) => l.rateSource === 'MANUAL' && !l.rateJustification?.trim()
     )
     if (manualNoJustification.length > 0) {
-      void message.error(`Rate justification is required for: ${manualNoJustification.map((l) => l.itemCode).join(', ')}.`)
+      notifyError(`Rate justification is required for: ${manualNoJustification.map((l) => l.itemCode).join(', ')}.`)
       return
     }
 
@@ -278,7 +278,7 @@ export function usePRFormCore() {
       return mode === 'new' ? rd.isBefore(today) : rd.isBefore(prDateVal)
     })
     if (invalidDate.length > 0) {
-      void message.error(
+      notifyError(
         `Required date cannot be before ${mode === 'new' ? 'today' : 'the PR date'} for: ${invalidDate.map((l) => l.itemCode).join(', ')}.`
       )
       return
@@ -288,7 +288,7 @@ export function usePRFormCore() {
     if (mode === 'new' && preCheckResult?.backDateFlag === 'N' && preCheckResult.maxPrDate) {
       const maxDate = dayjs(preCheckResult.maxPrDate)
       if (prDateVal.isBefore(maxDate)) {
-        void message.error(`Backdating is not allowed. PR date must be ${maxDate.format('DD-MMM-YYYY')} or later.`)
+        notifyError(`Backdating is not allowed. PR date must be ${maxDate.format('DD-MMM-YYYY')} or later.`)
         return
       }
     }
@@ -298,7 +298,7 @@ export function usePRFormCore() {
       (l) => (l.minLevel ?? 0) > 0 && (l.qtyInd ?? 0) < (l.minLevel ?? 0)
     )
     if (belowMinLevel.length > 0) {
-      void message.error(
+      notifyError(
         `Quantity is below minimum order level for: ${belowMinLevel.map((l) => l.itemCode).join(', ')}. Increase quantity before saving.`
       )
       return
@@ -309,7 +309,7 @@ export function usePRFormCore() {
       (l) => (l.maxLevel ?? 0) > 0 && (l.qtyInd ?? 0) > (l.maxLevel ?? 0)
     )
     if (aboveMaxLevel.length > 0) {
-      void message.error(
+      notifyError(
         `Quantity exceeds maximum order level for: ${aboveMaxLevel.map((l) => l.itemCode).join(', ')}. Reduce quantity before saving.`
       )
       return
@@ -320,7 +320,7 @@ export function usePRFormCore() {
     const MAX_APPCOST_DB = 99_999_999_999
     const rateOverflow = validLines.filter((l) => (l.rate ?? 0) > MAX_RATE_DB)
     if (rateOverflow.length > 0) {
-      void message.error(
+      notifyError(
         `Rate exceeds the maximum allowed value (₹9,99,99,999) for: ${rateOverflow.map((l) => l.itemCode).join(', ')}. Please correct the rate before saving.`
       )
       return
@@ -329,7 +329,7 @@ export function usePRFormCore() {
     // G6d: Approx. Value exceeds DB column limit
     const appCostOverflow = validLines.filter((l) => (l.appCost ?? 0) > MAX_APPCOST_DB)
     if (appCostOverflow.length > 0) {
-      void message.error(
+      notifyError(
         `Approx. Value exceeds the maximum allowed (₹99,99,99,99,999) for: ${appCostOverflow.map((l) => l.itemCode).join(', ')}. Reduce quantity or rate before saving.`
       )
       return
@@ -397,9 +397,9 @@ export function usePRFormCore() {
       setPrStatus(savedFull.prStatus)
       setMode('view')
       clearDirty()
-      void message.success(`PR-${String(result.prNo).padStart(5, '0')} saved successfully.`)
+      notifySuccess(`PR-${String(result.prNo).padStart(5, '0')} saved successfully.`)
     } catch (err) {
-      void message.error(err instanceof Error ? err.message : 'Failed to save the requisition. Please try again.')
+      notifyError(err instanceof Error ? err.message : 'Failed to save the requisition. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -423,11 +423,11 @@ export function usePRFormCore() {
         prSno:        null,
         deleteReason: null,
       })
-      void message.success(`PR-${String(savedPrNo).padStart(5, '0')} deleted.`)
+      notifySuccess(`PR-${String(savedPrNo).padStart(5, '0')} deleted.`)
       await loadLastRecord()
       return true
     } catch (err) {
-      void message.error(err instanceof Error ? err.message : 'Failed to delete the requisition.')
+      notifyError(err instanceof Error ? err.message : 'Failed to delete the requisition.')
       return false
     } finally {
       setDeleting(false)

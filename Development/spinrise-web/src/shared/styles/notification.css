@@ -1,0 +1,117 @@
+/* ── Spinrise ERP — Notification Theme ───────────────────────────────────── */
+
+/* ─── Shared base ─────────────────────────────────────────────────────────── */
+.ant-notification-notice.success-notification,
+.ant-notification-notice.error-notification,
+.ant-notification-notice.warning-notification,
+.ant-notification-notice.info-notification {
+  border-radius: 12px !important;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.10),
+    0 1px 6px  rgba(0, 0, 0, 0.06) !important;
+  overflow: hidden !important;
+  padding: 14px 20px 14px 16px !important;
+}
+
+.ant-notification-notice.success-notification .ant-notification-notice-message,
+.ant-notification-notice.error-notification   .ant-notification-notice-message,
+.ant-notification-notice.warning-notification .ant-notification-notice-message,
+.ant-notification-notice.info-notification    .ant-notification-notice-message {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.ant-notification-notice.success-notification .ant-notification-notice-description,
+.ant-notification-notice.error-notification   .ant-notification-notice-description,
+.ant-notification-notice.warning-notification .ant-notification-notice-description,
+.ant-notification-notice.info-notification    .ant-notification-notice-description {
+  color: #4A4A4A;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.ant-notification-notice.success-notification .ant-notification-notice-close,
+.ant-notification-notice.error-notification   .ant-notification-notice-close,
+.ant-notification-notice.warning-notification .ant-notification-notice-close,
+.ant-notification-notice.info-notification    .ant-notification-notice-close {
+  color: #888 !important;
+  top: 12px !important;
+}
+
+/* ─── SUCCESS ──────────────────────────────────────────────────────────────── */
+.ant-notification-notice.success-notification {
+  background:  #F6FFED !important;
+  border:      1px solid #B7EB8F !important;
+  border-left: 5px solid #52C41A !important;
+}
+
+.ant-notification-notice.success-notification .ant-notification-notice-message {
+  color: #389E0D !important;
+}
+
+.ant-notification-notice.success-notification .ant-notification-notice-icon {
+  color: #52C41A !important;
+}
+
+.ant-notification-notice.success-notification .ant-notification-notice-progress-bg {
+  background: #52C41A !important;
+}
+
+/* ─── ERROR ────────────────────────────────────────────────────────────────── */
+.ant-notification-notice.error-notification {
+  background:  #FFF2F0 !important;
+  border:      1px solid #FFCCC7 !important;
+  border-left: 5px solid #FF4D4F !important;
+}
+
+.ant-notification-notice.error-notification .ant-notification-notice-message {
+  color: #CF1322 !important;
+}
+
+.ant-notification-notice.error-notification .ant-notification-notice-icon {
+  color: #FF4D4F !important;
+}
+
+.ant-notification-notice.error-notification .ant-notification-notice-progress-bg {
+  background: #FF4D4F !important;
+}
+
+/* ─── WARNING ──────────────────────────────────────────────────────────────── */
+.ant-notification-notice.warning-notification {
+  background:  #FFFBE6 !important;
+  border:      1px solid #FFE58F !important;
+  border-left: 5px solid #FAAD14 !important;
+}
+
+.ant-notification-notice.warning-notification .ant-notification-notice-message {
+  color: #D48806 !important;
+}
+
+.ant-notification-notice.warning-notification .ant-notification-notice-icon {
+  color: #FAAD14 !important;
+}
+
+.ant-notification-notice.warning-notification .ant-notification-notice-progress-bg {
+  background: #FAAD14 !important;
+}
+
+/* ─── INFO ─────────────────────────────────────────────────────────────────── */
+.ant-notification-notice.info-notification {
+  background:  #E6F4FF !important;
+  border:      1px solid #91CAFF !important;
+  border-left: 5px solid #1677FF !important;
+}
+
+.ant-notification-notice.info-notification .ant-notification-notice-message {
+  color: #0958D9 !important;
+}
+
+.ant-notification-notice.info-notification .ant-notification-notice-icon {
+  color: #1677FF !important;
+}
+
+.ant-notification-notice.info-notification .ant-notification-notice-progress-bg {
+  background: #1677FF !important;
+}

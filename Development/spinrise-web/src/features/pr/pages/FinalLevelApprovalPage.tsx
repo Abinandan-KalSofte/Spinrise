@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
-import { Modal, Spin, App } from 'antd'
+import { Modal, Spin } from 'antd'
+import { notifyError, notifyInfo, notifySuccess, notifyWarning } from '@/shared/lib/notificationHelper'
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useFinalApprovalStore, selectEligibleLines } from '../store/useFinalApprovalStore'
 import { finalApprovalApi } from '../api/finalApprovalApi'
@@ -13,7 +14,6 @@ import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 export default function FinalLevelApprovalPage() {
   usePageTitle('Final Level PR Approval')
-  const { message } = App.useApp()
   const user    = useAuthStore((s) => s.user)
   const divCode = user?.divCode ?? ''
 
@@ -32,20 +32,20 @@ export default function FinalLevelApprovalPage() {
 
   const handleShow = useCallback(async () => {
     if (!filter.dbName) {
-      void message.warning('Please Select the Company Name')
+      notifyWarning('Please Select the Company Name')
       return
     }
     try {
       await loadGrid()
     } catch (e: unknown) {
-      void message.error(e instanceof Error ? e.message : 'Failed to load PR lines.')
+      notifyError(e instanceof Error ? e.message : 'Failed to load PR lines.')
     }
-  }, [filter.dbName, loadGrid, message])
+  }, [filter.dbName, loadGrid])
 
   const handleRefresh = useCallback(async () => {
-    if (!gridLoaded) { void message.info('Click Show to load PR lines first.'); return }
+    if (!gridLoaded) { notifyInfo('Click Show to load PR lines first.'); return }
     await handleShow()
-  }, [gridLoaded, handleShow, message])
+  }, [gridLoaded, handleShow])
 
   const handleCancel = useCallback(() => {
     reset()
@@ -90,7 +90,7 @@ export default function FinalLevelApprovalPage() {
           rowVersion:  r.rowVersion,
         })),
       })
-      void message.success('Purchase Requisition Approval Completed.')
+      notifySuccess('Purchase Requisition Approval Completed.')
       await handleShow()
     } catch (e: unknown) {
       // Check for 409 concurrency conflict
@@ -103,12 +103,12 @@ export default function FinalLevelApprovalPage() {
           onOk: () => void handleShow(),
         })
       } else {
-        void message.error(e instanceof Error ? e.message : 'Save failed.')
+        notifyError(e instanceof Error ? e.message : 'Save failed.')
       }
     } finally {
       setSaving(false)
     }
-  }, [eligibleLines, filter, setSaving, message, handleShow]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [eligibleLines, filter, setSaving, handleShow]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ref keeps Ctrl+S handler pointing at the latest handleSaveClick on every render,
   // avoiding stale closure when line qty/disposition changes without count changing.

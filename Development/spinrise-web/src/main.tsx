@@ -5,6 +5,7 @@ import themeConfig from './shared/theme/themeConfig'
 import { NotificationBridge } from './shared/lib/notification'
 import App from './App'
 import './index.css'
+import './shared/styles/notification.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

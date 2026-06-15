@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { App } from 'antd'
+import { notifyError, notifySuccess } from '@/shared/lib/notificationHelper'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import * as api from '../api/prForeclosureApi'
@@ -8,7 +9,7 @@ import type { PrForeclosureLineDto, PrForeclosureLineKey } from '../types'
 const rowKey = (line: PrForeclosureLineDto) => `${line.prNo}-${line.prDate}-${line.itemCode}-${line.depCode}-${line.sccCode}`
 
 export function usePrForeclosure() {
-  const { modal, message } = App.useApp()
+  const { modal } = App.useApp()
 
   const processingDate = useAuthStore((s) => s.processingDate)
   const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
@@ -27,11 +28,11 @@ export function usePrForeclosure() {
       setSelected(new Map())
       setHasLoaded(true)
     } catch {
-      void message.error('Failed to load open PR lines.')
+      notifyError('Failed to load open PR lines.')
     } finally {
       setLoading(false)
     }
-  }, [message, yfDate, ylDate])
+  }, [yfDate, ylDate])
 
   const reset = useCallback(() => {
     setLines([])
@@ -100,11 +101,11 @@ export function usePrForeclosure() {
       onOk: async () => {
         try {
           const result = await api.saveForeclosure([...selected.values()])
-          void message.success(`${result.count} line${result.count !== 1 ? 's' : ''} force-closed.`)
+          notifySuccess(`${result.count} line${result.count !== 1 ? 's' : ''} force-closed.`)
           await load(prNoFilter || undefined)
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Save failed.'
-          void message.error(msg)
+          notifyError(msg)
         }
       },
     })

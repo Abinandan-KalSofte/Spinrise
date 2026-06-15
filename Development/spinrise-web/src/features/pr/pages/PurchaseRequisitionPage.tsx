@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { App, Alert, Modal, Skeleton, Spin, Typography } from 'antd'
+import { Alert, Modal, Skeleton, Spin, Typography } from 'antd'
+import { notifyError, notifySuccess } from '@/shared/lib/notificationHelper'
 import {
   CheckOutlined, CloseOutlined, DeleteOutlined,
   DoubleLeftOutlined, DoubleRightOutlined, EditOutlined,
@@ -22,7 +23,6 @@ import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
 export default function PurchaseRequisitionPage() {
   usePageTitle('Purchase Requisition(PR)')
-  const { message } = App.useApp()
   const [searchParams] = useSearchParams()
 
   const {
@@ -107,11 +107,11 @@ export default function PurchaseRequisitionPage() {
       })
       await loadRecord(savedPrNo, savedPr.prDate)
       if (wasEditing) setMode('edit')
-      void message.success(`Line ${itemCode} deleted.`)
+      notifySuccess(`Line ${itemCode} deleted.`)
     } catch (err) {
-      void message.error(err instanceof Error ? err.message : 'Failed to delete line.')
+      notifyError(err instanceof Error ? err.message : 'Failed to delete line.')
     }
-  }, [divCode, mode, savedPrNo, savedPr, loadRecord, setMode, message])
+  }, [divCode, mode, savedPrNo, savedPr, loadRecord, setMode])
 
   // ── Print (G14) ───────────────────────────────────────────────────────────
   const handlePrint = useCallback(async () => {
@@ -131,11 +131,11 @@ export default function PurchaseRequisitionPage() {
       setPrintFilename(filename)
     } catch (err) {
       setPrintOpen(false)
-      void message.error(err instanceof Error ? err.message : 'Failed to generate print.')
+      notifyError(err instanceof Error ? err.message : 'Failed to generate print.')
     } finally {
       setPrintLoading(false)
     }
-  }, [divCode, savedPrNo, savedPr, message])
+  }, [divCode, savedPrNo, savedPr])
 
   const handlePrintClose = useCallback(() => {
     setPrintOpen(false)
@@ -145,11 +145,11 @@ export default function PurchaseRequisitionPage() {
   const handleAdd = useCallback(async () => {
     const checks = await runPreChecks()
     if (!checks) return
-    if (!checks.itemMasterExists) { void message.error('Please Define Item in Item Master'); return }
-    if (!checks.deptMasterExists) { void message.error('Please Define Department in Setup'); return }
-    if (!checks.docParaExists)    { void message.error('Please Define Document No. for Requisition'); return }
+    if (!checks.itemMasterExists) { notifyError('Please Define Item in Item Master'); return }
+    if (!checks.deptMasterExists) { notifyError('Please Define Department in Setup'); return }
+    if (!checks.docParaExists)    { notifyError('Please Define Document No. for Requisition'); return }
     guardDirty(() => { setIsDeleteMode(false); initNewMode() })
-  }, [runPreChecks, guardDirty, initNewMode, message])
+  }, [runPreChecks, guardDirty, initNewMode])
 
   // ── PR picker select ──────────────────────────────────────────────────────
   const handlePickerSelect = useCallback((prNo: number, prDate: string) => {

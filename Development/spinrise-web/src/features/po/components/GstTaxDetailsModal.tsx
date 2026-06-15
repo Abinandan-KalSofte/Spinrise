@@ -105,6 +105,7 @@ export function GstTaxDetailsModal({
 
   const isLocal  = line.route === 'LOCAL'
   const isDelete = mode === 'DELETE'
+  
 
   // ── Live breakdown (mirrors recalcLine) ─────────────────────────────────────
   const taxable      = round2((line.rate || 0) * (line.qty || 0))

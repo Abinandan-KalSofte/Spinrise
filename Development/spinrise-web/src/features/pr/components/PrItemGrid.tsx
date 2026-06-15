@@ -10,7 +10,8 @@ import ItemDetailDrawer from './ItemDetailDrawer'
 import type { ItemDetail, ItemLookup } from '../types'
 import { getItemDetail, checkPendingOrder } from '../api/prApi'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
-import { message, Modal } from 'antd'
+import { Modal } from 'antd'
+import { notifyError } from '@/shared/lib/notificationHelper'
 
 ModuleRegistry.registerModules([AllCommunityModule])
 
@@ -120,7 +121,7 @@ export default function PrItemGrid({
       (l, i) => i !== rowIndex && l.itemCode === item.itemCode && l.macNo === existing.macNo
     )
     if (dupIdx >= 0) {
-      void message.error('Same Machine or Same Item should not Be repeat')
+      notifyError('Same Machine or Same Item should not Be repeat')
       return
     }
 

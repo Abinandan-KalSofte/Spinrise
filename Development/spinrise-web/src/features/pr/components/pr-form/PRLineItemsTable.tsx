@@ -4,11 +4,12 @@ import {
 } from 'react'
 import {
   Button, Checkbox, DatePicker, Drawer, Input, InputNumber,
-  type InputRef, message, Modal, Space, Tooltip, Typography,
+  type InputRef, Modal, Space, Tooltip, Typography,
 } from 'antd'
 import {
   DeleteOutlined, EyeOutlined, FileImageOutlined, SearchOutlined,
 } from '@ant-design/icons'
+import { notifyWarning } from '@/shared/lib/notificationHelper'
 import { ItemPickerModal } from './ItemPickerModal'
 import { MachineLookupModal } from './MachineLookupModal'
 import { CostCentreLookupModal } from './CostCentreLookupModal'
@@ -481,7 +482,7 @@ function PRLineItemsTable({ items, divCode, depCode, depName, disabled, savedPrN
       (l) => l.key !== rowKey && l.itemCode === row.itemCode && l.macNo === machine.macNo
     )
     if (isDupe) {
-      message.warning(`${row.itemCode} with the same machine is already in the list.`)
+      notifyWarning(`${row.itemCode} with the same machine is already in the list.`)
       setMachineAutoNextKey(null)
       setMachinePickerKey(null)
       return

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { App, Modal, Spin } from 'antd'
+import { Modal, Spin } from 'antd'
+import { notifyError } from '@/shared/lib/notificationHelper'
 import { usePrAmendmentForm } from '../hooks/usePrAmendmentForm'
 import { PrAmendmentHeader } from '../components/amendment/PrAmendmentHeader'
 import { PrAmendmentLineGrid } from '../components/amendment/PrAmendmentLineGrid'
@@ -38,7 +39,6 @@ const SEP: React.CSSProperties = { width: 1, height: 20, background: '#e2e2e2', 
 
 export default function PrAmendmentPage() {
   usePageTitle('PR Amendment')
-  const { message } = App.useApp()
 
   const {
     mode,
@@ -134,11 +134,11 @@ export default function PrAmendmentPage() {
   }, [navList, navIdx, loadById, resetForm])
 
   const handleSave = useCallback(async () => {
-    if (!amendReason.trim()) { setReasonError(true); message.error('Amendment Reason is required.'); return }
-    if (purTypeFlg === 1 && !iType.trim()) { message.error('PR Type is required.'); return }
+    if (!amendReason.trim()) { setReasonError(true); notifyError('Amendment Reason is required.'); return }
+    if (purTypeFlg === 1 && !iType.trim()) { notifyError('PR Type is required.'); return }
     setReasonError(false)
     await doSave(refNo, amendReason, iType || null)
-  }, [amendReason, refNo, iType, purTypeFlg, doSave, message])
+  }, [amendReason, refNo, iType, purTypeFlg, doSave])
 
   const handlePrSelected = useCallback(async (pr: PrSummary) => {
     setPrPickerOpen(false)
@@ -177,11 +177,11 @@ export default function PrAmendmentPage() {
       setPrintFilename(`AMD-${String(header.amendNo).padStart(4, '0')}-PR${header.prNo}.pdf`)
       setPrintOpen(true)
     } catch (e: unknown) {
-      message.error((e as Error).message ?? 'Print failed.')
+      notifyError((e as Error).message ?? 'Print failed.')
     } finally {
       setPrintLoading(false)
     }
-  }, [header, printBlobUrl, message])
+  }, [header, printBlobUrl])
 
   const closePrint = useCallback(() => {
     setPrintOpen(false)

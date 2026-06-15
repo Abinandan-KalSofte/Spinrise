@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { App } from 'antd'
+import { notifyError, notifySuccess } from '@/shared/lib/notificationHelper'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import * as api from '../api/prCancellationApi'
@@ -12,7 +13,7 @@ import type {
 export type CancelTab = 'cancel' | 'undo'
 
 export function usePrCancellation() {
-  const { modal, message } = App.useApp()
+  const { modal } = App.useApp()
   const processingDate = useAuthStore((s) => s.processingDate)
 
   const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
@@ -40,11 +41,11 @@ export function usePrCancellation() {
       const data = await api.getCancellable(yfDate, ylDate)
       setCancellableList(data)
     } catch {
-      void message.error('Failed to load eligible PRs.')
+      notifyError('Failed to load eligible PRs.')
     } finally {
       setCancelLoading(false)
     }
-  }, [yfDate, ylDate, message])
+  }, [yfDate, ylDate])
 
   const loadCancelled = useCallback(async () => {
     setUndoLoading(true)
@@ -52,11 +53,11 @@ export function usePrCancellation() {
       const data = await api.getCancelledForUndo(yfDate, ylDate)
       setCancelledList(data)
     } catch {
-      void message.error('Failed to load cancelled PRs.')
+      notifyError('Failed to load cancelled PRs.')
     } finally {
       setUndoLoading(false)
     }
-  }, [yfDate, ylDate, message])
+  }, [yfDate, ylDate])
 
   useEffect(() => { void loadCancellable() }, [loadCancellable])
 
@@ -75,7 +76,7 @@ export function usePrCancellation() {
       setCancelReason('')
       setCancelReasonError(null)
     } catch {
-      void message.error('Failed to load PR details.')
+      notifyError('Failed to load PR details.')
     }
   }
 
@@ -104,12 +105,12 @@ export function usePrCancellation() {
         setIsCancelling(true)
         try {
           await api.cancelPR(header.prNo, header.prDate, header.depCode, cancelReason.trim())
-          void message.success(`${prTag} cancelled. Audit written to LogDet_PO.`)
+          notifySuccess(`${prTag} cancelled. Audit written to LogDet_PO.`)
           reset()
           await loadCancellable()
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Cancellation failed.'
-          void message.error(msg)
+          notifyError(msg)
         } finally {
           setIsCancelling(false)
         }
@@ -144,12 +145,12 @@ export function usePrCancellation() {
         setIsUndoing(true)
         try {
           await api.undoCancellation(selectedUndoPr.prNo, selectedUndoPr.prDate, selectedUndoPr.depCode, selectedUndoPr.rowVersion)
-          void message.success(`${prTag} restored. Audit written to LogDet_PO.`)
+          notifySuccess(`${prTag} restored. Audit written to LogDet_PO.`)
           reset()
           await loadCancellable()
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Undo failed.'
-          void message.error(msg)
+          notifyError(msg)
         } finally {
           setIsUndoing(false)
         }
