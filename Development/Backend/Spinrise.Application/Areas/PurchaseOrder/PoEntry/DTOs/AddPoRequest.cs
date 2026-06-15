@@ -82,7 +82,9 @@ public class AddPoHeaderRequest
 
 public class AddPoLineRequest
 {
-    [Required] public decimal PrSno    { get; init; }
+    [Required] public decimal  PrNo    { get; init; }
+    [Required] public decimal  PrSno   { get; init; }
+    [Required] public DateOnly PrDate  { get; init; }
     [Required][MaxLength(10)] public string ItemCode { get; init; } = "";
     [Range(0.0001, double.MaxValue)] public decimal Rate   { get; init; }
     [Range(0.0001, double.MaxValue)] public decimal Qty    { get; init; }
@@ -96,7 +98,6 @@ public class AddPoLineRequest
     public string  SgstCode  { get; init; } = "";
     public string  IgstCode  { get; init; } = "";
     public string  Route     { get; init; } = "LOCAL";
-    public decimal PrNo      { get; init; }
 
     [MinLength(0)]
     public List<DeliverySlotRequest> Slots { get; init; } = [];

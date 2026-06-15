@@ -5157,15 +5157,19 @@ BEGIN
             RAISERROR('Pricing Term Cannot be empty', 16, 1);
 
         -- ── 3. BR-01: Backdate check (FSD §4.6) ─────────────────────────────────
-        -- When BACKDATE='N', PO date must strictly equal the system processing date.
+        -- When BACKDATE='N', PO date must equal today OR the max existing PO date.
         DECLARE @BackDate CHAR(1) = 'Y';
         SELECT TOP 1 @BackDate = ISNULL(UPPER(RTRIM(BACKDATE)), 'Y') FROM dbo.IN_PARA;
 
         IF @BackDate <> 'Y'
         BEGIN
             DECLARE @ProcessingDate DATE = CAST(GETDATE() AS DATE);
+            DECLARE @MaxPoDate      DATE;
+            SELECT @MaxPoDate = CAST(MAX(PORDDT) AS DATE) FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode;
+
             IF @PoDate <> @ProcessingDate
-                RAISERROR('PO Date must be equal to today''s processing date.', 16, 1);
+               AND NOT (@MaxPoDate IS NOT NULL AND @PoDate = @MaxPoDate)
+                RAISERROR('PO Date must be equal to Current Date Or Max Purchase Order Date.', 16, 1);
         END
 
         -- ── 4. Parse lines JSON into temp table (one row per line) ───────────────
@@ -5253,6 +5257,29 @@ BEGIN
         IF @QtyError IS NOT NULL
             RAISERROR(@QtyError, 16, 1);
 
+        -- BR-09: GST code active-status check (ig_tax.TAXSTATUS = 'Y')
+        IF EXISTS (
+            SELECT 1 FROM #Lines l
+            LEFT JOIN dbo.IG_TAX cg ON RTRIM(cg.TAX_CODE) = RTRIM(l.CgstCode)
+            LEFT JOIN dbo.IG_TAX sg ON RTRIM(sg.TAX_CODE) = RTRIM(l.SgstCode)
+            LEFT JOIN dbo.IG_TAX ig ON RTRIM(ig.TAX_CODE) = RTRIM(l.IgstCode)
+            WHERE (l.CgstCode <> '' AND UPPER(ISNULL(cg.TAXSTATUS, '')) <> 'Y')
+               OR (l.SgstCode <> '' AND UPPER(ISNULL(sg.TAXSTATUS, '')) <> 'Y')
+               OR (l.IgstCode <> '' AND UPPER(ISNULL(ig.TAXSTATUS, '')) <> 'Y')
+        )
+            RAISERROR('One or more GST tax codes are inactive. Please select an active code.', 16, 1);
+
+        -- BR-02: Re-verify PR line eligibility at save time (race condition guard)
+        IF EXISTS (
+            SELECT 1 FROM #Lines l
+            INNER JOIN dbo.PO_PRL prl
+                ON prl.divcode = @DivCode AND prl.prno = l.PrNo
+               AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno
+            WHERE ISNULL(prl.DirectApp, 'N') <> 'Y'
+               OR ISNULL(prl.FClosed,   'N') =  'Y'
+        )
+            RAISERROR('One or more PR lines are no longer eligible for ordering.', 16, 1);
+
         -- ── 6. Allocate PO number (atomic SEQUENCE — CEO confirmed 07-Jun-2026) ──
         -- SEQUENCE guarantees uniqueness under concurrent users (no race condition).
         -- Prerequisite: dbo.seq_PO_AllocatePONo must exist in JAT DB.
@@ -5269,7 +5296,7 @@ BEGIN
             SET @PoNo = @StartDocNo;
 
         -- ── 7a. Division approval parameters (FSD §5.8 / §5.9) ────────────────
-        -- BR-09: If PoFirstLevelApp='N', auto-approve first level on save.
+        -- If PoFirstLevelApp='N', auto-approve first level on save.
         -- Conflg: If PoConf='N' (no confirmation step required), auto-confirm.
         DECLARE @PoFirstLevelApp CHAR(1) = 'Y';
         DECLARE @PoConf          CHAR(1) = 'N';
@@ -5360,16 +5387,21 @@ BEGIN
             0,                        -- roff: round-off (computed by client, stored as 0 here)
             @SupGstin,
             @SupGstState,
-            @FirstLevelApp,           -- 'Y' if PoFirstLevelApp='N' (BR-09), else 'N'
+            @FirstLevelApp,           -- 'Y' if PoFirstLevelApp='N', else 'N'
             @Conflg,                  -- 'Y' if PoConf='N' (auto-confirm), else 'N'
             'N',                      -- poprintflg
             @UserId,
             @CreatedDt
         );
 
-        -- ── 8b. Read back actual PORDDT after any triggers/defaults on PO_ORDH.
-        --       PO_ORDL/DETL must use the exact same datetime so insposup trigger
-        --       (join: pordno + porddt + divcode + pogrp) can find the PO_ORDH row.
+        -- FSD §14: Reset amendment/cancellation flags on every new save
+        UPDATE dbo.PO_ORDH
+        SET AMDORDNO = NULL, CANFLG = NULL
+        WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
+
+        -- ── 8b. Read back the actual PORDDT stored in PO_ORDH after any triggers/defaults.
+        --       PO_ORDL and PO_ORDL_DETL must use this exact value so that the
+        --       insposup trigger (which joins PO_ORDH on exact porddt) can find the row.
         DECLARE @ActualPoDt DATETIME;
         SELECT @ActualPoDt = PORDDT FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
 
@@ -5419,6 +5451,33 @@ BEGIN
 
         -- ── 10. INSERT PO_ORDL_DETL (delivery slots, up to 4 per line) ────────────
         --     OPENJSON(NULL) safely returns 0 rows, so no extra NULL guard needed.
+
+        -- Cap: max 4 slots per line (FSD Handover §6.3)
+        IF EXISTS (
+            SELECT 1
+            FROM #Lines l
+            CROSS APPLY OPENJSON(l.SlotsJson) WITH (qty NUMERIC(12,3) '$.qty') s
+            WHERE l.SlotsJson IS NOT NULL
+            GROUP BY l.PORDSNO
+            HAVING COUNT(*) > 4
+        )
+            RAISERROR('Maximum 4 delivery slots are allowed per order line.', 16, 1);
+
+        -- Reconciliation: slot qty total must equal line ordered qty
+        IF EXISTS (
+            SELECT 1
+            FROM #Lines l
+            CROSS APPLY (
+                SELECT SUM(s.qty) AS SlotTotal
+                FROM OPENJSON(l.SlotsJson) WITH (qty NUMERIC(12,3) '$.qty') s
+                WHERE s.qty > 0
+            ) st
+            WHERE l.SlotsJson IS NOT NULL
+              AND st.SlotTotal IS NOT NULL
+              AND ABS(st.SlotTotal - l.Qty) > 0.001
+        )
+            RAISERROR('Delivery slot quantities must sum to the ordered quantity for each line.', 16, 1);
+
         INSERT INTO dbo.PO_ORDL_DETL
         (divcode, pordno, porddt, pordsno, pogrp, itemcode, shdate, Quantity)
         SELECT
