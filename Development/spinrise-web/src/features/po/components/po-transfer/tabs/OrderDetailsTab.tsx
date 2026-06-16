@@ -81,7 +81,7 @@ export function OrderDetailsTab({
         </Col>
         <Col span={3}>
           <Form.Item name="gstin" label="GSTIN" style={mb}>
-            <Input readOnly placeholder="Auto-filled from supplier" style={{ fontFamily: 'monospace' }} />
+            <Input readOnly placeholder="Auto" style={{ fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
         <Col span={4}>
@@ -126,9 +126,7 @@ export function OrderDetailsTab({
         </Col>
 
         <Col span={4}>
-          <Form.Item name="currency" label="Currency" required
-            rules={[{ required: true, message: 'Currency is required' }]}
-            validateTrigger="onBlur" style={mb}>
+          <Form.Item name="currency" label="Currency" style={mb}>
             <Select
               showSearch optionFilterProp="label"
               placeholder="Select currency…" disabled={disabled}

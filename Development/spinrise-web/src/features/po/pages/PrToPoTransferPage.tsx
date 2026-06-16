@@ -43,6 +43,8 @@ export default function PrToPoTransferPage() {
   // to the tab containing the first failing field on save validation.
   const [headerTab, setHeaderTab] = useState<HeaderTabKey>('order')
   useEffect(() => { setHeaderTab('order') }, [f.headerTabResetKey])
+  // Reset body section to Item Details after a successful save (Task 1).
+  useEffect(() => { setBodyTab('lines') }, [f.bodyTabResetKey])
 
   // Print preview (modal — mirrors the PR module; no new browser tab).
   const [printOpen,     setPrintOpen]     = useState(false)
@@ -79,15 +81,18 @@ export default function PrToPoTransferPage() {
     if (f.mode === 'DELETE') {
       f.handleDeleteClick()
     } else {
-      void f.doSave((tab, fieldName) => {
-        setHeaderTab(tab)
-        // Small delay lets React re-render the new active tab before scrolling.
-        setTimeout(() => {
-          f.headerForm.scrollToField(fieldName)
-          const inst = f.headerForm.getFieldInstance(fieldName) as { focus?: () => void } | null
-          inst?.focus?.()
-        }, 100)
-      })
+      void f.doSave(
+        (tab, fieldName) => {
+          setHeaderTab(tab)
+          // Small delay lets React re-render the new active tab before scrolling.
+          setTimeout(() => {
+            f.headerForm.scrollToField(fieldName)
+            const inst = f.headerForm.getFieldInstance(fieldName) as { focus?: () => void } | null
+            inst?.focus?.()
+          }, 100)
+        },
+        (bodyTab) => setBodyTab(bodyTab),
+      )
     }
   }
 

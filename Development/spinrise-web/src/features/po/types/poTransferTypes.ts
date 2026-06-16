@@ -225,6 +225,18 @@ export interface PoHeader {
   freightType:  'PAID' | 'TOPAY'
   discApp:      'BEFORE' | 'AFTER'
   packApp:      'BEFORE' | 'AFTER'
+  // Computed charge amounts + applicability flags — must reach the save payload.
+  discountAmt:          number
+  freightPer:           number
+  packingAmt:           number
+  insuranceAmt:         number
+  addTaxAmt:            number
+  cessPer:              number
+  cessAmt:              number
+  freightPosition:      'BEFORE' | 'AFTER'
+  insurancePosition:    'BEFORE' | 'AFTER'
+  cessPosition:         'BEFORE' | 'AFTER'
+  exciseIncludePacking: 'Y' | 'N'
 
   // Payment
   payMode:      'DIRECT' | 'BANK'   // BR-15 when BANK
