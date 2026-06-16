@@ -4561,11 +4561,11 @@ BEGIN
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         RTRIM(ISNULL(h.REMARKS, ''))                                AS Remarks,
-        -- Header GST: PO_ORDH stores amounts only (CGSTAMT/SGSTAMT/IGSTAMT), not percentages
-        CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS TcsPer,
+        -- Header GST %: PO_ORDH stores amounts only; derive % from first PO_ORDL line (P2-03)
+        ISNULL((SELECT TOP 1 cgstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS CgstPer,
+        ISNULL((SELECT TOP 1 sgstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS SgstPer,
+        ISNULL((SELECT TOP 1 igstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS IgstPer,
+        ISNULL((SELECT TOP 1 tcs_per FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS TcsPer,
         ISNULL(h.DISPER, 0)                                         AS DiscPer,
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
@@ -4768,11 +4768,11 @@ BEGIN
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         RTRIM(ISNULL(h.REMARKS, ''))                                AS Remarks,
-        -- Header GST: PO_ORDH stores amounts only (CGSTAMT/SGSTAMT/IGSTAMT), not percentages
-        CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS TcsPer,
+        -- Header GST %: PO_ORDH stores amounts only; derive % from first PO_ORDL line (P2-03)
+        ISNULL((SELECT TOP 1 cgstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS CgstPer,
+        ISNULL((SELECT TOP 1 sgstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS SgstPer,
+        ISNULL((SELECT TOP 1 igstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS IgstPer,
+        ISNULL((SELECT TOP 1 tcs_per FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS TcsPer,
         ISNULL(h.DISPER, 0)                                         AS DiscPer,
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
