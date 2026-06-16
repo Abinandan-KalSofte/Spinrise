@@ -143,6 +143,8 @@ export interface PoHeaderFormValues {
   freightType:   'PAID' | 'TOPAY'
   discApp:       'BEFORE' | 'AFTER'
   packApp:       'BEFORE' | 'AFTER'
+  freightApp:    'BEFORE' | 'AFTER'
+  insurApp:      'BEFORE' | 'AFTER'
   // Payment
   payMode:       'DIRECT' | 'BANK'
   directInstr:   string
@@ -484,6 +486,8 @@ export function usePoTransferForm() {
     freightType: 'PAID',
     discApp:     'BEFORE',
     packApp:     'BEFORE',
+    freightApp:  'BEFORE',
+    insurApp:    'BEFORE',
     payMode:     'DIRECT',
     cancelled:   false,
   })
@@ -550,6 +554,8 @@ export function usePoTransferForm() {
       freightType:   po.freightType,
       discApp:       po.discApp,
       packApp:       po.packApp,
+      freightApp:    po.freightApp ?? 'BEFORE',
+      insurApp:      po.insurApp   ?? 'BEFORE',
       payMode:       po.payMode,
       directInstr:   po.directInstr,
       bankCode:      po.bankCode,
@@ -757,6 +763,7 @@ export function usePoTransferForm() {
         freightAmt:    v.freightAmt, packPer: v.packPer, insurPer: v.insurPer,
         addTaxPer:     v.addTaxPer, fileNo: v.fileNo, fcaFob: v.fcaFob,
         freightType:   v.freightType, discApp: v.discApp, packApp: v.packApp,
+        freightApp:    v.freightApp,  insurApp: v.insurApp,
         payMode:       v.payMode, directInstr: v.directInstr, bankCode: v.bankCode,
         paymentTerms:  v.paymentTerms, advPer: v.advPer, advAmt: 0,
         modeOfPayment: v.modeOfPayment, payRef: v.payRef, payRefDate: fmtDate(v.payRefDate),

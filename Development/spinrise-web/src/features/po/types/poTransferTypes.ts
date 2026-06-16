@@ -210,6 +210,8 @@ export interface PoHeader {
   freightType:  'PAID' | 'TOPAY'
   discApp:      'BEFORE' | 'AFTER'
   packApp:      'BEFORE' | 'AFTER'
+  freightApp:   'BEFORE' | 'AFTER'
+  insurApp:     'BEFORE' | 'AFTER'
 
   // Payment
   payMode:      'DIRECT' | 'BANK'   // BR-15 when BANK

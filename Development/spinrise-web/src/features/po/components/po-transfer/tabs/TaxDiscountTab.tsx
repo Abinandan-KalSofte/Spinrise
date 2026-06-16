@@ -59,6 +59,20 @@ export function TaxDiscountTab({ disabled }: TaxDiscountTabProps) {
             </Radio.Group>
           </Form.Item>
         </Col>
+        <Col span={4}>
+          <Form.Item name="freightApp" label="Freight Charge" style={mb}>
+            <Radio.Group disabled={disabled}>
+              <Radio value="BEFORE">Before Tax</Radio><Radio value="AFTER">After Tax</Radio>
+            </Radio.Group>
+          </Form.Item>
+        </Col>
+        <Col span={4}>
+          <Form.Item name="insurApp" label="Insurance Charge" style={mb}>
+            <Radio.Group disabled={disabled}>
+              <Radio value="BEFORE">Before Tax</Radio><Radio value="AFTER">After Tax</Radio>
+            </Radio.Group>
+          </Form.Item>
+        </Col>
       </Row>
     </TabPanel>
   )

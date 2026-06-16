@@ -52,6 +52,8 @@ public class AddPoHeaderRequest
     public string  FreightType  { get; init; } = "PAID";
     public string  DiscApp      { get; init; } = "BEFORE";
     public string  PackApp      { get; init; } = "BEFORE";
+    public string  FreightApp   { get; init; } = "BEFORE";
+    public string  InsurApp     { get; init; } = "BEFORE";
     public string  CessApp      { get; init; } = "BEFORE";
     // Payment
     public string   PayMode       { get; init; } = "DIRECT";

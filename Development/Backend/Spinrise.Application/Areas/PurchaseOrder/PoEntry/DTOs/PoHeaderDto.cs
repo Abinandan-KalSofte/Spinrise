@@ -91,6 +91,8 @@ public class PoHeaderDto
     public string  FreightType  { get; set; } = "PAID";
     public string  DiscApp      { get; set; } = "BEFORE";
     public string  PackApp      { get; set; } = "BEFORE";
+    public string  FreightApp   { get; set; } = "BEFORE";
+    public string  InsurApp     { get; set; } = "BEFORE";
     public string  CessApp      { get; set; } = "BEFORE";
     // Payment
     public string  PayMode       { get; set; } = "DIRECT";

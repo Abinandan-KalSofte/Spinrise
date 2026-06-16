@@ -195,6 +195,8 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("FreightType",     request.Header.FreightType);
         p.Add("DiscApp",         request.Header.DiscApp);
         p.Add("PackApp",         request.Header.PackApp);
+        p.Add("FrtFlg",          request.Header.FreightApp == "AFTER" ? "A" : "B");
+        p.Add("InsFlg",          request.Header.InsurApp   == "AFTER" ? "A" : "B");
         p.Add("CessApp",         request.Header.CessApp);
         p.Add("PayMode",         request.Header.PayMode);
         p.Add("DirectInstr",     request.Header.DirectInstr);

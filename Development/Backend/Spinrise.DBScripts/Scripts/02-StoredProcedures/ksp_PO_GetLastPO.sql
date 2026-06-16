@@ -39,7 +39,7 @@ BEGIN
                NULL AS FreightAmt, NULL AS PackPer, NULL AS InsurPer,
                NULL AS SurchargePer, NULL AS AddTaxPer, NULL AS FileNo,
                NULL AS FcaFob, NULL AS FreightType, NULL AS DiscApp,
-               NULL AS PackApp, NULL AS CessApp, NULL AS PayMode,
+               NULL AS PackApp, NULL AS FreightApp, NULL AS InsurApp, NULL AS CessApp, NULL AS PayMode,
                NULL AS DirectInstr, NULL AS BankCode, NULL AS PaymentTerms,
                NULL AS AdvPer, NULL AS AdvAmt, NULL AS ModeOfPayment,
                NULL AS PayRef, NULL AS PayRefDate, NULL AS ChequeNo,
@@ -99,6 +99,8 @@ BEGIN
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
         'BEFORE'                                                    AS DiscApp,
         'BEFORE'                                                    AS PackApp,
+        CASE WHEN RTRIM(ISNULL(h.FRT_FLG, 'B')) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightApp,
+        CASE WHEN RTRIM(ISNULL(h.INS_FLG, 'B')) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurApp,
         'BEFORE'                                                    AS CessApp,
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
