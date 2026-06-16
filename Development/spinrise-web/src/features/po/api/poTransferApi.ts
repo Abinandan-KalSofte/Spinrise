@@ -60,14 +60,23 @@ export const getGstTaxCodes = (search?: string) => {
 export const getCurrencies = () =>
   apiHelpers.get<CurrencyOption[]>(`${BASE}/currencies`)
 
-export const getDeliveryLocations = (divCode: string) =>
-  apiHelpers.get<AddressOption[]>(`${BASE}/addresses?divCode=${divCode}&kind=delivery`)
+export const getAddresses = (divCode: string, kind: 'DELIVERY' | 'BILLING', search?: string) => {
+  const p = new URLSearchParams({ divCode, kind })
+  if (search) p.set('search', search)
+  return apiHelpers.get<AddressOption[]>(`${BASE}/addresses?${p}`)
+}
 
-export const getBillingAddresses = (divCode: string) =>
-  apiHelpers.get<AddressOption[]>(`${BASE}/addresses?divCode=${divCode}&kind=billing`)
+export const getDeliveryLocations = (divCode: string, search?: string) =>
+  getAddresses(divCode, 'DELIVERY', search)
 
-export const getPricingTerms = () =>
-  apiHelpers.get<AddressOption[]>(`${BASE}/pricing-terms`)
+export const getBillingAddresses = (divCode: string, search?: string) =>
+  getAddresses(divCode, 'BILLING', search)
+
+export const getPricingTerms = (search?: string) => {
+  const p = new URLSearchParams()
+  if (search) p.set('search', search)
+  return apiHelpers.get<AddressOption[]>(`${BASE}/pricing-terms?${p}`)
+}
 
 // ── PR Picker — eligible approved PR lines (BR-02 filtered server-side) ───────
 // Order Type is NOT a filter here — all eligible approved PR lines are returned
@@ -149,6 +158,18 @@ export const getPrintBlobUrl = async (
 ): Promise<{ blobUrl: string; filename: string }> => {
   const p = new URLSearchParams({ divCode, poDate })
   const response = await api.get(`${BASE}/${poNo}/print?${p}`, { responseType: 'blob' })
+  const blobUrl = URL.createObjectURL(new Blob([response.data as BlobPart], { type: 'application/pdf' }))
+  const filename = `${formatPoNo(poNo)}.pdf`
+  return { blobUrl, filename }
+}
+
+export const getPrintV2BlobUrl = async (
+  divCode: string,
+  poNo: number,
+  poDate: string,
+): Promise<{ blobUrl: string; filename: string }> => {
+  const p = new URLSearchParams({ divCode, poDate })
+  const response = await api.get(`${BASE}/${poNo}/print-v2?${p}`, { responseType: 'blob' })
   const blobUrl = URL.createObjectURL(new Blob([response.data as BlobPart], { type: 'application/pdf' }))
   const filename = `${formatPoNo(poNo)}.pdf`
   return { blobUrl, filename }

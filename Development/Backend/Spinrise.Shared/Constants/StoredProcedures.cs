@@ -82,6 +82,8 @@ public static class StoredProcedures
         public const string SaveEntry          = "ksp_PO_SaveEntry";
         public const string DeletePo           = "ksp_PO_DeletePO";
         public const string GetAddresses       = "ksp_PO_GetAddresses";
+        public const string GetCurrencies      = "ksp_PO_GetCurrencies";
+        public const string GetPricingTerms    = "ksp_PO_GetPricingTerms";
         public const string GetPrintData       = "ksp_PO_GetPrint";
         public const string SetPrintFlag       = "ksp_PO_SetPrintFlag";
     }

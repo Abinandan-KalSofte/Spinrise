@@ -41,6 +41,16 @@ public record PoPrintDto(
     string   Conflg,
     string   CreatedBy,
     string   CreatedDt,
+    // V2 print fields
+    string   RefNo,
+    string   RefDate,
+    string   DeliveryDate,
+    string   Purpose,
+    string   PayTerms,
+    decimal  InsAmt,
+    decimal  PackAmt,
+    string   DivStateCode,
+    string   SlStateCode,
     // Lines
     IReadOnlyList<PoPrintLineDto> Lines
 );
@@ -66,7 +76,9 @@ public record PoPrintLineDto(
     decimal IgstPer,
     decimal IgstAmt,
     decimal TcsPer,
-    decimal TcsAmt
+    decimal TcsAmt,
+    decimal LineDis,
+    decimal LineDisAmt
 );
 
 /// <summary>Flat Dapper row for ksp_PO_GetPrint result set 1.</summary>
@@ -108,6 +120,15 @@ public class PoPrintHeaderRow
     public string   Conflg       { get; set; } = "";
     public string   CreatedBy    { get; set; } = "";
     public string   CreatedDt    { get; set; } = "";
+    public string   RefNo        { get; set; } = "";
+    public string   RefDate      { get; set; } = "";
+    public string   DeliveryDate { get; set; } = "";
+    public string   Purpose      { get; set; } = "";
+    public string   PayTerms     { get; set; } = "";
+    public decimal  InsAmt       { get; set; }
+    public decimal  PackAmt      { get; set; }
+    public string   DivStateCode { get; set; } = "";
+    public string   SlStateCode  { get; set; } = "";
 }
 
 /// <summary>Flat Dapper row for ksp_PO_GetPrint result set 2.</summary>
@@ -132,6 +153,8 @@ public class PoPrintLineRow
     public decimal SgstAmt  { get; set; }
     public decimal IgstPer  { get; set; }
     public decimal IgstAmt  { get; set; }
-    public decimal TcsPer   { get; set; }
-    public decimal TcsAmt   { get; set; }
+    public decimal TcsPer      { get; set; }
+    public decimal TcsAmt      { get; set; }
+    public decimal LineDis     { get; set; }
+    public decimal LineDisAmt  { get; set; }
 }

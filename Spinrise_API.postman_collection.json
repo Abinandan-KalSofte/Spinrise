@@ -2003,6 +2003,30 @@
               }
             },
             {
+              "name": "Get Currencies",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/currencies?search=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "po", "currencies"],
+                  "query": [{ "key": "search", "value": "" }]
+                }
+              }
+            },
+            {
+              "name": "Get Pricing Terms",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/po/pricing-terms?search=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "po", "pricing-terms"],
+                  "query": [{ "key": "search", "value": "" }]
+                }
+              }
+            },
+            {
               "name": "Get Eligible PR Lines",
               "request": {
                 "method": "GET",
