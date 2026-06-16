@@ -4478,9 +4478,7 @@ GO
 -- Filter: DirectApp='Y', Fclosed<>'Y', balance qty > 0,
 --         prstatus NOT IN ('O','E','C','Z','X'), PR not cancelled.
 -- Balance = QTYREQD - QTYORD - Enq_Qty
--- PO_PRL has NO GST columns — CgstPer/SgstPer/IgstPer default to 0.
--- User sets tax codes in the GST modal after loading lines.
--- ⚠ VERIFY: IN_ITEM.hsncode column — may differ.
+-- GST columns (CgstPer/SgstPer/IgstPer/GstTaxCode) sourced from IN_ITEM.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPRLines
 (
@@ -4508,11 +4506,11 @@ BEGIN
         RTRIM(ISNULL(d.depname, ''))                                    AS Department,
         RTRIM(ISNULL(scc.SCCNAME, ''))                                  AS SubCostCentre,
         RTRIM(ISNULL(l.remarks, ''))                                    AS Remarks,
-        RTRIM(ISNULL(i.hsncode, ''))                                    AS HsnCode,   -- ⚠ VERIFY: IN_ITEM.hsncode
-        CAST(0 AS DECIMAL(10,2))                                        AS CgstPer,   -- PO_PRL has no GST columns
-        CAST(0 AS DECIMAL(10,2))                                        AS SgstPer,
-        CAST(0 AS DECIMAL(10,2))                                        AS IgstPer,
-        ''                                                              AS GstTaxCode,
+        RTRIM(ISNULL(i.hsncode, ''))                                    AS HsnCode,
+        ISNULL(i.CGST_PER, 0)                                          AS CgstPer,
+        ISNULL(i.SGST_PER, 0)                                          AS SgstPer,
+        ISNULL(i.IGST_PER, 0)                                          AS IgstPer,
+        RTRIM(ISNULL(i.GSTTAXCODE, ''))                                AS GstTaxCode,
         RTRIM(ISNULL(h.REQNAME, ''))                                    AS RequesterId,
         RTRIM(ISNULL(e.ename, ''))                                      AS RequesterName
     FROM dbo.PO_PRL l
