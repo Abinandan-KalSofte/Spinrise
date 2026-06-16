@@ -55,3 +55,10 @@ public class AddressOptionDto
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
 }
+
+public class CurrencyOptionDto
+{
+    public string  CurrCode { get; set; } = "";
+    public string  CurrName { get; set; } = "";
+    public decimal CurrRate { get; set; }
+}

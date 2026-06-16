@@ -109,6 +109,22 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
     }
 
+    public async Task<IEnumerable<CurrencyOptionDto>> GetCurrenciesAsync(string? search)
+    {
+        return await _uow.Connection.QueryAsync<CurrencyOptionDto>(
+            StoredProcedures.Po.GetCurrencies,
+            new { Search = search },
+            commandType: CommandType.StoredProcedure);
+    }
+
+    public async Task<IEnumerable<AddressOptionDto>> GetPricingTermsAsync(string? search)
+    {
+        return await _uow.Connection.QueryAsync<AddressOptionDto>(
+            StoredProcedures.Po.GetPricingTerms,
+            new { Search = search },
+            commandType: CommandType.StoredProcedure);
+    }
+
     public async Task<IEnumerable<EligiblePrLineDto>> GetEligiblePrLinesAsync(
         string divCode, string? orderType, string? search, int page, int pageSize)
     {
@@ -297,7 +313,8 @@ public class PoEntryRepository : IPoEntryRepository
             r.PrNo, r.PrSno, r.Qty, r.Rate, r.Value,
             r.TaxCode, r.TaxPer, r.TaxAmt,
             r.CgstPer, r.CgstAmt, r.SgstPer, r.SgstAmt,
-            r.IgstPer, r.IgstAmt, r.TcsPer, r.TcsAmt
+            r.IgstPer, r.IgstAmt, r.TcsPer, r.TcsAmt,
+            r.LineDis, r.LineDisAmt
         )).ToList();
 
         return new PoPrintDto(
@@ -311,6 +328,9 @@ public class PoEntryRepository : IPoEntryRepository
             header.CgstPer, header.SgstPer, header.IgstPer, header.TcsPer,
             header.DiscPer, header.FreightAmt, header.RoundOff, header.OrderValue,
             header.FirstLevelApp, header.Conflg, header.CreatedBy, header.CreatedDt,
+            header.RefNo, header.RefDate, header.DeliveryDate, header.Purpose,
+            header.PayTerms, header.InsAmt, header.PackAmt,
+            header.DivStateCode, header.SlStateCode,
             lines
         );
     }

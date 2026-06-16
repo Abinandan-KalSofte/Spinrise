@@ -3,10 +3,10 @@
 -- Returns print data for a PO (PDF generation via QuestPDF).
 -- Returns 2 result sets: (1) header with division letterhead,
 --                        (2) PO lines.
--- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno.
+-- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno,
+--   add1, add2, add3, pincode, email — all verified.
 -- FA_SLMAS confirmed columns: add1, add2, gstinno (lowercase).
 -- PO_ORDH: GST % columns don't exist — amounts only.
--- ⚠ VERIFY: div.add1/add2/add3/pincode/email — column names.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPrint
 (
@@ -24,12 +24,12 @@ BEGIN
         NULL                                                        AS DivLogo,
         RTRIM(ISNULL(div.divname, ''))                              AS DivName,
         RTRIM(ISNULL(div.div_printname, div.divname))               AS DivPrintName,
-        RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,   -- ⚠ VERIFY column
-        RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,   -- ⚠ VERIFY column
-        RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,   -- ⚠ VERIFY column
-        RTRIM(ISNULL(div.pincode, ''))                              AS DivPinCode,    -- ⚠ VERIFY column
+        RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,
+        RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,
+        RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,
+        RTRIM(ISNULL(div.pincode, ''))                              AS DivPinCode,
         RTRIM(ISNULL(div.PHONE1, ''))                               AS DivPhone,
-        RTRIM(ISNULL(div.email, ''))                                AS DivEmail,      -- ⚠ VERIFY column
+        RTRIM(ISNULL(div.email, ''))                                AS DivEmail,
         RTRIM(ISNULL(div.gstinno, ''))                              AS DivGstin,
         -- PO header
         RTRIM(h.DIVCODE)                                            AS DivCode,
@@ -60,7 +60,19 @@ BEGIN
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
         RTRIM(ISNULL(h.createdby, ''))                              AS CreatedBy,
-        ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt
+        ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
+        -- Additional fields for V2 print
+        RTRIM(ISNULL(h.refno, ''))                                  AS RefNo,
+        CASE WHEN h.refDate IS NULL THEN ''
+             ELSE CONVERT(varchar(10), h.refDate, 103) END          AS RefDate,
+        CASE WHEN h.Duedate IS NULL THEN ''
+             ELSE CONVERT(varchar(10), h.Duedate, 103) END          AS DeliveryDate,
+        RTRIM(ISNULL(h.Note, ''))                                   AS Purpose,
+        RTRIM(ISNULL(h.paytermcode, ''))                            AS PayTerms,
+        ISNULL(h.Ins_Amt, 0)                                        AS InsAmt,
+        ISNULL(h.Pack_Amt, 0)                                       AS PackAmt,
+        LEFT(ISNULL(div.gstinno, ''), 2)                            AS DivStateCode,
+        LEFT(ISNULL(sl.gstinno, ''), 2)                             AS SlStateCode
     FROM dbo.PO_ORDH h
     LEFT JOIN dbo.pp_divmas div
         ON RTRIM(div.divcode) = RTRIM(h.DIVCODE)
@@ -92,7 +104,9 @@ BEGIN
         ISNULL(l.igstper, 0)                                        AS IgstPer,
         ISNULL(l.igstamt, 0)                                        AS IgstAmt,
         ISNULL(l.Tcs_per, 0)                                        AS TcsPer,
-        ISNULL(l.Tcs_amt, 0)                                        AS TcsAmt
+        ISNULL(l.Tcs_amt, 0)                                        AS TcsAmt,
+        ISNULL(l.disper, 0)                                         AS LineDis,
+        ISNULL(l.disamt, 0)                                         AS LineDisAmt
     FROM dbo.PO_ORDL l
     INNER JOIN dbo.IN_ITEM i
         ON i.itemcode = l.ITEMCODE

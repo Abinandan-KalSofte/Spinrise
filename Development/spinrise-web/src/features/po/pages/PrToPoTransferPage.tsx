@@ -105,7 +105,7 @@ export default function PrToPoTransferPage() {
     setPrintLoading(true)
     setPrintBlobUrl(null)
     try {
-      const { blobUrl, filename } = await poApi.getPrintBlobUrl(f.divCode, f.currentPo.poNo, f.currentPo.poDate)
+      const { blobUrl, filename } = await poApi.getPrintV2BlobUrl(f.divCode, f.currentPo.poNo, f.currentPo.poDate)
       setPrintBlobUrl(blobUrl)
       setPrintFilename(filename)
     } catch (err) {

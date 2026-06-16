@@ -108,6 +108,20 @@ public class PoEntryController : BaseApiController
         return OkResponse(result);
     }
 
+    [HttpGet("currencies")]
+    public async Task<IActionResult> GetCurrencies([FromQuery] string? search)
+    {
+        var result = await _service.GetCurrenciesAsync(search);
+        return OkResponse(result);
+    }
+
+    [HttpGet("pricing-terms")]
+    public async Task<IActionResult> GetPricingTerms([FromQuery] string? search)
+    {
+        var result = await _service.GetPricingTermsAsync(search);
+        return OkResponse(result);
+    }
+
     // ── PR Picker ──────────────────────────────────────────────────────────────
 
     [HttpGet("eligible-pr-lines")]
@@ -188,6 +202,22 @@ public class PoEntryController : BaseApiController
             return FailResponse("Approval Not Complete For This PO", 403);
 
         var pdfBytes = PurchaseOrderDocument.Generate(po);
+        await _service.UpdatePrintFlagAsync(divCode, poNo, poDate);
+        return File(pdfBytes, "application/pdf", $"PO-{(long)poNo:D6}.pdf");
+    }
+
+    [HttpGet("{poNo}/print-v2")]
+    public async Task<IActionResult> PrintV2(decimal poNo, [FromQuery] string divCode, [FromQuery] DateOnly poDate)
+    {
+        var parameters = await _service.GetParametersAsync(divCode);
+        var po = await _service.GetPrintDataAsync(divCode, poNo, poDate);
+        if (po is null)
+            return NotFoundResponse("No records to print.");
+
+        if (parameters?.PoPrintApp == "Y" && po.Conflg == "N")
+            return FailResponse("Approval Not Complete For This PO", 403);
+
+        var pdfBytes = PurchaseOrderDocumentV2.Generate(po);
         await _service.UpdatePrintFlagAsync(divCode, poNo, poDate);
         return File(pdfBytes, "application/pdf", $"PO-{(long)poNo:D6}.pdf");
     }
