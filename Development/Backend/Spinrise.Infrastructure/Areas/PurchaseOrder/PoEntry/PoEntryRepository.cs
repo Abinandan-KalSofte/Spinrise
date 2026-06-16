@@ -318,11 +318,11 @@ public class PoEntryRepository : IPoEntryRepository
         )).ToList();
 
         return new PoPrintDto(
-            header.DivLogo, header.DivName, header.DivPrintName,
+            header.DivLogo, header.DivName, header.DivPrintName, header.DivUnitName,
             header.DivAddress1, header.DivAddress2, header.DivAddress3,
-            header.DivPinCode, header.DivPhone, header.DivEmail, header.DivGstin,
+            header.DivPinCode, header.DivPhone, header.DivEmail, header.DivGstin, header.DivPan, header.DivWeb,
             header.DivCode, header.PoNo, header.PoDate,
-            header.SlCode, header.SlName, header.SlAddress, header.SlGstin,
+            header.SlCode, header.SlName, header.SlAddress, header.SlGstin, header.SlPhone, header.SlEmail,
             header.OrderType, header.Carrier, header.Currency, header.CurrRate,
             header.CreditDays, header.PayMode, header.Remarks,
             header.CgstPer, header.SgstPer, header.IgstPer, header.TcsPer,

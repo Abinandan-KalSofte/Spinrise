@@ -5,6 +5,7 @@ public record PoPrintDto(
     byte[]?  DivLogo,
     string   DivName,
     string   DivPrintName,
+    string   DivUnitName,
     string   DivAddress1,
     string   DivAddress2,
     string   DivAddress3,
@@ -12,6 +13,8 @@ public record PoPrintDto(
     string   DivPhone,
     string   DivEmail,
     string   DivGstin,
+    string   DivPan,
+    string   DivWeb,
     // PO header
     string   DivCode,
     decimal  PoNo,
@@ -20,6 +23,8 @@ public record PoPrintDto(
     string   SlName,
     string   SlAddress,
     string   SlGstin,
+    string   SlPhone,
+    string   SlEmail,
     string   OrderType,
     string   Carrier,
     string   Currency,
@@ -87,6 +92,7 @@ public class PoPrintHeaderRow
     public byte[]?  DivLogo      { get; set; }
     public string   DivName      { get; set; } = "";
     public string   DivPrintName { get; set; } = "";
+    public string   DivUnitName  { get; set; } = "";
     public string   DivAddress1  { get; set; } = "";
     public string   DivAddress2  { get; set; } = "";
     public string   DivAddress3  { get; set; } = "";
@@ -94,6 +100,8 @@ public class PoPrintHeaderRow
     public string   DivPhone     { get; set; } = "";
     public string   DivEmail     { get; set; } = "";
     public string   DivGstin     { get; set; } = "";
+    public string   DivPan       { get; set; } = "";
+    public string   DivWeb       { get; set; } = "";
     public string   DivCode      { get; set; } = "";
     public decimal  PoNo         { get; set; }
     public DateOnly PoDate       { get; set; }
@@ -101,6 +109,8 @@ public class PoPrintHeaderRow
     public string   SlName       { get; set; } = "";
     public string   SlAddress    { get; set; } = "";
     public string   SlGstin      { get; set; } = "";
+    public string   SlPhone      { get; set; } = "";
+    public string   SlEmail      { get; set; } = "";
     public string   OrderType    { get; set; } = "";
     public string   Carrier      { get; set; } = "";
     public string   Currency     { get; set; } = "";

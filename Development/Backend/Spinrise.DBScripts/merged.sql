@@ -5013,9 +5013,10 @@ BEGIN
     -- ─── Result set 1: Print header (div letterhead + PO header) ──────────────
     SELECT
         -- Division letterhead
-        NULL                                                        AS DivLogo,
+        div.DIV_LOGO                                                AS DivLogo,
         RTRIM(ISNULL(div.divname, ''))                              AS DivName,
         RTRIM(ISNULL(div.div_printname, div.divname))               AS DivPrintName,
+        RTRIM(ISNULL(div.div_unitname, ''))                         AS DivUnitName,
         RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,
         RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,
         RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,
@@ -5023,6 +5024,8 @@ BEGIN
         RTRIM(ISNULL(div.PHONE1, ''))                               AS DivPhone,
         RTRIM(ISNULL(div.email, ''))                                AS DivEmail,
         RTRIM(ISNULL(div.gstinno, ''))                              AS DivGstin,
+        RTRIM(ISNULL(div.PAN, ''))                                  AS DivPan,
+        RTRIM(ISNULL(div.WEBADDR, ''))                              AS DivWeb,
         -- PO header
         RTRIM(h.DIVCODE)                                            AS DivCode,
         h.PORDNO                                                    AS PoNo,
@@ -5033,6 +5036,8 @@ BEGIN
             CASE WHEN RTRIM(ISNULL(sl.add2, '')) <> ''
                  THEN ' ' + RTRIM(sl.add2) ELSE '' END              AS SlAddress,
         RTRIM(ISNULL(sl.gstinno, ''))                               AS SlGstin,
+        RTRIM(ISNULL(sl.phone1, ''))                                AS SlPhone,
+        RTRIM(ISNULL(sl.email, ''))                                 AS SlEmail,
         RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
         RTRIM(ISNULL(h.CARCODE, ''))                                AS Carrier,
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
