@@ -1,4 +1,4 @@
-import { Col, Form, Input, InputNumber, Radio, Row, Select } from 'antd'
+import { Col, Form, Input, InputNumber, Radio, Row } from 'antd'
 import { TabPanel, Section } from './_fieldKit'
 
 // ── Tax / Discount tab (HTML #htab-panel-tax) ────────────────────────────────
