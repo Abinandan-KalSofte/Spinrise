@@ -514,9 +514,11 @@ export function usePoTransferForm() {
       igstAmt:       0,
       tcsPer:        gstHeaderDefaults.tcsPer,
       tcsAmt:        0,
-      cgstCode:      '',
-      sgstCode:      '',
-      igstCode:      '',
+      // Auto-derive tax code references from PR gstTaxCode based on server-resolved route.
+      // LOCAL → cgst/sgst code = taxCode; IGST → igst code = taxCode.
+      cgstCode:      gstRoute === 'LOCAL' ? pr.gstTaxCode : '',
+      sgstCode:      gstRoute === 'LOCAL' ? pr.gstTaxCode : '',
+      igstCode:      gstRoute === 'LOCAL' ? '' : pr.gstTaxCode,
       // Commercial charges + additional tax — seeded from the header (§3/§7).
       discPer:       gstHeaderDefaults.discPer,
       packingPer:    gstHeaderDefaults.packingPer,

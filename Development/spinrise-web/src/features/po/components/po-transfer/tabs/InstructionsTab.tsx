@@ -43,9 +43,7 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
           </Form.Item>
         </Col>
         <Col span={4}>
-          <Form.Item name="deliveryLocation" label="Delivery Location"
-            rules={[{ required: true, message: 'Delivery Location is required' }]}
-            validateTrigger="onBlur" style={mb}>
+          <Form.Item name="deliveryLocation" label="Delivery Location" style={mb}>
             <Select
               showSearch optionFilterProp="label" allowClear
               placeholder="Select delivery location…" disabled={disabled}
@@ -56,9 +54,7 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
         </Col>
 
         <Col span={4}>
-          <Form.Item name="billingAddress" label="Billing Address"
-            rules={[{ required: true, message: 'Billing Address is required' }]}
-            validateTrigger="onBlur" style={mb}>
+          <Form.Item name="billingAddress" label="Billing Address" style={mb}>
             <Select
               showSearch optionFilterProp="label" allowClear
               placeholder="Select billing address…" disabled={disabled}

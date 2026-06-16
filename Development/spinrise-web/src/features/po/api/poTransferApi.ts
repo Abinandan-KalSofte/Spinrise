@@ -61,10 +61,10 @@ export const getCurrencies = () =>
   apiHelpers.get<CurrencyOption[]>(`${BASE}/currencies`)
 
 export const getDeliveryLocations = (divCode: string) =>
-  apiHelpers.get<AddressOption[]>(`${BASE}/delivery-locations?divCode=${divCode}`)
+  apiHelpers.get<AddressOption[]>(`${BASE}/addresses?divCode=${divCode}&kind=delivery`)
 
 export const getBillingAddresses = (divCode: string) =>
-  apiHelpers.get<AddressOption[]>(`${BASE}/billing-addresses?divCode=${divCode}`)
+  apiHelpers.get<AddressOption[]>(`${BASE}/addresses?divCode=${divCode}&kind=billing`)
 
 export const getPricingTerms = () =>
   apiHelpers.get<AddressOption[]>(`${BASE}/pricing-terms`)

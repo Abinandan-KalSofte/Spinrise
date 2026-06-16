@@ -24,7 +24,7 @@ export function ApprovalTab({ currentPo }: ApprovalTabProps) {
         </Col>
         <Col span={6}>
           <div style={lbl}>Print Status</div>
-          <Tag style={{ background: '#F5F5F3', color: '#4a4a4a', border: '1px solid #e2e2e2' }}>{printStatus}</Tag>
+          <Tag style={{ background: '#F5F5F3', color: '#4a4a4a', border: '1px solid #e2e2e2' }}>{printStatus==='N' ?  'Not Printed' : 'Printed'  }</Tag>
         </Col>
         <Col span={6}><ReadOnlyField label="Created By" value={currentPo?.createdBy || '—'} /></Col>
         <Col span={6}>

@@ -113,6 +113,7 @@ export function GstTaxDetailsModal({
 
   const isLocal  = line.route === 'LOCAL'
   const isDelete = mode === 'DELETE'
+  const isView = mode === 'VIEW'
 
   // ── Calculations (unchanged from recalcLine) ──────────────────────────────
   const taxable      = round2((line.rate || 0) * (line.qty || 0))
@@ -286,7 +287,7 @@ export function GstTaxDetailsModal({
               <InputNumber
                 size="small" min={0} precision={2} controls={false}
                 style={{ ...full, ...monoR }} value={tax.fcaFob}
-                onChange={(v) => set('fcaFob', v ?? 0)} disabled={isDelete}
+                onChange={(v) => set('fcaFob', v ?? 0)} disabled={isDelete || isView}
               />
             </Field>
           </div>
@@ -310,17 +311,17 @@ export function GstTaxDetailsModal({
               <span style={{ ...colHdr, textAlign: 'right' }}>%</span>
               <span style={{ ...colHdr, textAlign: 'right' }}>Amount</span>
               {/* Rows — ChargeRow renders 3 naked cells each */}
-              <ChargeRow label="Discount"      per={tax.discPer}      amt={discountAmt}  disabled={isDelete}
+              <ChargeRow label="Discount"      per={tax.discPer}      amt={discountAmt}  disabled={isDelete || isView}
                 onPer={(v) => set('discPer',      v ?? 0)} onAmt={onDiscAmt}  />
-              <ChargeRow label="Packing"        per={tax.packingPer}   amt={packingAmt}   disabled={isDelete}
+              <ChargeRow label="Packing"        per={tax.packingPer}   amt={packingAmt}   disabled={isDelete || isView}
                 onPer={(v) => set('packingPer',   v ?? 0)} onAmt={onPackAmt}  />
-              <ChargeRow label="Freight"        per={tax.freightPer}   amt={freightAmt}   disabled={isDelete}
+              <ChargeRow label="Freight"        per={tax.freightPer}   amt={freightAmt}   disabled={isDelete || isView}
                 onPer={(v) => set('freightPer',   v ?? 0)} onAmt={onFreAmt}   />
-              <ChargeRow label="Insurance"      per={tax.insurancePer} amt={insuranceAmt} disabled={isDelete}
+              <ChargeRow label="Insurance"      per={tax.insurancePer} amt={insuranceAmt} disabled={isDelete || isView}
                 onPer={(v) => set('insurancePer', v ?? 0)} onAmt={onInsurAmt} />
-              <ChargeRow label="Cess"           per={tax.cessPer}      amt={cessAmt}      disabled={isDelete}
+              <ChargeRow label="Cess"           per={tax.cessPer}      amt={cessAmt}      disabled={isDelete || isView}
                 onPer={(v) => set('cessPer',      v ?? 0)} onAmt={onCessAmt}  />
-              <ChargeRow label="Additional Tax" per={tax.addTaxPer}    amt={addTaxAmt}    disabled={isDelete}
+              <ChargeRow label="Additional Tax" per={tax.addTaxPer}    amt={addTaxAmt}    disabled={isDelete || isView}
                 onPer={(v) => set('addTaxPer',    v ?? 0)} onAmt={onAddAmt}   />
             </div>
 
@@ -332,25 +333,25 @@ export function GstTaxDetailsModal({
               flexDirection: 'column',
               gap: 5,
             }}>
-              <AppRadio label="Freight Position"    value={tax.freightPos}       disabled={isDelete}
+              <AppRadio label="Freight Position"    value={tax.freightPos}       disabled={isDelete || isView}
                 onChange={(v) => set('freightPos',       v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Freight Payment"     value={tax.freightType}      disabled={isDelete}
+              <AppRadio label="Freight Payment"     value={tax.freightType}      disabled={isDelete || isView}
                 onChange={(v) => set('freightType',      v as 'PAID' | 'TOPAY')}
                 options={[{ value: 'PAID', label: 'Paid' }, { value: 'TOPAY', label: 'To Pay' }]} />
-              <AppRadio label="Insurance Position"  value={tax.insuranceDuty}    disabled={isDelete}
+              <AppRadio label="Insurance Position"  value={tax.insuranceDuty}    disabled={isDelete || isView}
                 onChange={(v) => set('insuranceDuty',    v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Duty' }, { value: 'AFTER', label: 'After Duty' }]} />
-              <AppRadio label="Cess Position"       value={tax.cessTaxPos}       disabled={isDelete}
+              <AppRadio label="Cess Position"       value={tax.cessTaxPos}       disabled={isDelete || isView}
                 onChange={(v) => set('cessTaxPos',       v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Discount Application" value={tax.discApp}         disabled={isDelete}
+              <AppRadio label="Discount Application" value={tax.discApp}         disabled={isDelete || isView}
                 onChange={(v) => set('discApp',          v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Packing Application" value={tax.packApp}          disabled={isDelete}
+              <AppRadio label="Packing Application" value={tax.packApp}          disabled={isDelete || isView}
                 onChange={(v) => set('packApp',          v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Excise Inc. Packing" value={tax.exciseIncPacking} disabled={isDelete}
+              <AppRadio label="Excise Inc. Packing" value={tax.exciseIncPacking} disabled={isDelete || isView}
                 onChange={(v) => set('exciseIncPacking', v as 'Y' | 'N')}
                 options={[{ value: 'Y', label: 'Yes' }, { value: 'N', label: 'No' }]} />
             </div>
@@ -437,9 +438,11 @@ export function GstTaxDetailsModal({
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button size="medium" onClick={onCancel}>Cancel</Button>
-          <Button size="medium" type="primary" onClick={handleApply}>
+          {
+            !isView && <Button size="medium" type="primary" onClick={handleApply}>
             {isDelete ? 'Apply & Close' : 'Save & Update'}
           </Button>
+          }
         </div>
       </div>
     </Modal>
