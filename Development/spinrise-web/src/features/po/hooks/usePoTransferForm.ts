@@ -22,7 +22,7 @@ import dayjs from 'dayjs'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { getFYBounds } from '@/shared/lib/dateUtils'
 import { getErrorMessage, AppError } from '@/shared/lib/errorHandler'
-import { formatPoNo } from '../types'
+import { formatPoNo, resolveGstStateDisplay } from '../types'
 import { usePoTransferStore } from '../store/usePoTransferStore'
 import { notificationService } from '@/shared/lib/notification'
 import * as poApi from '../api/poTransferApi'
@@ -268,6 +268,9 @@ export function usePoTransferForm() {
   // Save. PoHeaderTabs resets its active tab to 'order' when this changes.
   const [headerTabResetKey, setHeaderTabResetKey] = useState(0)
   const resetToHeaderTab = useCallback(() => setHeaderTabResetKey((k) => k + 1), [])
+  // Bumped on successful save so the page resets the body tab to "Item Details".
+  const [bodyTabResetKey, setBodyTabResetKey] = useState(0)
+  const resetBodyTab = useCallback(() => setBodyTabResetKey((k) => k + 1), [])
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   const [parameters,  setParameters]  = useState<PoParameters | null>(null)
@@ -450,7 +453,7 @@ export function usePoTransferForm() {
     headerForm.setFieldsValue({
       supplier: supplier?.slCode ?? '',
       gstin:    supplier?.gstinNo ?? '',
-      gstState: supplier?.gstStateName ?? '',
+      gstState: resolveGstStateDisplay(supplier?.gstStateName ?? '', supplier?.gstStateCode),
     })
     // GST State Code validation — must not be empty for GST compliance.
     if (supplier && !supplier.gstStateCode?.trim()) {
@@ -690,9 +693,12 @@ export function usePoTransferForm() {
   }
 
   const cancelMode = () => {
-    resetToView()
+    resetToView()   // resets deliveryLines → []
     resetToHeaderTab()
-    if (currentPo) fillHeaderFromPo(currentPo)
+    if (currentPo) {
+      fillHeaderFromPo(currentPo)
+      setDeliveryLines(currentPo.delivery ?? [])  // restore delivery after reset
+    }
     notificationService.info('Operation Cancelled', 'The current operation was cancelled.')
   }
 
@@ -703,7 +709,7 @@ export function usePoTransferForm() {
       orderType:     po.orderType,
       supplier:      po.supplier,
       gstin:         po.gstin,
-      gstState:      po.gstState,
+      gstState:      resolveGstStateDisplay(po.gstState),
       inspect:       po.inspect,
       formType:      po.formType,
       refNo:         po.refNo,
@@ -717,26 +723,26 @@ export function usePoTransferForm() {
       igstPer:       po.igstPer,
       tcsPer:        po.tcsPer,
       discPer:       po.discPer,
-      discAmt:       0,
+      discAmt:       po.discountAmt         ?? 0,
       freightAmt:    po.freightAmt,
-      freightPer:    0,
+      freightPer:    po.freightPer          ?? 0,
       packPer:       po.packPer,
-      packAmt:       0,
+      packAmt:       po.packingAmt          ?? 0,
       insurPer:      po.insurPer,
-      insurAmt:      0,
+      insurAmt:      po.insuranceAmt        ?? 0,
       addTaxPer:     po.addTaxPer,
-      addTaxAmtHdr:  0,
-      cessPer:       0,
-      cessAmt:       0,
+      addTaxAmtHdr:  po.addTaxAmt           ?? 0,
+      cessPer:       po.cessPer             ?? 0,
+      cessAmt:       po.cessAmt             ?? 0,
       fileNo:        po.fileNo,
       fcaFob:        po.fcaFob,
       freightType:   po.freightType,
-      freightPos:    'BEFORE',
+      freightPos:    po.freightPosition     ?? 'BEFORE',
       discApp:       po.discApp,
       packApp:       po.packApp,
-      insuranceDuty:    'BEFORE',
-      cessTaxPos:       'BEFORE',
-      exciseIncPacking: 'N',
+      insuranceDuty:    po.insurancePosition  ?? 'BEFORE',
+      cessTaxPos:       po.cessPosition       ?? 'BEFORE',
+      exciseIncPacking: po.exciseIncludePacking ?? 'N',
       payMode:       po.payMode,
       directInstr:   po.directInstr,
       bankCode:      po.bankCode,
@@ -775,6 +781,16 @@ export function usePoTransferForm() {
     setNavLoading(true)
     try {
       const po = await poApi.getById(divCode, poNo, poDate)
+      // Supplier list is lazy-loaded (on dropdown open) and may be empty in VIEW.
+      // Inject a synthetic option so the Select resolves the label immediately.
+      // React 18 batches this with fillHeaderFromPo — zero flash, single render.
+      // The real entry replaces this when the full list loads on dropdown open.
+      setSuppliers((prev) =>
+        prev.some((s) => s.slCode === po.supplier) ? prev : [
+          { slCode: po.supplier, slName: po.supplierName, gstinNo: po.gstin, gstStateCode: '', gstStateName: po.gstState },
+          ...prev,
+        ],
+      )
       setCurrentPo(po)
       fillHeaderFromPo(po)
       setDeliveryLines(po.delivery ?? [])
@@ -795,7 +811,18 @@ export function usePoTransferForm() {
     setNavLoading(true)
     try {
       const po = await poApi.getLastRecord(divCode, yfDate, ylDate)
-      if (po) { setCurrentPo(po); fillHeaderFromPo(po); setDeliveryLines(po.delivery ?? []); resetToHeaderTab() }
+      if (po) {
+        setSuppliers((prev) =>
+          prev.some((s) => s.slCode === po.supplier) ? prev : [
+            { slCode: po.supplier, slName: po.supplierName, gstinNo: po.gstin, gstStateCode: '', gstStateName: po.gstState },
+            ...prev,
+          ],
+        )
+        setCurrentPo(po)
+        fillHeaderFromPo(po)
+        setDeliveryLines(po.delivery ?? [])
+        resetToHeaderTab()
+      }
     } catch { /* empty list is fine */ }
     finally { setNavLoading(false) }
   }, [divCode, processingDate]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -814,40 +841,46 @@ export function usePoTransferForm() {
   }, [divCode, processingDate])
 
   // ── Client-side validation (mirrors BR register; server is authoritative) ──
-  const validateLines = (): boolean => {
+  const validateLines = (onBodyTab?: (tab: 'lines' | 'delivery') => void): boolean => {
     const working = draftLines.filter((l) => l.itemCode.trim() !== '')
     if (working.length === 0) {
       notificationService.warning('No Line Items', 'Add at least one PR line before saving.')
+      onBodyTab?.('lines')
       return false
     }
     // BR-07 Rate > 0
     const zeroRate = working.filter((l) => (l.rate ?? 0) <= 0)
     if (zeroRate.length) {
       notificationService.warning('Validation Failed', `Rate must be greater than 0 for: ${zeroRate.map((l) => l.itemCode).join(', ')}.`)
+      onBodyTab?.('lines')
       return false
     }
     // BR-06 Qty > 0
     const zeroQty = working.filter((l) => (l.qty ?? 0) <= 0)
     if (zeroQty.length) {
       notificationService.warning('Validation Failed', `Quantity must be greater than 0 for: ${zeroQty.map((l) => l.itemCode).join(', ')}.`)
+      onBodyTab?.('lines')
       return false
     }
     // BR-05 Qty ≤ PR balance
     const overBalance = working.filter((l) => (l.qty ?? 0) > (l.balanceQty ?? 0))
     if (overBalance.length) {
       notificationService.warning('Validation Failed', `Quantity exceeds PR balance for: ${overBalance.map((l) => l.itemCode).join(', ')}.`)
+      onBodyTab?.('lines')
       return false
     }
     // BR-08 Tax Code mandatory
     const noTaxCode = working.filter((l) => !l.taxCode.trim())
     if (noTaxCode.length) {
       notificationService.warning('Mandatory Fields Missing', `Tax Code is required for: ${noTaxCode.map((l) => l.itemCode).join(', ')}.`)
+      onBodyTab?.('lines')
       return false
     }
     // BR-10 HSN mandatory (SPINRISE enforces at save; server re-checks → 400)
     const noHsn = working.filter((l) => !l.hsnCode.trim())
     if (noHsn.length) {
       notificationService.warning('Mandatory Fields Missing', `HSN Code is required for: ${noHsn.map((l) => l.itemCode).join(', ')}. Configure it in Item Master.`)
+      onBodyTab?.('lines')
       return false
     }
     // B1 PR Date mandatory — server validates PR balance against it; an empty or
@@ -855,6 +888,7 @@ export function usePoTransferForm() {
     const noPrDate = working.filter((l) => !toIsoDate(l.prDate))
     if (noPrDate.length) {
       notificationService.warning('PR Date Missing', `PR date could not be resolved for: ${noPrDate.map((l) => l.itemCode).join(', ')}. Remove and re-select the line from the PR Picker.`)
+      onBodyTab?.('lines')
       return false
     }
     // UX-01 delivery reconciliation — block over-allocation; under is allowed.
@@ -863,6 +897,7 @@ export function usePoTransferForm() {
     )
     if (overSched.length) {
       notificationService.warning('Delivery Schedule Mismatch', `Scheduled quantity exceeds PO quantity for: ${overSched.map((d) => d.itemCode).join(', ')}.`)
+      onBodyTab?.('delivery')
       return false
     }
     return true
@@ -971,6 +1006,17 @@ export function usePoTransferForm() {
         freightAmt:    v.freightAmt, packPer: v.packPer, insurPer: v.insurPer,
         addTaxPer:     v.addTaxPer, fileNo: v.fileNo, fcaFob: v.fcaFob,
         freightType:   v.freightType, discApp: v.discApp, packApp: v.packApp,
+        discountAmt:          v.discAmt         ?? 0,
+        freightPer:           v.freightPer      ?? 0,
+        packingAmt:           v.packAmt         ?? 0,
+        insuranceAmt:         v.insurAmt        ?? 0,
+        addTaxAmt:            v.addTaxAmtHdr    ?? 0,
+        cessPer:              v.cessPer         ?? 0,
+        cessAmt:              v.cessAmt         ?? 0,
+        freightPosition:      v.freightPos,
+        insurancePosition:    v.insuranceDuty,
+        cessPosition:         v.cessTaxPos,
+        exciseIncludePacking: v.exciseIncPacking,
         payMode:       v.payMode, directInstr: v.directInstr, bankCode: v.bankCode,
         paymentTerms:  v.paymentTerms, advPer: 0, advAmt: v.advAmt ?? 0,
         modeOfPayment: v.modeOfPayment, payRef: v.payRef, payRefDate: fmtDate(v.payRefDate),
@@ -992,7 +1038,10 @@ export function usePoTransferForm() {
   }
 
   // ── Save (ADD only here; Modify is a separate screen) ──────────────────────
-  const doSave = async (onValidationFailed?: (tab: HeaderTabKey, fieldName: string) => void) => {
+  const doSave = async (
+    onValidationFailed?: (tab: HeaderTabKey, fieldName: string) => void,
+    onBodyTabFailed?: (tab: 'lines' | 'delivery') => void,
+  ) => {
     let values: PoHeaderFormValues
     try { values = await headerForm.validateFields() }   // BR-11..14 via field rules (HF-19a)
     catch (err) {
@@ -1012,7 +1061,7 @@ export function usePoTransferForm() {
       onValidationFailed?.(FIELD_TAB_MAP[condResult] ?? 'order', condResult)
       return
     }                                                      // BR-15, BR-01
-    if (!validateLines()) return                          // BR-05/06/07/08/10, UX-01
+    if (!validateLines(onBodyTabFailed)) return           // BR-05/06/07/08/10, UX-01
 
     setSaving(true)
     try {
@@ -1024,9 +1073,12 @@ export function usePoTransferForm() {
       setCurrentPo(saved)
       fillHeaderFromPo(saved)
       resetToView()
+      // Must come AFTER resetToView — resetToView sets deliveryLines:[] in the store.
+      setDeliveryLines(saved.delivery ?? [])
       resetToHeaderTab()
       void loadNavList()   // new PO joins the navigation index
       notificationService.success('Purchase Order Saved Successfully', `Purchase Order ${formatPoNo(result.poNo)} was created.`)
+      resetBodyTab()   // navigate page body back to Item Details tab (Task 1)
     } catch (err) {
       // BR-16/17 budget rejections are SERVER-DRIVEN — surface the server message
       // verbatim. TODO[BR-16/17]: when the contract is final, branch on a typed
@@ -1164,7 +1216,7 @@ export function usePoTransferForm() {
     mode, setMode, pageBusy, saving, deleting, navLoading,
     deleteModalOpen, setDeleteModalOpen,
     // data
-    currentPo, lines, draftLines, deliveryLines, gstRoute, headerTabResetKey,
+    currentPo, lines, draftLines, deliveryLines, gstRoute, headerTabResetKey, bodyTabResetKey,
     // lookups
     parameters, preChecks,
     orderTypes, carriers, formTypes, suppliers, banks, gstTaxCodes,

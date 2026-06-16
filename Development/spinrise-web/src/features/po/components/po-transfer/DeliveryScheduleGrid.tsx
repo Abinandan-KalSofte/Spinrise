@@ -1,4 +1,4 @@
-import { Button, DatePicker, Input, InputNumber } from 'antd'
+import { Button, ConfigProvider, DatePicker, Input, InputNumber } from 'antd'
 import { PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { erpTh, ERP_TD as TD } from '@/shared/styles/erpTable'
@@ -15,6 +15,13 @@ import { type DeliveryScheduleLine, type ScreenMode } from '../../types'
 //   PO Qty      = d.poQty (total PO line quantity, rowspan)
 //   Scheduled Qty = slot.qty (quantity for this specific delivery slot, editable)
 //   Balance Qty = PO Qty − Σ Scheduled Qty across all slots (rowspan, colour-coded)
+
+// AntD 5 disabled fields use the colorTextDisabled design token — inline styles
+// cannot override it. Override the token here so disabled cells remain readable
+// in VIEW mode and after Save (delivery date, remarks, scheduled qty).
+const readableDisabled = {
+  token: { colorTextDisabled: '#262626', colorBgContainerDisabled: '#f5f5f5' },
+}
 
 const TH = erpTh({ zIndex: 10 })
 const fmt3 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
@@ -41,6 +48,7 @@ export function DeliveryScheduleGrid({
   const matched    = Math.abs(schedTotal - poTotal) < 0.001
 
   return (
+    <ConfigProvider theme={readableDisabled}>
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: '#fff', overflow: 'hidden' }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px',
@@ -197,5 +205,6 @@ export function DeliveryScheduleGrid({
         </table>
       </div>
     </div>
+    </ConfigProvider>
   )
 }

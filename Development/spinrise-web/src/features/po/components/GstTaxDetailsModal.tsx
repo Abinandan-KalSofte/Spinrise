@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, InputNumber, Modal, Radio, Select } from 'antd'
+import { Button, ConfigProvider, Input, InputNumber, Modal, Radio, Select } from 'antd'
 import type { PoLine, LineTaxDetail, ScreenMode, GstTaxCodeOption } from '../types'
 import type { GstHeaderDefaults } from '../hooks/usePoTransferForm'
 import { notificationService } from '@/shared/lib/notification'
@@ -212,6 +212,7 @@ export function GstTaxDetailsModal({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
+    <ConfigProvider theme={readableDisabled}>
     <Modal
       open={open}
       onCancel={onCancel}
@@ -267,6 +268,7 @@ export function GstTaxDetailsModal({
                 placeholder="Select code" value={tax.taxCode || undefined}
                 options={codeOptions} onChange={onGstCodeChange}
                 notFoundContent={gstTaxCodes.length ? undefined : 'No codes loaded'}
+                disabled={isDelete || isView}
               />
             </Field>
             <Field label="Additional Tax Code">
@@ -274,6 +276,7 @@ export function GstTaxDetailsModal({
                 size="small" style={full} showSearch optionFilterProp="label" allowClear
                 placeholder="Optional" value={tax.addTaxCode || undefined}
                 options={codeOptions} onChange={(v) => onAddTaxCodeChange(v ?? '')}
+                disabled={isDelete || isView}
               />
             </Field>
             <Field label="TCS %">
@@ -281,6 +284,7 @@ export function GstTaxDetailsModal({
                 size="small" min={0} precision={2} controls={false}
                 style={{ ...full, ...monoR }} value={tax.tcsPer}
                 onChange={(v) => set('tcsPer', v ?? 0)}
+                disabled={isDelete || isView}
               />
             </Field>
             <Field label="FCA / FOB">
@@ -446,6 +450,7 @@ export function GstTaxDetailsModal({
         </div>
       </div>
     </Modal>
+    </ConfigProvider>
   )
 }
 
@@ -604,6 +609,12 @@ const SL = (text: string) => (
     {text}
   </div>
 )
+
+// AntD 5 disabled fields use the colorTextDisabled token — inline style has no
+// effect. Override the token here so disabled values stay fully readable in VIEW.
+const readableDisabled = {
+  token: { colorTextDisabled: '#262626', colorBgContainerDisabled: '#f5f5f5' },
+}
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const full: React.CSSProperties     = { width: '100%' }

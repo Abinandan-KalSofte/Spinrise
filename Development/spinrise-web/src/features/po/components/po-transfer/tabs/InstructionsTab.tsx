@@ -23,12 +23,32 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
   return (
     <TabPanel>
       <Row gutter={[12, 0]}>
-        <Col span={4}>
+        <Col span={6}>
           <Form.Item name="carrier" label="Carrier" required
             rules={[{ required: true, message: 'Carrier is required' }]}
             validateTrigger="onBlur" style={mb}>
             <Select showSearch optionFilterProp="label" placeholder="02 — COURIER" disabled={disabled}
               options={carriers.map((c) => ({ value: c.carCode, label: `${c.carCode} — ${c.carName}` }))} />
+          </Form.Item>
+        </Col>        
+        <Col span={7}>
+          <Form.Item name="deliveryLocation" label="Delivery Location" style={mb}>
+            <Select
+              showSearch optionFilterProp="label" allowClear
+              placeholder="Select delivery location…" disabled={disabled}
+              options={deliveryLocations.map((l) => ({ value: l.code, label: `${l.code} — ${l.name}` }))}
+              notFoundContent={deliveryLocations.length === 0 ? 'Loading…' : 'Not found'}
+            />
+          </Form.Item>
+        </Col>
+        <Col span={7}>
+          <Form.Item name="billingAddress" label="Billing Address" style={mb}>
+            <Select
+              showSearch optionFilterProp="label" allowClear
+              placeholder="Select billing address…" disabled={disabled}
+              options={billingAddresses.map((a) => ({ value: a.code, label: `${a.code} — ${a.name}` }))}
+              notFoundContent={billingAddresses.length === 0 ? 'Loading…' : 'Not found'}
+            />
           </Form.Item>
         </Col>
         <Col span={4}>
@@ -40,27 +60,6 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
         <Col span={4}>
           <Form.Item name="deliveryDate" label="Delivery Date" style={mb}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} />
-          </Form.Item>
-        </Col>
-        <Col span={4}>
-          <Form.Item name="deliveryLocation" label="Delivery Location" style={mb}>
-            <Select
-              showSearch optionFilterProp="label" allowClear
-              placeholder="Select delivery location…" disabled={disabled}
-              options={deliveryLocations.map((l) => ({ value: l.code, label: `${l.code} — ${l.name}` }))}
-              notFoundContent={deliveryLocations.length === 0 ? 'Loading…' : 'Not found'}
-            />
-          </Form.Item>
-        </Col>
-
-        <Col span={4}>
-          <Form.Item name="billingAddress" label="Billing Address" style={mb}>
-            <Select
-              showSearch optionFilterProp="label" allowClear
-              placeholder="Select billing address…" disabled={disabled}
-              options={billingAddresses.map((a) => ({ value: a.code, label: `${a.code} — ${a.name}` }))}
-              notFoundContent={billingAddresses.length === 0 ? 'Loading…' : 'Not found'}
-            />
           </Form.Item>
         </Col>
         <Col span={4}>
