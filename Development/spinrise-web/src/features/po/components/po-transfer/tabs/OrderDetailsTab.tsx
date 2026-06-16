@@ -121,12 +121,12 @@ export function OrderDetailsTab({
         <Col span={4}>
           <Form.Item name="currency" label="Currency" required
             rules={[{ required: true, message: 'Currency is required' }]} style={mb}>
-            <Input disabled={disabled} style={{ fontFamily: 'monospace' }} />
+            <Input disabled={mode === 'VIEW'} style={{ fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
         <Col span={4}>
           <Form.Item name="currRate" label="Curr. Rate" style={mb}>
-            <InputNumber disabled precision={4} controls={false} style={{ ...full, fontFamily: 'monospace' }} />
+            <InputNumber disabled={disabled} precision={4} controls={false} style={{ ...full, fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
         <Col span={8}>
