@@ -65,7 +65,7 @@ const Row = memo(function Row({
       <td style={{ ...TD_TXT, width: 78, textAlign: 'center', fontFamily: 'monospace', fontWeight: 600, color: '#185FA5' }}>
         {line.itemCode || '—'}
       </td>
-      <td style={{ ...TD_TXT, width: 190, fontWeight: 500 }}>{line.itemName || line.itemCode}</td>
+      <td style={{ ...TD_TXT, width: 190, fontWeight: 500,textAlign: 'left' }}>{line.itemName || line.itemCode}</td>
       <td style={{ ...TD_TXT, width: 44, textAlign: 'center', color: '#4a4a4a' }}>{line.uom}</td>
       <td style={{ ...TD_TXT, width: 100, fontFamily: 'monospace' }}>{line.prNo}</td>
       <td style={{ ...TD_TXT, width: 80, fontFamily: 'monospace' }}>{line.prDate || '—'}</td>
@@ -86,20 +86,18 @@ const Row = memo(function Row({
         )}
       </td>
 
-      {/* Quantity — editable in ADD (3dp, BR-05/06) */}
+      {/* Quantity — editable in ADD (3dp, BR-05/06). Hook clamps to balanceQty
+          immediately on change and shows a warning, so the value can never
+          exceed balanceQty here — only show error when qty is 0. */}
       <td style={{ ...TD_TXT, width: 82, textAlign: 'right' }}
         onClick={(e) => isAdd && e.stopPropagation()}
         onDoubleClick={(e) => isAdd && e.stopPropagation()}>
         {isAdd ? (
-          <Tooltip
-            title={line.qty > line.balanceQty ? `Exceeds PR balance (${fmt3(line.balanceQty)})` : ''}
-            open={line.qty > line.balanceQty}
-            color="#ff4d4f"
-          >
+          <Tooltip title={`Balance: ${fmt3(line.balanceQty)}`} mouseEnterDelay={0.8}>
             <InputNumber
               size="small" min={0} precision={3} controls={false} value={line.qty}
               style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
-              status={line.qty <= 0 || line.qty > line.balanceQty ? 'error' : undefined}
+              status={line.qty <= 0 ? 'error' : undefined}
               onChange={(v) => onRateQty({ qty: v ?? 0 })}
             />
           </Tooltip>
@@ -203,7 +201,7 @@ export function PoLineGrid({
           <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
             <tr>
               <th style={{ ...TH, width: 78, textAlign: 'center' }}>Item Id</th>
-              <th style={{ ...TH, width: 190 }}>Item Name</th>
+              <th style={{ ...TH, width: 190, textAlign: 'left' }}>Item Name</th>
               <th style={{ ...TH, width: 44, textAlign: 'center' }}>UOM</th>
               <th style={{ ...TH, width: 100 }}>PR No</th>
               <th style={{ ...TH, width: 80 }}>PR Date</th>

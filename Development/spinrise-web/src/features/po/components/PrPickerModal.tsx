@@ -14,13 +14,14 @@ import { MODAL_TH as TH, MODAL_TD as TD } from '@/shared/styles/erpTable'
 const fmt3 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 
 interface PrPickerModalProps {
-  open:      boolean
-  divCode:   string
-  onLoad:    (lines: EligiblePrLine[]) => void
-  onCancel:  () => void
+  open:          boolean
+  divCode:       string
+  alreadyAdded?: Set<string>   // "${prNo}-${prSno}" keys — these rows are shown disabled
+  onLoad:        (lines: EligiblePrLine[]) => void
+  onCancel:      () => void
 }
 
-export function PrPickerModal({ open, divCode, onLoad, onCancel }: PrPickerModalProps) {
+export function PrPickerModal({ open, divCode, alreadyAdded, onLoad, onCancel }: PrPickerModalProps) {
   const [rows,     setRows]     = useState<EligiblePrLine[]>([])
   const [loading,  setLoading]  = useState(false)
   const [search,   setSearch]   = useState('')
@@ -66,7 +67,9 @@ export function PrPickerModal({ open, divCode, onLoad, onCancel }: PrPickerModal
   }
 
   const toggleAll = (checked: boolean) =>
-    setSelected(checked ? new Map(rows.map((r) => [r.id, r])) : new Map())
+    setSelected(checked
+      ? new Map(rows.filter((r) => !(alreadyAdded?.has(`${r.prNo}-${r.prSno}`))).map((r) => [r.id, r]))
+      : new Map())
 
   const handleLoad = () => {
     if (selected.size === 0) return
@@ -134,23 +137,27 @@ export function PrPickerModal({ open, divCode, onLoad, onCancel }: PrPickerModal
               </td></tr>
             ) : (
               rows.map((row, idx) => {
-                const isSel = selected.has(row.id)
-                const noHsn = !row.hsnCode?.trim()
+                const isSel          = selected.has(row.id)
+                const isDuplicate    = alreadyAdded?.has(`${row.prNo}-${row.prSno}`) ?? false
+                const noHsn          = !row.hsnCode?.trim()
                 return (
                   <tr key={row.id}
-                    style={{ background: isSel ? '#EBF3FF' : idx % 2 === 0 ? '#ffffff' : '#fafafa', cursor: 'pointer' }}
-                    onClick={() => toggle(row)}>
+                    style={{
+                      background: isDuplicate ? '#f5f5f5' : isSel ? '#EBF3FF' : idx % 2 === 0 ? '#ffffff' : '#fafafa',
+                      cursor:     isDuplicate ? 'not-allowed' : 'pointer',
+                      opacity:    isDuplicate ? 0.65 : 1,
+                    }}
+                    onClick={() => !isDuplicate && toggle(row)}>
                     <td style={TD} onClick={(e) => e.stopPropagation()}>
-                      <Checkbox checked={isSel} onChange={() => toggle(row)} />
+                      <Checkbox checked={isSel} disabled={isDuplicate} onChange={() => !isDuplicate && toggle(row)} />
                     </td>
                     <td style={{ ...TD, fontFamily: 'monospace', fontWeight: 600 }}>{row.prNo}</td>
                     <td style={TD}>{row.prDate}</td>
                     <td style={{ ...TD, fontFamily: 'monospace', color: '#185FA5' }}>{row.itemCode}</td>
                     <td style={{ ...TD, minWidth: 180 }}>
                       {row.itemName}
-                      {noHsn && (
-                        <Tag color="warning" style={{ marginLeft: 6, fontSize: 10 }}>⚠ No HSN</Tag>
-                      )}
+                      {isDuplicate && <Tag color="default" style={{ marginLeft: 6, fontSize: 10 }}>Already added</Tag>}
+                      {!isDuplicate && noHsn && <Tag color="warning" style={{ marginLeft: 6, fontSize: 10 }}>⚠ No HSN</Tag>}
                     </td>
                     <td style={{ ...TD, textAlign: 'center' }}>{row.uom}</td>
                     <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace' }}>{fmt3(row.balanceQty)}</td>

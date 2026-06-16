@@ -4,7 +4,7 @@ import { formatPoNo } from '../types'
 import type {
   PoParameters, PoPreAddChecks,
   SupplierOption, OrderTypeOption, CarrierOption, BankOption,
-  FormTypeOption,
+  FormTypeOption, AddressOption, CurrencyOption,
   EligiblePrLine,
   PoHeader, PoSummary,
   AddPoRequest, DeletePoRequest,
@@ -56,6 +56,18 @@ export const getGstTaxCodes = (search?: string) => {
   if (search) p.set('search', search)
   return apiHelpers.get<GstTaxCodeOption[]>(`${BASE}/gst-tax-codes?${p}`)
 }
+
+export const getCurrencies = () =>
+  apiHelpers.get<CurrencyOption[]>(`${BASE}/currencies`)
+
+export const getDeliveryLocations = (divCode: string) =>
+  apiHelpers.get<AddressOption[]>(`${BASE}/delivery-locations?divCode=${divCode}`)
+
+export const getBillingAddresses = (divCode: string) =>
+  apiHelpers.get<AddressOption[]>(`${BASE}/billing-addresses?divCode=${divCode}`)
+
+export const getPricingTerms = () =>
+  apiHelpers.get<AddressOption[]>(`${BASE}/pricing-terms`)
 
 // ── PR Picker — eligible approved PR lines (BR-02 filtered server-side) ───────
 // Order Type is NOT a filter here — all eligible approved PR lines are returned

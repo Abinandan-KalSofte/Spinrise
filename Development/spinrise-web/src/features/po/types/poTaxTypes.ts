@@ -42,9 +42,18 @@ export interface LineTaxDetail {
   packingPer:    number      // Packing & Forwarding %
   freightPer:    number      // Freight %
   insurancePer:  number      // Insurance %
+  cessPer:       number      // Cess %
   fcaFob:        number      // FCA / FOB charges
   addTaxCode:    string      // Additional Tax code (reuses GST tax-code master)
   addTaxPer:     number      // Additional Tax %
+  // Applicability flags (Section C — editable per line in GST modal)
+  freightPos:       'BEFORE' | 'AFTER'
+  insuranceDuty:    'BEFORE' | 'AFTER'
+  cessTaxPos:       'BEFORE' | 'AFTER'
+  exciseIncPacking: 'Y' | 'N'
+  freightType:      'PAID' | 'TOPAY'
+  discApp:          'BEFORE' | 'AFTER'
+  packApp:          'BEFORE' | 'AFTER'
 }
 
 /** Live totals shown in the GST modal footer (all computed display values). */

@@ -29,7 +29,7 @@ export function ApprovalTab({ currentPo }: ApprovalTabProps) {
         <Col span={6}><ReadOnlyField label="Created By" value={currentPo?.createdBy || '—'} /></Col>
         <Col span={6}>
           <ReadOnlyField label="Created On"
-            value={currentPo?.createdDt ? dayjs(currentPo.createdDt).format('DD-MMM-YYYY · hh:mm A') : '—'} mono />
+            value={currentPo?.createdDt ? dayjs(currentPo.createdDt, 'DD/MM/YYYY').format('DD-MMM-YYYY') : '—'} mono />
         </Col>
       </Row>
     </TabPanel>

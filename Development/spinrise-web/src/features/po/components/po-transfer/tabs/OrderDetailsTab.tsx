@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Col, DatePicker, Form, Input, InputNumber, Row, Select } from 'antd'
 import { TabPanel } from './_fieldKit'
 import { formatPoNo } from '../../../types'
-import type { ScreenMode, SupplierOption, OrderTypeOption, FormTypeOption } from '../../../types'
+import type { ScreenMode, SupplierOption, OrderTypeOption, FormTypeOption, CurrencyOption } from '../../../types'
 
 // ── Order Details tab (HTML #htab-panel-order) ───────────────────────────────
 // Mandatory: Order Type (BR-11), Supplier (BR-12), Currency (BR-13) — validated
@@ -10,6 +10,7 @@ import type { ScreenMode, SupplierOption, OrderTypeOption, FormTypeOption } from
 // selection also re-resolves the server GST route (Q4) via onSupplierChange.
 // Order Value is read-only, bound to the computed total (UI-03). PO No is never
 // guessed — server allocates on save (CD-03 / UX-04).
+// Round Off is now editable — recalculates Order Value / Grand Total live.
 
 const fmt2 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -17,56 +18,59 @@ interface OrderDetailsTabProps {
   mode:             ScreenMode
   disabled:         boolean
   poNo:             number | null
-  orderValue:       number
+  orderValue:       number         // total order value (including GST + charges ± roundoff)
   orderTypes:       OrderTypeOption[]
   suppliers:        SupplierOption[]
   formTypes:        FormTypeOption[]
+  currencies:       CurrencyOption[]
   onSupplierChange: (s: SupplierOption | null) => void
   onSupplierOpen:   () => void
 }
 
 export function OrderDetailsTab({
-  mode, disabled, poNo, orderValue, orderTypes, suppliers, formTypes,
+  mode, disabled, poNo, orderValue, orderTypes, suppliers, formTypes, currencies,
   onSupplierChange, onSupplierOpen,
 }: OrderDetailsTabProps) {
   const form = Form.useFormInstance()
 
-  // Single source of truth: PO No. and Order Value are READ-ONLY mirrors of the
-  // hook's `currentPo.poNo` and computed `orderValue` (same values feeding the
-  // Doc Band and KPI strip). We push them into the form's poNo / poValue fields
-  // so the read-only inputs render via form state — no duplicate calculation.
-  // CD-03: blank (placeholder) until the server allocates a number on save.
-  const poNoText = mode === 'ADD' ? '' : formatPoNo(poNo)
+  const poNoText    = mode === 'ADD' ? '' : formatPoNo(poNo)
   const poValueText = fmt2(orderValue)
   useEffect(() => {
     form.setFieldsValue({ poNo: poNoText, poValue: poValueText })
   }, [form, poNoText, poValueText])
 
+  const handleCurrencyChange = (code: string) => {
+    const curr = currencies.find((c) => c.currCode === code)
+    if (curr) form.setFieldValue('currRate', curr.currRate)
+  }
+
   return (
     <TabPanel>
       <Row gutter={[12, 0]}>
-        <Col span={4}>
-        <Form.Item name="poNo" label="PO No." style={mb}>
-          <Input readOnly placeholder="Auto-generated on save" style={{ fontFamily: 'monospace', color: '#185FA5' }} />
-        </Form.Item>
+        <Col span={2}>
+          <Form.Item name="poNo" label="PO No." style={mb}>
+            <Input readOnly placeholder="Auto" style={{ fontFamily: 'monospace', color: '#185FA5' }} />
+          </Form.Item>
         </Col>
-        <Col span={4}>
+        <Col span={2}>
           <Form.Item name="poDate" label="PO Date" style={mb}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} allowClear={false} />
           </Form.Item>
         </Col>
-        <Col span={4}>
+        <Col span={3}>
           <Form.Item name="orderType" label="Order Type" required
-            rules={[{ required: true, message: 'Order Type is required' }]} style={mb}>
+            rules={[{ required: true, message: 'Order Type is required' }]}
+            validateTrigger="onBlur" style={mb}>
             <Select
               showSearch optionFilterProp="label" placeholder="Select order type…" disabled={disabled}
               options={orderTypes.map((t) => ({ value: t.poGrp, label: `${t.poGrp} — ${t.typName}` }))}
             />
           </Form.Item>
         </Col>
-        <Col span={4}>
+        <Col span={10}>
           <Form.Item name="supplier" label="Supplier" required
-            rules={[{ required: true, message: 'Supplier is required' }]} style={mb}>
+            rules={[{ required: true, message: 'Supplier is required' }]}
+            validateTrigger="onBlur" style={mb}>
             <Select
               showSearch optionFilterProp="label" placeholder="Select supplier — type to filter…" disabled={disabled}
               onDropdownVisibleChange={(open) => { if (open) onSupplierOpen() }}
@@ -75,7 +79,7 @@ export function OrderDetailsTab({
             />
           </Form.Item>
         </Col>
-        <Col span={4}>
+        <Col span={3}>
           <Form.Item name="gstin" label="GSTIN" style={mb}>
             <Input readOnly placeholder="Auto-filled from supplier" style={{ fontFamily: 'monospace' }} />
           </Form.Item>
@@ -91,9 +95,9 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={4}>
-        <Form.Item name="poValue" label="Order Value (₹)" style={mb}>
-          <Input readOnly style={{ fontFamily: 'monospace', color: '#185FA5' }} />
-        </Form.Item>
+          <Form.Item name="poValue" label="Order Value (₹)" style={mb}>
+            <Input readOnly style={{ fontFamily: 'monospace', color: '#185FA5', textAlign: 'right' }} />
+          </Form.Item>
         </Col>
 
         <Col span={4}>
@@ -114,19 +118,30 @@ export function OrderDetailsTab({
         </Col>
         <Col span={4}>
           <Form.Item name="roundOff" label="Round Off" style={mb}>
-            <InputNumber readOnly precision={2} controls={false} style={{ ...full, fontFamily: 'monospace' }} />
+            <InputNumber
+              precision={2} controls={false} disabled={disabled}
+              style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }}
+            />
           </Form.Item>
         </Col>
 
         <Col span={4}>
           <Form.Item name="currency" label="Currency" required
-            rules={[{ required: true, message: 'Currency is required' }]} style={mb}>
-            <Input disabled={disabled} style={{ fontFamily: 'monospace' }} />
+            rules={[{ required: true, message: 'Currency is required' }]}
+            validateTrigger="onBlur" style={mb}>
+            <Select
+              showSearch optionFilterProp="label"
+              placeholder="Select currency…" disabled={disabled}
+              onChange={handleCurrencyChange}
+              options={currencies.map((c) => ({ value: c.currCode, label: `${c.currCode} — ${c.currName}` }))}
+              notFoundContent={currencies.length === 0 ? 'Loading currencies…' : 'Not found'}
+            />
           </Form.Item>
         </Col>
         <Col span={4}>
           <Form.Item name="currRate" label="Curr. Rate" style={mb}>
-            <InputNumber disabled precision={4} controls={false} style={{ ...full, fontFamily: 'monospace' }} />
+            <InputNumber disabled precision={4} controls={false}
+              style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} />
           </Form.Item>
         </Col>
         <Col span={8}>
@@ -139,5 +154,5 @@ export function OrderDetailsTab({
   )
 }
 
-const mb = { marginBottom: 8 }
+const mb   = { marginBottom: 8 }
 const full = { width: '100%' }

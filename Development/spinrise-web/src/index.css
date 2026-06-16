@@ -48,7 +48,7 @@ body {
   color: #fff !important;
 }
 .ant-message-info .ant-message-notice-content .anticon { color: #fff !important; }
-
+.ant-input-number-input {text-align: right !important;}
 /* ── Sidebar navigation (AppShell) — modern ERP styling ───────── */
 /* Thin, subtle scrollbar that only shows on the dark sider. */
 .spinrise-nav-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }

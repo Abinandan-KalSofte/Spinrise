@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { HeaderTabKey } from '../hooks/usePoTransferForm'
 import { Alert, ConfigProvider, Form, Skeleton } from 'antd'
 import { PageLoader, ApiLoader } from '@/components/common/loading'
 import { SearchOutlined } from '@ant-design/icons'
@@ -32,10 +33,16 @@ export default function PrToPoTransferPage() {
 
   const f = usePoTransferForm()
 
-  const [prPickerOpen, setPrPickerOpen] = useState(false)
-  const [findOpen,     setFindOpen]     = useState(false)
-  const [bodyTab,      setBodyTab]      = useState<'lines' | 'delivery'>('lines')
-  const [deleteReason, setDeleteReason] = useState('')
+  const [prPickerOpen,   setPrPickerOpen]   = useState(false)
+  const [findOpen,       setFindOpen]       = useState(false)
+  const [deletePickOpen, setDeletePickOpen] = useState(false)   // delete-flow Find modal
+  const [bodyTab,        setBodyTab]        = useState<'lines' | 'delivery'>('lines')
+  const [deleteReason,   setDeleteReason]   = useState('')
+
+  // Header tab state — controlled here so the page can programmatically navigate
+  // to the tab containing the first failing field on save validation.
+  const [headerTab, setHeaderTab] = useState<HeaderTabKey>('order')
+  useEffect(() => { setHeaderTab('order') }, [f.headerTabResetKey])
 
   // Print preview (modal — mirrors the PR module; no new browser tab).
   const [printOpen,     setPrintOpen]     = useState(false)
@@ -62,11 +69,35 @@ export default function PrToPoTransferPage() {
   const activeBodyTab = showDelivery ? bodyTab : 'lines'
 
   // ── Toolbar actions ────────────────────────────────────────────────────────
-  const handleNew    = () => { setBodyTab('lines'); void f.enterAddMode() }
+  const handleNew    = () => { setBodyTab('lines'); void f.enterAddMode().then((ok) => { if (ok) setPrPickerOpen(true) }) }
   const handleFind   = () => setFindOpen(true)
-  const handleDelete = () => { setDeleteReason(''); f.enterDeleteMode() }
+  // Delete flow: always open the Find PO modal first so the user picks which PO
+  // to delete — prevents accidental deletion of whichever PO happens to be loaded.
+  const handleDelete = () => { setDeleteReason(''); setDeletePickOpen(true) }
   const handleCancel = () => { setDeleteReason(''); setBodyTab('lines'); f.cancelMode() }
-  const handleSave   = () => { if (f.mode === 'DELETE') f.handleDeleteClick(); else void f.doSave() }
+  const handleSave   = () => {
+    if (f.mode === 'DELETE') {
+      f.handleDeleteClick()
+    } else {
+      void f.doSave((tab, fieldName) => {
+        setHeaderTab(tab)
+        // Small delay lets React re-render the new active tab before scrolling.
+        setTimeout(() => {
+          f.headerForm.scrollToField(fieldName)
+          const inst = f.headerForm.getFieldInstance(fieldName) as { focus?: () => void } | null
+          inst?.focus?.()
+        }, 100)
+      })
+    }
+  }
+
+  // Delete-find: user picks a PO → load it → enter DELETE mode immediately.
+  const handleDeletePickSelect = (po: { poNo: number; poDate: string }) => {
+    setDeletePickOpen(false)
+    void f.loadRecord(po.poNo, po.poDate).then((loaded) => {
+      if (loaded) f.enterDeleteMode(loaded)
+    })
+  }
 
   const handlePrint = async () => {
     if (!f.currentPo?.poNo) return
@@ -208,14 +239,20 @@ export default function PrToPoTransferPage() {
             <PoHeaderTabs
               mode={f.mode}
               poNo={f.currentPo?.poNo ?? null}
-              orderValue={f.totals.orderValue}
+              orderValue={f.totals.totalOrderValue}
+              lineItemValue={f.totals.orderValue}
               currentPo={f.currentPo}
               orderTypes={f.orderTypes}
               suppliers={f.suppliers}
               carriers={f.carriers}
               formTypes={f.formTypes}
               banks={f.banks}
-              headerTabResetKey={f.headerTabResetKey}
+              currencies={f.currencies}
+              deliveryLocations={f.deliveryLocations}
+              billingAddresses={f.billingAddresses}
+              pricingTermsOpts={f.pricingTermsOpts}
+              activeTab={headerTab}
+              onTabChange={setHeaderTab}
               onSupplierChange={(s) => void f.onSupplierChange(s)}
               onSupplierOpen={() => void f.loadSuppliers()}
             />
@@ -291,6 +328,7 @@ export default function PrToPoTransferPage() {
       <PrPickerModal
         open={prPickerOpen}
         divCode={f.divCode}
+        alreadyAdded={new Set(f.draftLines.map((l) => `${l.prNo}-${l.prSno}`))}
         onLoad={(lines) => { f.addPrLines(lines); setPrPickerOpen(false) }}
         onCancel={() => setPrPickerOpen(false)}
       />
@@ -323,6 +361,15 @@ export default function PrToPoTransferPage() {
         lDate={ylDate}
         onSelect={(po) => { void f.loadRecord(po.poNo, po.poDate) }}
         onClose={() => setFindOpen(false)}
+      />
+
+      {/* Delete-find: user picks which PO to delete → load → enter DELETE mode */}
+      <PoListModal
+        open={deletePickOpen}
+        fDate={yfDate}
+        lDate={ylDate}
+        onSelect={handleDeletePickSelect}
+        onClose={() => setDeletePickOpen(false)}
       />
 
       <PrPrintPreviewModal

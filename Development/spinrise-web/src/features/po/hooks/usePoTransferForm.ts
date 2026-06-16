@@ -29,6 +29,7 @@ import * as poApi from '../api/poTransferApi'
 import type {
   PoHeader, PoLine, PoParameters, PoPreAddChecks,
   SupplierOption, OrderTypeOption, CarrierOption, BankOption, FormTypeOption,
+  AddressOption, CurrencyOption,
   EligiblePrLine, DeliveryScheduleLine, AddPoRequest, SavePoLineRequest,
   GstRoute, LineTaxDetail, GstTaxCodeOption,
 } from '../types'
@@ -36,13 +37,50 @@ import type {
 // Per-line charge / additional-tax defaults sourced from the header tab. Re-read
 // live on each GST-modal open so unsaved lines pick up the latest header values.
 export interface GstHeaderDefaults {
-  discPer:      number
-  packingPer:   number
-  freightPer:   number
-  insurancePer: number
-  addTaxPer:    number
-  tcsPer:       number
-  fcaFob:       number
+  discPer:         number
+  packingPer:      number
+  freightPer:      number
+  insurancePer:    number
+  addTaxPer:       number
+  cessPer:         number
+  tcsPer:          number
+  fcaFob:          number
+  freightPos:      'BEFORE' | 'AFTER'
+  insuranceDuty:   'BEFORE' | 'AFTER'
+  cessTaxPos:      'BEFORE' | 'AFTER'
+  exciseIncPacking: 'Y' | 'N'
+  freightType:     'PAID' | 'TOPAY'
+  discApp:         'BEFORE' | 'AFTER'
+  packApp:         'BEFORE' | 'AFTER'
+}
+
+// ── Header tab key type + field-to-tab map (used for smart validation nav) ────
+export type HeaderTabKey = 'order' | 'tax' | 'payment' | 'instructions' | 'cancel' | 'amendment' | 'approval'
+
+export const FIELD_TAB_MAP: Record<string, HeaderTabKey> = {
+  // Order Details
+  poDate: 'order', orderType: 'order', supplier: 'order', gstin: 'order',
+  gstState: 'order', inspect: 'order', formType: 'order', refNo: 'order',
+  refDate: 'order', currency: 'order', currRate: 'order', remarks: 'order', roundOff: 'order',
+  // Tax / Discount
+  cgstPer: 'tax', sgstPer: 'tax', igstPer: 'tax', tcsPer: 'tax', fcaFob: 'tax', fileNo: 'tax',
+  discPer: 'tax', discAmt: 'tax', freightPer: 'tax', freightAmt: 'tax',
+  packPer: 'tax', packAmt: 'tax', insurPer: 'tax', insurAmt: 'tax',
+  addTaxPer: 'tax', addTaxAmtHdr: 'tax', cessPer: 'tax', cessAmt: 'tax',
+  freightType: 'tax', freightPos: 'tax', discApp: 'tax', packApp: 'tax',
+  insuranceDuty: 'tax', cessTaxPos: 'tax', exciseIncPacking: 'tax',
+  // Payment
+  payMode: 'payment', directInstr: 'payment', advAmt: 'payment', advPer: 'payment',
+  modeOfPayment: 'payment', payRef: 'payment', payRefDate: 'payment',
+  bankCode: 'payment', paymentTerms: 'payment', chequeNo: 'payment', chequeDate: 'payment',
+  // Instructions
+  carrier: 'instructions', creditDays: 'instructions', deliveryDate: 'instructions',
+  deliveryLocation: 'instructions', billingAddress: 'instructions', specialInstr: 'instructions',
+  despatch: 'instructions', purpose: 'instructions', otherLevies: 'instructions',
+  pricingTerms: 'instructions', packForwarding: 'instructions', insurance: 'instructions', freight: 'instructions',
+  // Cancel / Status
+  reminder: 'cancel', status: 'cancel', cancelled: 'cancel', cancelDate: 'cancel',
+  cancelReason: 'cancel', approved: 'cancel', approvedBy: 'cancel',
 }
 
 // ── Numeric helpers (project precision: Value/Amt 2dp, Qty 3dp) ──────────────
@@ -114,7 +152,7 @@ const recalcLine = (line: PoLine): PoLine => {
 export interface PoHeaderFormValues {
   // Display-only, fed from hook state (not sent in requests):
   poNo:          string         // formatted server PO number (blank pre-save, CD-03)
-  poValue:       string         // formatted computed Order Value (UI-03, same as KPI)
+  poValue:       string         // formatted computed Total Order Value (UI-03)
   // Order Details
   poDate:        Dayjs
   orderType:     string         // BR-11
@@ -128,25 +166,38 @@ export interface PoHeaderFormValues {
   currency:      string         // BR-13
   currRate:      number
   remarks:       string
+  roundOff:      number         // editable; drives Order Value recalc
   // Tax / Discount (header-level)
+  // Note: cgstPer/sgstPer/igstPer hidden from UI (GST comes from line-level only)
   cgstPer:       number
   sgstPer:       number
   igstPer:       number
   tcsPer:        number
   discPer:       number
+  discAmt:       number         // computed from discPer × line item value
   freightAmt:    number
+  freightPer:    number         // computed from freightAmt / line item value
   packPer:       number
+  packAmt:       number         // computed from packPer × line item value
   insurPer:      number
+  insurAmt:      number         // computed from insurPer × line item value
   addTaxPer:     number
+  addTaxAmtHdr:  number         // computed from addTaxPer × line item value
+  cessPer:       number
+  cessAmt:       number
   fileNo:        string
   fcaFob:        number
   freightType:   'PAID' | 'TOPAY'
+  freightPos:    'BEFORE' | 'AFTER'   // freight position relative to tax
   discApp:       'BEFORE' | 'AFTER'
   packApp:       'BEFORE' | 'AFTER'
+  insuranceDuty: 'BEFORE' | 'AFTER'  // insurance before/after duty
+  cessTaxPos:    'BEFORE' | 'AFTER'  // cess before/after tax
+  exciseIncPacking: 'Y' | 'N'
   // Payment
   payMode:       'DIRECT' | 'BANK'
   directInstr:   string
-  advPer:        number
+  advAmt:        number         // advance amount (replaces advPer)
   modeOfPayment: string
   payRef:        string
   payRefDate:    Dayjs | null
@@ -224,12 +275,16 @@ export function usePoTransferForm() {
   // Record-navigation index — every PO number in the active FY, ascending.
   const [navList, setNavList] = useState<{ poNo: number; poDate: string }[]>([])
 
-  const [orderTypes, setOrderTypes] = useState<OrderTypeOption[]>([])
-  const [carriers,   setCarriers]   = useState<CarrierOption[]>([])
-  const [formTypes,  setFormTypes]  = useState<FormTypeOption[]>([])
-  const [suppliers,  setSuppliers]  = useState<SupplierOption[]>([])
-  const [banks,      setBanks]      = useState<BankOption[]>([])
-  const [gstTaxCodes, setGstTaxCodes] = useState<GstTaxCodeOption[]>([])
+  const [orderTypes,         setOrderTypes]         = useState<OrderTypeOption[]>([])
+  const [carriers,           setCarriers]           = useState<CarrierOption[]>([])
+  const [formTypes,          setFormTypes]          = useState<FormTypeOption[]>([])
+  const [suppliers,          setSuppliers]          = useState<SupplierOption[]>([])
+  const [banks,              setBanks]              = useState<BankOption[]>([])
+  const [gstTaxCodes,        setGstTaxCodes]        = useState<GstTaxCodeOption[]>([])
+  const [currencies,         setCurrencies]         = useState<CurrencyOption[]>([])
+  const [deliveryLocations,  setDeliveryLocations]  = useState<AddressOption[]>([])
+  const [billingAddresses,   setBillingAddresses]   = useState<AddressOption[]>([])
+  const [pricingTermsOpts,   setPricingTermsOpts]   = useState<AddressOption[]>([])
   const [lookupsLoaded,  setLookupsLoaded]  = useState(false)
   const [lookupsLoading, setLookupsLoading] = useState(false)
   const [lookupsError,   setLookupsError]   = useState<string | null>(null)
@@ -245,23 +300,65 @@ export function usePoTransferForm() {
   )
 
   // Live header-tab values → defaults for a line's GST/charge fields. Watched so
-  // an unsaved line opened in the GST modal reflects the LATEST header values
-  // (§7). Header freight is an amount (not a %), so line freight% defaults to 0.
-  const hDiscPer   = Form.useWatch('discPer',   headerForm)
-  const hPackPer   = Form.useWatch('packPer',   headerForm)
-  const hInsurPer  = Form.useWatch('insurPer',  headerForm)
-  const hAddTaxPer = Form.useWatch('addTaxPer', headerForm)
-  const hTcsPer    = Form.useWatch('tcsPer',    headerForm)
-  const hFcaFob    = Form.useWatch('fcaFob',    headerForm)
+  // an unsaved line opened in the GST modal reflects the LATEST header values (§7).
+  const hDiscPer          = Form.useWatch('discPer',          headerForm)
+  const hPackPer          = Form.useWatch('packPer',          headerForm)
+  const hFreightPer       = Form.useWatch('freightPer',       headerForm)
+  const hInsurPer         = Form.useWatch('insurPer',         headerForm)
+  const hAddTaxPer        = Form.useWatch('addTaxPer',        headerForm)
+  const hCessPer          = Form.useWatch('cessPer',          headerForm)
+  const hTcsPer           = Form.useWatch('tcsPer',           headerForm)
+  const hFcaFob           = Form.useWatch('fcaFob',           headerForm)
+  const hRoundOff         = Form.useWatch('roundOff',         headerForm)
+  const hFreightPos       = Form.useWatch('freightPos',       headerForm)
+  const hInsuranceDuty    = Form.useWatch('insuranceDuty',    headerForm)
+  const hCessTaxPos       = Form.useWatch('cessTaxPos',       headerForm)
+  const hExciseIncPacking = Form.useWatch('exciseIncPacking', headerForm)
+  const hFreightType      = Form.useWatch('freightType',      headerForm)
+  const hDiscApp          = Form.useWatch('discApp',          headerForm)
+  const hPackApp          = Form.useWatch('packApp',          headerForm)
   const gstHeaderDefaults = useMemo<GstHeaderDefaults>(() => ({
-    discPer:      hDiscPer   ?? 0,
-    packingPer:   hPackPer   ?? 0,
-    freightPer:   0,
-    insurancePer: hInsurPer  ?? 0,
-    addTaxPer:    hAddTaxPer  ?? 0,
-    tcsPer:       hTcsPer     ?? 0,
-    fcaFob:       hFcaFob     ?? 0,
-  }), [hDiscPer, hPackPer, hInsurPer, hAddTaxPer, hTcsPer, hFcaFob])
+    discPer:         hDiscPer    ?? 0,
+    packingPer:      hPackPer    ?? 0,
+    freightPer:      hFreightPer ?? 0,
+    insurancePer:    hInsurPer   ?? 0,
+    addTaxPer:       hAddTaxPer  ?? 0,
+    cessPer:         hCessPer    ?? 0,
+    tcsPer:          hTcsPer     ?? 0,
+    fcaFob:          hFcaFob     ?? 0,
+    freightPos:       (hFreightPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+    insuranceDuty:    (hInsuranceDuty    as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+    cessTaxPos:       (hCessTaxPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+    exciseIncPacking: (hExciseIncPacking as 'Y' | 'N' | undefined)           ?? 'N',
+    freightType:      (hFreightType      as 'PAID' | 'TOPAY' | undefined)    ?? 'PAID',
+    discApp:          (hDiscApp          as 'BEFORE' | 'AFTER' | undefined)  ?? 'BEFORE',
+    packApp:          (hPackApp          as 'BEFORE' | 'AFTER' | undefined)  ?? 'BEFORE',
+  }), [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hCessPer, hTcsPer, hFcaFob,
+       hFreightPos, hInsuranceDuty, hCessTaxPos, hExciseIncPacking,
+       hFreightType, hDiscApp, hPackApp])
+
+  // Grid tax sync: when header tax % fields change in ADD mode, propagate to all
+  // unsaved lines (taxSaved=false) immediately. Rows with taxSaved=true retain
+  // their manually-entered values (manual override rule, §GST Modal Sync).
+  const draftLinesRef = useRef(draftLines)
+  draftLinesRef.current = draftLines
+  useEffect(() => {
+    if (mode !== 'ADD') return
+    const lines = draftLinesRef.current
+    if (lines.length === 0) return
+    setDraftLines(lines.map((l) => {
+      if (l.taxSaved) return l
+      return recalcLine({
+        ...l,
+        discPer:      hDiscPer    ?? 0,
+        packingPer:   hPackPer    ?? 0,
+        freightPer:   hFreightPer ?? 0,
+        insurancePer: hInsurPer   ?? 0,
+        addTaxPer:    hAddTaxPer  ?? 0,
+        tcsPer:       hTcsPer     ?? 0,
+      })
+    }))
+  }, [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hTcsPer]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load lookups on mount ───────────────────────────────────────────────────
   const loadLookups = useCallback(async () => {
@@ -269,20 +366,29 @@ export function usePoTransferForm() {
     setLookupsLoading(true)
     setLookupsError(null)
     try {
-      const [params, types, cars, forms, bankList, taxCodes] = await Promise.all([
-        poApi.getParameters(divCode),
-        poApi.getOrderTypes(),
-        poApi.getCarriers(),
-        poApi.getFormTypes(),
-        poApi.getBanks(divCode),
-        poApi.getGstTaxCodes(),
-      ])
+      const [params, types, cars, forms, bankList, taxCodes, currList, delLocs, billAddrs, pricTerms] =
+        await Promise.all([
+          poApi.getParameters(divCode),
+          poApi.getOrderTypes(),
+          poApi.getCarriers(),
+          poApi.getFormTypes(),
+          poApi.getBanks(divCode),
+          poApi.getGstTaxCodes(),
+          poApi.getCurrencies().catch(() => [] as CurrencyOption[]),
+          poApi.getDeliveryLocations(divCode).catch(() => [] as AddressOption[]),
+          poApi.getBillingAddresses(divCode).catch(() => [] as AddressOption[]),
+          poApi.getPricingTerms().catch(() => [] as AddressOption[]),
+        ])
       setParameters(params)
       setOrderTypes(types)
       setCarriers(cars)
       setFormTypes(forms)
       setBanks(bankList)
       setGstTaxCodes(taxCodes)
+      setCurrencies(currList)
+      setDeliveryLocations(delLocs)
+      setBillingAddresses(billAddrs)
+      setPricingTermsOpts(pricTerms)
       setLookupsLoaded(true)
     } catch {
       setLookupsError('Failed to load reference data. Click Retry to reload.')
@@ -346,6 +452,13 @@ export function usePoTransferForm() {
       gstin:    supplier?.gstinNo ?? '',
       gstState: supplier?.gstStateName ?? '',
     })
+    // GST State Code validation — must not be empty for GST compliance.
+    if (supplier && !supplier.gstStateCode?.trim()) {
+      notificationService.warning(
+        'GST State Code Not Available',
+        'GST State Code is not available for this supplier.',
+      )
+    }
     const route = supplier ? await resolveGstRoute(supplier.slCode) : 'LOCAL'
     setGstRoute(route)
     // Re-apply route to every working line and recompute its GST split.
@@ -409,10 +522,19 @@ export function usePoTransferForm() {
       packingPer:    gstHeaderDefaults.packingPer,
       freightPer:    gstHeaderDefaults.freightPer,
       insurancePer:  gstHeaderDefaults.insurancePer,
+      cessPer:       gstHeaderDefaults.cessPer,
       fcaFob:        gstHeaderDefaults.fcaFob,
       addTaxCode:    '',
       addTaxPer:     gstHeaderDefaults.addTaxPer,
       addTaxAmt:     0,
+      // Applicability flags — seeded from header, editable per-line in GST modal.
+      freightPos:       gstHeaderDefaults.freightPos,
+      insuranceDuty:    gstHeaderDefaults.insuranceDuty,
+      cessTaxPos:       gstHeaderDefaults.cessTaxPos,
+      exciseIncPacking: gstHeaderDefaults.exciseIncPacking,
+      freightType:      gstHeaderDefaults.freightType,
+      discApp:          gstHeaderDefaults.discApp,
+      packApp:          gstHeaderDefaults.packApp,
       taxableValue:  0,
       netAmount:     0,
       taxSaved:      false,
@@ -445,9 +567,17 @@ export function usePoTransferForm() {
   }
 
   // Edit Rate / Qty inline → recompute line + keep delivery poQty in sync.
+  // Qty is clamped to balanceQty immediately with a warning (BR-05 UX).
   const updateLineRateQty = (lineNo: number, patch: { rate?: number; qty?: number }) => {
     const target = draftLines.find((l) => l.lineNo === lineNo)
     if (!target) return
+    if (patch.qty !== undefined && patch.qty > target.balanceQty) {
+      notificationService.warning(
+        'Quantity Exceeded',
+        'Quantity cannot exceed available balance quantity.',
+      )
+      patch = { ...patch, qty: target.balanceQty }
+    }
     const merged = recalcLine({ ...target, ...patch })
     updateDraftLine(lineNo, merged)
     if (patch.qty !== undefined) {
@@ -481,19 +611,36 @@ export function usePoTransferForm() {
     inspect:     'YES',
     currency:    parameters?.currCode ?? 'INR',
     currRate:    1,
+    roundOff:    0,
     freightType: 'PAID',
+    freightPos:  'BEFORE',
     discApp:     'BEFORE',
     packApp:     'BEFORE',
+    insuranceDuty:    'BEFORE',
+    cessTaxPos:       'BEFORE',
+    exciseIncPacking: 'N',
     payMode:     'DIRECT',
     cancelled:   false,
+    formType:    formTypes[0]?.formCode ?? '',   // auto-default first available form type
+    // Numeric fields default to 0 so validateFields() never returns null.
+    cgstPer: 0, sgstPer: 0, igstPer: 0, tcsPer: 0,
+    discPer: 0, discAmt: 0,
+    freightAmt: 0, freightPer: 0,
+    packPer: 0, packAmt: 0,
+    insurPer: 0, insurAmt: 0,
+    addTaxPer: 0, addTaxAmtHdr: 0,
+    cessPer: 0, cessAmt: 0,
+    fcaFob: 0,
+    creditDays: 0, advAmt: 0,
+    otherLevies: '',
   })
 
-  const enterAddMode = async () => {
+  const enterAddMode = async (): Promise<boolean> => {
     const result = await runPreChecks()
     // BR-02 gate: no eligible PR lines ⇒ cannot start an Add.
     if (result && result.approvedPrLinesExist === false) {
       notificationService.warning('No Eligible PR Lines', 'There are no approved PR lines available to convert.')
-      return
+      return false
     }
     headerForm.resetFields()
     headerForm.setFieldsValue(headerDefaults())
@@ -502,14 +649,40 @@ export function usePoTransferForm() {
     setGstRoute('LOCAL')
     setMode('ADD')
     resetToHeaderTab()   // Add Mode opens the Header (Order Details) tab
+    return true
   }
 
-  const enterDeleteMode = () => {
-    if (!currentPo) return
+  // poOverride: when supplied (delete-find flow), skip the store lookup — avoids
+  // the React closure staleness issue when called immediately after loadRecord.
+  const enterDeleteMode = (poOverride?: PoHeader) => {
+    const po = poOverride ?? currentPo
+    if (!po) return
     // GRN guard (BR-03) is enforced server-side (HTTP 409); the confirm step
     // surfaces it. Seed draft lines so per-line delete reasons are editable.
-    setDraftLines(currentPo.lines.map((l) => ({ ...l, deleteReason: '' })))
-    setDeliveryLines(currentPo.delivery ?? [])
+    setDraftLines(po.lines.map((l) => ({
+      ...l,
+      discPer:          l.discPer          ?? 0,
+      packingPer:       l.packingPer       ?? 0,
+      freightPer:       l.freightPer       ?? 0,
+      insurancePer:     l.insurancePer     ?? 0,
+      cessPer:          l.cessPer          ?? 0,
+      fcaFob:           l.fcaFob           ?? 0,
+      addTaxCode:       l.addTaxCode       ?? '',
+      addTaxPer:        l.addTaxPer        ?? 0,
+      addTaxAmt:        l.addTaxAmt        ?? 0,
+      freightPos:       l.freightPos       ?? 'BEFORE',
+      insuranceDuty:    l.insuranceDuty    ?? 'BEFORE',
+      cessTaxPos:       l.cessTaxPos       ?? 'BEFORE',
+      exciseIncPacking: l.exciseIncPacking ?? 'N',
+      freightType:      l.freightType      ?? 'PAID',
+      discApp:          l.discApp          ?? 'BEFORE',
+      packApp:          l.packApp          ?? 'BEFORE',
+      taxableValue:     l.taxableValue     ?? (l.rate * l.qty),
+      netAmount:        l.netAmount        ?? 0,
+      taxSaved:         l.taxSaved         ?? true,
+      deleteReason: '',
+    })))
+    setDeliveryLines(po.delivery ?? [])
     setMode('DELETE')
     resetToHeaderTab()
   }
@@ -536,25 +709,37 @@ export function usePoTransferForm() {
       currency:      po.currency,
       currRate:      po.currRate,
       remarks:       po.remarks,
+      roundOff:      po.roundOff ?? 0,
       cgstPer:       po.cgstPer,
       sgstPer:       po.sgstPer,
       igstPer:       po.igstPer,
       tcsPer:        po.tcsPer,
       discPer:       po.discPer,
+      discAmt:       0,
       freightAmt:    po.freightAmt,
+      freightPer:    0,
       packPer:       po.packPer,
+      packAmt:       0,
       insurPer:      po.insurPer,
+      insurAmt:      0,
       addTaxPer:     po.addTaxPer,
+      addTaxAmtHdr:  0,
+      cessPer:       0,
+      cessAmt:       0,
       fileNo:        po.fileNo,
       fcaFob:        po.fcaFob,
       freightType:   po.freightType,
+      freightPos:    'BEFORE',
       discApp:       po.discApp,
       packApp:       po.packApp,
+      insuranceDuty:    'BEFORE',
+      cessTaxPos:       'BEFORE',
+      exciseIncPacking: 'N',
       payMode:       po.payMode,
       directInstr:   po.directInstr,
       bankCode:      po.bankCode,
       paymentTerms:  po.paymentTerms,
-      advPer:        po.advPer,
+      advAmt:        po.advAmt ?? 0,
       modeOfPayment: po.modeOfPayment,
       payRef:        po.payRef,
       payRefDate:    po.payRefDate ? dayjs(po.payRefDate) : null,
@@ -583,17 +768,20 @@ export function usePoTransferForm() {
     })
   }
 
-  const loadRecord = async (poNo: number, poDate: string) => {
-    if (!divCode) return
+  const loadRecord = async (poNo: number, poDate: string): Promise<PoHeader | null> => {
+    if (!divCode) return null
     setNavLoading(true)
     try {
       const po = await poApi.getById(divCode, poNo, poDate)
       setCurrentPo(po)
       fillHeaderFromPo(po)
+      setDeliveryLines(po.delivery ?? [])
       setMode('VIEW')
       resetToHeaderTab()   // Find→Load / record navigation opens the Header tab
+      return po
     } catch (err) {
       notificationService.error('Failed to Load Record', getErrorMessage(err))
+      return null
     } finally {
       setNavLoading(false)
     }
@@ -605,7 +793,7 @@ export function usePoTransferForm() {
     setNavLoading(true)
     try {
       const po = await poApi.getLastRecord(divCode, yfDate, ylDate)
-      if (po) { setCurrentPo(po); fillHeaderFromPo(po); resetToHeaderTab() }
+      if (po) { setCurrentPo(po); fillHeaderFromPo(po); setDeliveryLines(po.delivery ?? []); resetToHeaderTab() }
     } catch { /* empty list is fine */ }
     finally { setNavLoading(false) }
   }, [divCode, processingDate]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -679,21 +867,31 @@ export function usePoTransferForm() {
   }
 
   // Cross-field header rules not expressible as single-field AntD `required`.
-  const validateHeaderConditionals = (v: PoHeaderFormValues): boolean => {
+  // Returns true on success, or the offending field name (string) on failure so
+  // the caller can navigate to the correct tab and focus the invalid field.
+  const validateHeaderConditionals = (v: PoHeaderFormValues): true | string => {
+    // GST State Code guard: a selected supplier that has no gstStateCode cannot
+    // route GST correctly. Block save so the SP never receives an empty state.
+    if (v.supplier?.trim() && !v.gstState?.trim()) {
+      notificationService.error('GST State Missing', 'The selected supplier does not have a GST State Code. Select a valid supplier before saving.')
+      return 'supplier'
+    }
     // BR-15 Bank → Bank Code + Cheque No.
     if (v.payMode === 'BANK') {
-      if (!v.bankCode?.trim()) { notificationService.warning('Mandatory Fields Missing', 'Bank is required for bank payment.'); return false }
-      if (!v.chequeNo?.trim()) { notificationService.warning('Mandatory Fields Missing', 'Cheque No. is required for bank payment.'); return false }
+      if (!v.bankCode?.trim()) { notificationService.warning('Mandatory Fields Missing', 'Bank is required for bank payment.'); return 'bankCode' }
+      if (!v.chequeNo?.trim()) { notificationService.warning('Mandatory Fields Missing', 'Cheque No. is required for bank payment.'); return 'chequeNo' }
     }
     // BR-15 HO order type → Pricing Terms
     if (v.orderType === HO_TYPE && !v.pricingTerms?.trim()) {
-      notificationService.warning('Mandatory Fields Missing', 'Pricing Terms is required for HO purchase type.'); return false
+      notificationService.warning('Mandatory Fields Missing', 'Pricing Terms is required for HO purchase type.')
+      return 'pricingTerms'
     }
     // BR-01 backdate guard: PO date must equal processing date when BACKDATE='N'
     if (preChecks?.backDateFlag === 'N' && v.poDate && processingDate) {
       const today = dayjs(processingDate)
       if (!v.poDate.isSame(today, 'day')) {
-        notificationService.warning('Invalid PO Date', `PO date must equal today's processing date (${today.format('DD-MMM-YYYY')}).`); return false
+        notificationService.warning('Invalid PO Date', `PO date must equal today's processing date (${today.format('DD-MMM-YYYY')}).`)
+        return 'poDate'
       }
     }
     return true
@@ -722,10 +920,25 @@ export function usePoTransferForm() {
       cgstCode: l.cgstCode,
       sgstCode: l.sgstCode,
       igstCode: l.igstCode,
-      route:         l.route,
-      requesterId:   l.requesterId,
-      requesterName: l.requesterName,
-      slots:         slotsFor(l.lineNo),
+      route:            l.route,
+      requesterId:      l.requesterId,
+      requesterName:    l.requesterName,
+      discPer:          l.discPer,
+      packingPer:       l.packingPer,
+      freightPer:       l.freightPer,
+      insurancePer:     l.insurancePer,
+      cessPer:          l.cessPer,
+      fcaFob:           l.fcaFob,
+      addTaxCode:       l.addTaxCode,
+      addTaxPer:        l.addTaxPer,
+      freightPos:       l.freightPos,
+      insuranceDuty:    l.insuranceDuty,
+      cessTaxPos:       l.cessTaxPos,
+      exciseIncPacking: l.exciseIncPacking,
+      freightType:      l.freightType,
+      discApp:          l.discApp,
+      packApp:          l.packApp,
+      slots:            slotsFor(l.lineNo),
     }))
 
     // Guard the PO date: fall back to the processing date / today if the form
@@ -743,27 +956,27 @@ export function usePoTransferForm() {
         gstin:         v.gstin,
         gstState:      v.gstState,
         inspect:       v.inspect,
-        roundOff:      totals.roundOff,
-        orderValue:    totals.orderValue,
+        roundOff:      v.roundOff ?? 0,
+        orderValue:    totals.totalOrderValue,
         formType:      v.formType,
         refNo:         v.refNo,
         refDate:       fmtDate(v.refDate),
         currency:      v.currency,
         currRate:      v.currRate,
         remarks:       v.remarks,
-        cgstPer:       v.cgstPer, sgstPer: v.sgstPer, igstPer: v.igstPer, tcsPer: v.tcsPer,
+        cgstPer:       v.cgstPer ?? 0, sgstPer: v.sgstPer ?? 0, igstPer: v.igstPer ?? 0, tcsPer: v.tcsPer ?? 0,
         discPer:       v.discPer,
         freightAmt:    v.freightAmt, packPer: v.packPer, insurPer: v.insurPer,
         addTaxPer:     v.addTaxPer, fileNo: v.fileNo, fcaFob: v.fcaFob,
         freightType:   v.freightType, discApp: v.discApp, packApp: v.packApp,
         payMode:       v.payMode, directInstr: v.directInstr, bankCode: v.bankCode,
-        paymentTerms:  v.paymentTerms, advPer: v.advPer, advAmt: 0,
+        paymentTerms:  v.paymentTerms, advPer: 0, advAmt: v.advAmt ?? 0,
         modeOfPayment: v.modeOfPayment, payRef: v.payRef, payRefDate: fmtDate(v.payRefDate),
         chequeNo:      v.chequeNo, chequeDate: fmtDate(v.chequeDate),
         carrier:       v.carrier, creditDays: v.creditDays, deliveryDate: fmtDate(v.deliveryDate),
         deliveryLocation: v.deliveryLocation, billingAddress: v.billingAddress,
         specialInstr:  v.specialInstr, despatch: v.despatch, purpose: v.purpose,
-        otherLevies:   v.otherLevies, pricingTerms: v.pricingTerms,
+        otherLevies:   v.otherLevies ?? '', pricingTerms: v.pricingTerms,
         packForwarding: v.packForwarding, insurance: v.insurance, freight: v.freight,
         reminder:      v.reminder, status: v.status, cancelled: v.cancelled,
         cancelDate:    fmtDate(v.cancelDate), cancelReason: v.cancelReason,
@@ -777,12 +990,26 @@ export function usePoTransferForm() {
   }
 
   // ── Save (ADD only here; Modify is a separate screen) ──────────────────────
-  const doSave = async () => {
+  const doSave = async (onValidationFailed?: (tab: HeaderTabKey, fieldName: string) => void) => {
     let values: PoHeaderFormValues
     try { values = await headerForm.validateFields() }   // BR-11..14 via field rules (HF-19a)
-    catch { notificationService.warning('Mandatory Fields Missing', 'Please fill in all required fields.'); return }
+    catch (err) {
+      notificationService.warning('Mandatory Fields Missing', 'Please fill in all required fields.')
+      if (onValidationFailed && err && typeof err === 'object' && 'errorFields' in err) {
+        const errorFields = (err as { errorFields: { name: (string | number)[] }[] }).errorFields
+        const firstField  = errorFields[0]?.name?.[0]
+        if (typeof firstField === 'string') {
+          onValidationFailed(FIELD_TAB_MAP[firstField] ?? 'order', firstField)
+        }
+      }
+      return
+    }
 
-    if (!validateHeaderConditionals(values)) return       // BR-15, BR-01
+    const condResult = validateHeaderConditionals(values)
+    if (condResult !== true) {
+      onValidationFailed?.(FIELD_TAB_MAP[condResult] ?? 'order', condResult)
+      return
+    }                                                      // BR-15, BR-01
     if (!validateLines()) return                          // BR-05/06/07/08/10, UX-01
 
     setSaving(true)
@@ -875,8 +1102,8 @@ export function usePoTransferForm() {
     totalTcs    = round2(totalTcs)
     totalAddTax = round2(totalAddTax)
     totalNet    = round2(totalNet)
-    // Round-off is server-authoritative (TaxOK_Click, §5.5); 0 pre-save.
-    const roundOff = currentPo?.roundOff ?? 0
+    // Round-off: editable in ADD (watched from form); server-authoritative in VIEW.
+    const roundOff = mode === 'ADD' ? (hRoundOff ?? 0) : (currentPo?.roundOff ?? 0)
     return {
       totalLines: lines.length,
       orderValue,
@@ -888,7 +1115,7 @@ export function usePoTransferForm() {
       totalOrderValue: round2(totalNet + roundOff),
       qtyByUom,
     }
-  }, [lines, mode, currentPo])
+  }, [lines, mode, currentPo, hRoundOff])
 
   // Header "Order Value" (RO) is bound by the component to `totals.orderValue`
   // (UI-03) — kept out of the form so there is a single computed source.
@@ -939,6 +1166,7 @@ export function usePoTransferForm() {
     // lookups
     parameters, preChecks,
     orderTypes, carriers, formTypes, suppliers, banks, gstTaxCodes,
+    currencies, deliveryLocations, billingAddresses, pricingTermsOpts,
     gstHeaderDefaults,
     lookupsLoaded, lookupsLoading, lookupsError,
     loadLookups, loadSuppliers, runPreChecks,

@@ -61,7 +61,7 @@ export function DeliveryScheduleGrid({
               <th style={{ ...TH, width: 46, textAlign: 'center' }}>UOM</th>
               <th style={{ ...TH, width: 44, textAlign: 'center' }}>Slot</th>
               <th style={{ ...TH, width: 150 }}>Delivery Date</th>
-              <th style={{ ...TH, width: 120, textAlign: 'right' }}>Scheduled Qty</th>
+              <th style={{ ...TH, width: 120, textAlign: 'right' }}>PO Qty</th>
               <th style={{ ...TH, width: 100, textAlign: 'right' }}>Balance Qty</th>
               <th style={{ ...TH }}>Remarks</th>
             </tr>
@@ -139,7 +139,7 @@ export function DeliveryScheduleGrid({
             <tfoot>
               <tr style={{ background: '#fafaf8', fontWeight: 700 }}>
                 <td colSpan={7} style={{ ...TD, textAlign: 'right', fontSize: 11, color: '#4a4a4a' }}>
-                  Σ Scheduled Qty (must equal Σ PO line qty)
+                  Σ PO Qty (must equal Σ PO line qty)
                 </td>
                 <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{fmt3(schedTotal)}</td>
                 <td colSpan={2} style={{ ...TD, fontSize: 11 }}>

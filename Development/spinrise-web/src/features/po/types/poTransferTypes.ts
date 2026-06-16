@@ -73,6 +73,12 @@ export interface AddressOption {
   name: string
 }
 
+export interface CurrencyOption {
+  currCode: string
+  currName: string
+  currRate: number
+}
+
 // ── PR eligible line (PR Picker — FpSpdInd / delmodok_Click) ──────────────────
 // Server list is pre-filtered by BR-02 (DirectApp='Y', Fclosed<>'Y').
 
@@ -131,11 +137,20 @@ export interface PoLine {
   packingPer:    number       // Packing & Forwarding %
   freightPer:    number       // Freight %
   insurancePer:  number       // Insurance %
+  cessPer:       number       // Cess %
   fcaFob:        number       // FCA / FOB charges (pass-through; not in net)
   // ── Additional Tax (GST-family; code reuses the GST tax-code master) ────────
   addTaxCode:    string       // Additional Tax code
   addTaxPer:     number       // Additional Tax %
   addTaxAmt:     number       // Additional Tax amount (2dp, computed)
+  // ── Applicability (per-line; seeded from header, editable in GST modal) ─────
+  freightPos:       'BEFORE' | 'AFTER'
+  insuranceDuty:    'BEFORE' | 'AFTER'
+  cessTaxPos:       'BEFORE' | 'AFTER'
+  exciseIncPacking: 'Y' | 'N'
+  freightType:      'PAID' | 'TOPAY'
+  discApp:          'BEFORE' | 'AFTER'
+  packApp:          'BEFORE' | 'AFTER'
   // ── Computed money fields (recalcLine) ─────────────────────────────────────
   taxableValue:  number       // 2dp — Rate × Qty (GST base)
   netAmount:     number       // 2dp — taxable − disc + charges + all taxes
@@ -251,7 +266,7 @@ export interface PoHeader {
   // Amendment (read-only history)
   amdOrderNo:   number | null
   amdDate:      string | null
-  amdRefNo:     number | null
+  amdRefNo:     string | null
   amdRefDate:   string | null
 
   // Approval (read-only)
@@ -284,23 +299,42 @@ export interface PoSummary {
 // ── Request types (provisional — Q7) ─────────────────────────────────────────
 
 export interface SavePoLineRequest {
-  prNo:         number       // PR back-reference — server validates PR balance
-  prSno:        number
-  prDate:       string       // "YYYY-MM-DD" — MANDATORY (server PR-balance validation)
-  itemCode:     string
-  rate:         number
-  qty:          number
-  taxCode:      string
-  hsnCode:      string
-  cgstPer:      number
-  sgstPer:      number
-  igstPer:      number
-  tcsPer:       number
-  cgstCode:     string
-  sgstCode:     string
-  igstCode:     string
-  route:        GstRoute
-  slots:        DeliverySlot[]   // unlimited delivery rows per item (OQ-NEW B)
+  prNo:          number       // PR back-reference — server validates PR balance
+  prSno:         number
+  prDate:        string       // "YYYY-MM-DD" — MANDATORY (server PR-balance validation)
+  itemCode:      string
+  rate:          number
+  qty:           number
+  taxCode:       string
+  hsnCode:       string
+  cgstPer:       number
+  sgstPer:       number
+  igstPer:       number
+  tcsPer:        number
+  cgstCode:      string
+  sgstCode:      string
+  igstCode:      string
+  route:         GstRoute
+  requesterId:   string      // propagated from PR line (required by SP)
+  requesterName: string
+  // Commercial charges
+  discPer:          number
+  packingPer:       number
+  freightPer:       number
+  insurancePer:     number
+  cessPer:          number
+  fcaFob:           number
+  addTaxCode:       string
+  addTaxPer:        number
+  // Applicability flags
+  freightPos:       'BEFORE' | 'AFTER'
+  insuranceDuty:    'BEFORE' | 'AFTER'
+  cessTaxPos:       'BEFORE' | 'AFTER'
+  exciseIncPacking: 'Y' | 'N'
+  freightType:      'PAID' | 'TOPAY'
+  discApp:          'BEFORE' | 'AFTER'
+  packApp:          'BEFORE' | 'AFTER'
+  slots:            DeliverySlot[]   // unlimited delivery rows per item (OQ-NEW B)
 }
 
 /** Add-PO payload. PO No is allocated server-side — never sent (CD-03). */
