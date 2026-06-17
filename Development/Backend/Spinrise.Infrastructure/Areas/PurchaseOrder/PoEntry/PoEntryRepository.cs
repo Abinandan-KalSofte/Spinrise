@@ -250,6 +250,19 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
 
         var poNo = p.Get<decimal>("PoNo");
+
+        // SP #13: deduct order value from PO_BUDGET (no-op if BudgetControl='N' in PO_PARA)
+        await _uow.Connection.ExecuteAsync(
+            StoredProcedures.Po.UpdateBudget,
+            new { DivCode = divCode, PoNo = poNo, PoDate = request.PoDate },
+            commandType: CommandType.StoredProcedure);
+
+        // SP #14: deduct ordered qty from PO_BUDGETQTY_YEAR (no-op if BudgetQty='N' in PO_PARA)
+        await _uow.Connection.ExecuteAsync(
+            StoredProcedures.Po.UpdateBudgetQty,
+            new { DivCode = divCode, PoNo = poNo, PoDate = request.PoDate },
+            commandType: CommandType.StoredProcedure);
+
         return new PoSaveResultDto
         {
             PoNo   = poNo,

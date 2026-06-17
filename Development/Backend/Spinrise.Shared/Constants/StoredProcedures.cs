@@ -86,6 +86,8 @@ public static class StoredProcedures
         public const string GetPricingTerms    = "ksp_PO_GetPricingTerms";
         public const string GetPrintData       = "ksp_PO_GetPrint";
         public const string SetPrintFlag       = "ksp_PO_SetPrintFlag";
+        public const string UpdateBudget       = "ksp_PO_UpdateBudget";
+        public const string UpdateBudgetQty    = "ksp_PO_UpdateBudgetQty";
     }
 
     public static class Pr
