@@ -189,7 +189,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT TOP 100
+    SELECT
         RTRIM(s.slcode)                                         AS SlCode,
         RTRIM(ISNULL(s.slname, ''))                             AS SlName,
         RTRIM(ISNULL(s.gstinno, ''))                            AS GstinNo,
