@@ -94,7 +94,7 @@ public static class StoredProcedures
         public const string SetSecondApproval   = "ksp_PO_SetSecondApproval";
         public const string SetFinalApproval    = "ksp_PO_SetFinalApproval";
         public const string SaveLpoRateHistory  = "ksp_PO_SaveLPORateHistory";  // SP #15 — pending schema
-        public const string UpdateQuotationStatus = "ksp_PO_UpdateQuotationStatus"; // SP #16 — pending Case A/B decision
+        public const string UpdateQuotationStatus = "ksp_PO_UpdateQuotationStatus"; // SP #16 — DEFERRED Sprint 2A. PO_QUOTH not active at JAT pilot site. CEO execution plan 14-Jun-2026.
     }
 
     public static class Pr
