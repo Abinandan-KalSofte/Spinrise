@@ -67,7 +67,7 @@ BEGIN
            OR RTRIM(l.itemcode) LIKE @Search + '%'
            OR RTRIM(i.itemname) LIKE '%' + @Search + '%'
            OR CAST(l.prno AS VARCHAR(20)) LIKE @Search + '%')
-    ORDER BY h.prdate, l.prno, l.prsno
+    ORDER BY h.prdate DESC, l.prno DESC, l.prsno
     OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
 END;
 GO

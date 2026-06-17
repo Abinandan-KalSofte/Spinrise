@@ -27,7 +27,8 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
           <Form.Item name="carrier" label="Carrier" required
             rules={[{ required: true, message: 'Carrier is required' }]}
             validateTrigger="onBlur" style={mb}>
-            <Select showSearch optionFilterProp="label" placeholder="02 — COURIER" disabled={disabled}
+            <Select showSearch optionFilterProp="label" placeholder="02 — COURIER"
+              allowClear disabled={disabled}
               options={carriers.map((c) => ({ value: c.carCode, label: `${c.carCode} — ${c.carName}` }))} />
           </Form.Item>
         </Col>        

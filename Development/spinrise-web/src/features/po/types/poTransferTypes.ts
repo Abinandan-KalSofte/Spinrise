@@ -46,6 +46,7 @@ export interface SupplierOption {
   gstinNo:      string       // auto-fills GSTIN (UX-06)
   gstStateCode: string       // drives GST route (server-side, Q4)
   gstStateName: string
+  city?:        string       // CR-003: shown in dropdown label
 }
 
 export interface OrderTypeOption {

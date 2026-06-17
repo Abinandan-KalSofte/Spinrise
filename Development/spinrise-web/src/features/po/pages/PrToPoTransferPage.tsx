@@ -334,7 +334,14 @@ export default function PrToPoTransferPage() {
         open={prPickerOpen}
         divCode={f.divCode}
         alreadyAdded={new Set(f.draftLines.map((l) => `${l.prNo}-${l.prSno}`))}
-        onLoad={(lines) => { f.addPrLines(lines); setPrPickerOpen(false) }}
+        onLoad={(lines) => {
+          f.addPrLines(lines)
+          setPrPickerOpen(false)
+          setTimeout(() => {
+            const inst = f.headerForm.getFieldInstance('orderType') as { focus?: () => void } | null
+            inst?.focus?.()
+          }, 100)
+        }}
         onCancel={() => setPrPickerOpen(false)}
       />
 

@@ -23,7 +23,8 @@ BEGIN
         RTRIM(ISNULL(s.gststatecode, '')) +
             CASE WHEN RTRIM(ISNULL(s.state, '')) <> ''
                  THEN ' - ' + RTRIM(s.state)
-                 ELSE '' END                                    AS GstStateName
+                 ELSE '' END                                    AS GstStateName,
+        RTRIM(ISNULL(s.city, ''))                              AS City
     FROM dbo.FA_SLMAS s
     WHERE UPPER(ISNULL(s.active, 'Y')) = 'Y'
       AND (@Search IS NULL

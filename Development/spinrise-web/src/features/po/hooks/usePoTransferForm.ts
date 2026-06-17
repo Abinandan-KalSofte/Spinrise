@@ -98,20 +98,18 @@ const toIsoDate = (d: string | null | undefined): string => {
 }
 
 // ── Pure line recompute ──────────────────────────────────────────────────────
-// GST-based engine derived from the legacy Tax-Calculation reference (reproduces
-// its Net Amount). Pre-GST excise/cess/surcharge (D-11) are NOT FOR SPINRISE and
-// are absent. GST split honours the SERVER-supplied route (Q4); UI never decides.
+// Standard Indian GST formula (CR-012). GST is computed on the assessable base,
+// which adjusts for discount/freight/packing/insurance position flags (BEFORE/AFTER).
 //
-//   Taxable Value  = Rate × Qty                         (GST base)
+//   Taxable Value  = Rate × Qty
 //   Discount       = Taxable × disc%
 //   Packing        = (Taxable − Discount) × packing%
 //   Freight        = Taxable × freight%
 //   Insurance      = Taxable × insurance%
-//   CGST/SGST/IGST = Taxable × rate%   (route-driven)
-//   Additional Tax = Taxable × addTax%
-//   TCS            = Taxable × tcs%
-//   Net Amount     = Taxable − Discount + Packing + Freight + Insurance
-//                    + CGST + SGST + IGST + Additional Tax + TCS
+//   GST Base       = Taxable ± charges per position flags
+//   CGST/SGST/IGST = GST Base × rate%   (route-driven, server Q4)
+//   TCS            = Taxable × tcs%     (always on raw taxable)
+//   Net Amount     = Taxable − Discount + Packing + Freight + Insurance + All Tax
 // FCA/FOB is a pass-through reference value and is not folded into Net.
 const calcLineValue = (rate: number, qty: number) => round2((rate || 0) * (qty || 0))
 const pctOf = (base: number, pct: number) => round2((base * (pct || 0)) / 100)
@@ -121,18 +119,26 @@ const recalcLine = (line: PoLine): PoLine => {
   const isLocal = line.route === 'LOCAL'
 
   const discountAmt  = pctOf(taxable, line.discPer)
-  const packingAmt   = pctOf(taxable - discountAmt, line.packingPer)   // packing on net-of-discount (legacy)
+  const packingAmt   = pctOf(taxable - discountAmt, line.packingPer)
   const freightAmt   = pctOf(taxable, line.freightPer)
   const insuranceAmt = pctOf(taxable, line.insurancePer)
+  const cessAmt      = pctOf(taxable, line.cessPer ?? 0)
+  const addTaxAmt    = pctOf(taxable, line.addTaxPer)
+  const tcsAmt       = pctOf(taxable, line.tcsPer)
 
-  const cgstAmt = isLocal ? pctOf(taxable, line.cgstPer) : 0
-  const sgstAmt = isLocal ? pctOf(taxable, line.sgstPer) : 0
-  const igstAmt = isLocal ? 0 : pctOf(taxable, line.igstPer)
-  const addTaxAmt = pctOf(taxable, line.addTaxPer)
-  const tcsAmt    = pctOf(taxable, line.tcsPer)
+  // CR-012: assessable base adjusts per position flags
+  let gstBase = taxable
+  if (line.discApp       === 'BEFORE') gstBase = round2(gstBase - discountAmt)
+  if (line.freightPos    === 'BEFORE') gstBase = round2(gstBase + freightAmt)
+  if (line.packApp       === 'BEFORE') gstBase = round2(gstBase + packingAmt)
+  if (line.insuranceDuty === 'BEFORE') gstBase = round2(gstBase + insuranceAmt)
+
+  const cgstAmt = isLocal ? pctOf(gstBase, line.cgstPer) : 0
+  const sgstAmt = isLocal ? pctOf(gstBase, line.sgstPer) : 0
+  const igstAmt = isLocal ? 0 : pctOf(gstBase, line.igstPer)
 
   const gstTotal = round2(cgstAmt + sgstAmt + igstAmt)
-  const totalTax = round2(gstTotal + addTaxAmt + tcsAmt)
+  const totalTax = round2(gstTotal + addTaxAmt + tcsAmt + cessAmt)
   const netAmount = round2(
     taxable - discountAmt + packingAmt + freightAmt + insuranceAmt + totalTax,
   )
@@ -464,9 +470,14 @@ export function usePoTransferForm() {
     }
     const route = supplier ? await resolveGstRoute(supplier.slCode) : 'LOCAL'
     setGstRoute(route)
-    // Re-apply route to every working line and recompute its GST split.
-    setDraftLines(draftLines.map((l) => recalcLine({ ...l, route })))
-  }, [headerForm, resolveGstRoute, draftLines, setDraftLines])
+    // Use the ref (kept current every render) to avoid stale closure — the async
+    // resolveGstRoute call may return after draftLines has been updated by the user.
+    setDraftLines(draftLinesRef.current.map((l) => recalcLine({
+      ...l,
+      route,
+      igstPer: route === 'LOCAL' ? 0 : l.igstPer,
+    })))
+  }, [headerForm, resolveGstRoute, setDraftLines])
 
   // ── Header tax propagation — SERVER-SIDE handler (Q5) ──────────────────────
   // Abstracted so final behaviour can be wired without touching callers.
@@ -594,10 +605,23 @@ export function usePoTransferForm() {
 
   // GST modal apply → merge tax detail, recompute, refresh ONLY this row (§4).
   // taxSaved flips true so later opens load the saved row, not header defaults (§7).
+  // CR-013: optional rate/qty in detail overrides line rate/qty and syncs delivery.
   const applyGstDetail = (lineNo: number, detail: LineTaxDetail) => {
     const target = draftLines.find((l) => l.lineNo === lineNo)
     if (!target) return
-    updateDraftLine(lineNo, recalcLine({ ...target, ...detail, taxSaved: true }))
+    const merged = {
+      ...target,
+      ...detail,
+      rate: detail.rate ?? target.rate,
+      qty:  detail.qty  ?? target.qty,
+      taxSaved: true,
+    }
+    updateDraftLine(lineNo, recalcLine(merged))
+    if (detail.qty !== undefined && detail.qty !== target.qty) {
+      setDeliveryLines(deliveryLines.map((d) =>
+        d.lineNo === lineNo ? { ...d, poQty: detail.qty! } : d,
+      ))
+    }
     closeGstModal()
   }
 
@@ -627,6 +651,7 @@ export function usePoTransferForm() {
     payMode:     'DIRECT',
     cancelled:   false,
     formType:    formTypes[0]?.formCode ?? '',   // auto-default first available form type
+    carrier:     carriers[0]?.carCode  ?? '',   // CR-020: default first carrier
     // Numeric fields default to 0 so validateFields() never returns null.
     cgstPer: 0, sgstPer: 0, igstPer: 0, tcsPer: 0,
     discPer: 0, discAmt: 0,
@@ -698,6 +723,9 @@ export function usePoTransferForm() {
     if (currentPo) {
       fillHeaderFromPo(currentPo)
       setDeliveryLines(currentPo.delivery ?? [])  // restore delivery after reset
+    } else {
+      // No prior record — clear the form entirely so no ADD-mode values linger.
+      headerForm.resetFields()
     }
     notificationService.info('Operation Cancelled', 'The current operation was cancelled.')
   }
@@ -787,7 +815,7 @@ export function usePoTransferForm() {
       // The real entry replaces this when the full list loads on dropdown open.
       setSuppliers((prev) =>
         prev.some((s) => s.slCode === po.supplier) ? prev : [
-          { slCode: po.supplier, slName: po.supplierName, gstinNo: po.gstin, gstStateCode: '', gstStateName: po.gstState },
+          { slCode: po.supplier, slName: po.supplierName, gstinNo: po.gstin, gstStateCode: '', gstStateName: po.gstState, city: '' },
           ...prev,
         ],
       )
@@ -814,7 +842,7 @@ export function usePoTransferForm() {
       if (po) {
         setSuppliers((prev) =>
           prev.some((s) => s.slCode === po.supplier) ? prev : [
-            { slCode: po.supplier, slName: po.supplierName, gstinNo: po.gstin, gstStateCode: '', gstStateName: po.gstState },
+            { slCode: po.supplier, slName: po.supplierName, gstinNo: po.gstin, gstStateCode: '', gstStateName: po.gstState, city: '' },
             ...prev,
           ],
         )
@@ -896,9 +924,22 @@ export function usePoTransferForm() {
       round3(d.slots.reduce((s, x) => s + (Number(x.qty) || 0), 0)) > round3(d.poQty),
     )
     if (overSched.length) {
-      notificationService.warning('Delivery Schedule Mismatch', `Scheduled quantity exceeds PO quantity for: ${overSched.map((d) => d.itemCode).join(', ')}.`)
+      // CR-014: updated message format
+      notificationService.warning('Delivery Schedule Mismatch', `Scheduled quantity exceeds PO quantity for item: ${overSched.map((d) => d.itemCode).join(', ')}.`)
       onBodyTab?.('delivery')
       return false
+    }
+    // CR-016: duplicate delivery dates per item are not allowed
+    for (const d of deliveryLines) {
+      const filledDates = d.slots.map((s) => s.shDate).filter(Boolean) as string[]
+      if (filledDates.length !== new Set(filledDates).size) {
+        notificationService.warning(
+          'Duplicate Delivery Date',
+          `Duplicate delivery date found for item ${d.itemCode}. Each delivery slot must have a unique date.`,
+        )
+        onBodyTab?.('delivery')
+        return false
+      }
     }
     return true
   }
@@ -930,6 +971,16 @@ export function usePoTransferForm() {
         notificationService.warning('Invalid PO Date', `PO date must equal today's processing date (${today.format('DD-MMM-YYYY')}).`)
         return 'poDate'
       }
+    }
+    // CR-017: PO Date cannot be a future date
+    if (v.poDate && v.poDate.isAfter(dayjs(), 'day')) {
+      notificationService.warning('Invalid PO Date', 'PO Date cannot be a future date.')
+      return 'poDate'
+    }
+    // CR-018: Reference Date cannot be later than PO Date
+    if (v.refDate && v.poDate && v.refDate.isAfter(v.poDate, 'day')) {
+      notificationService.warning('Invalid Reference Date', 'Reference Date cannot be later than PO Date.')
+      return 'refDate'
     }
     return true
   }

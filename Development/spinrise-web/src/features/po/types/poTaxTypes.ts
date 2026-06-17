@@ -54,6 +54,9 @@ export interface LineTaxDetail {
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
+  // CR-013: optional rate/qty override from the GST modal
+  rate?:            number
+  qty?:             number
 }
 
 /** Live totals shown in the GST modal footer (all computed display values). */

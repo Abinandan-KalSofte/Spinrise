@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Col, Form, Input, InputNumber, Radio, Row } from 'antd'
 import { TabPanel, Section } from './_fieldKit'
 
@@ -32,6 +33,25 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
     const per = base > 0 ? round2(amt / base * 100) : 0
     form.setFieldValue(perField, per)
   }
+
+  // When lines are added/removed, the base (Σ Rate×Qty) changes. Re-derive all
+  // charge amounts from the currently-stored % values so the amounts stay in sync.
+  // Guard on disabled: in VIEW mode the base prop changes when a record is loaded,
+  // and we must NOT overwrite the server-authoritative amounts with client-derived ones.
+  useEffect(() => {
+    if (disabled || base === 0) return
+    const v = form.getFieldsValue([
+      'discPer', 'freightPer', 'packPer', 'insurPer', 'addTaxPer', 'cessPer',
+    ])
+    form.setFieldsValue({
+      discAmt:      round2((Number(v.discPer)    || 0) * base / 100),
+      freightAmt:   round2((Number(v.freightPer) || 0) * base / 100),
+      packAmt:      round2((Number(v.packPer)    || 0) * base / 100),
+      insurAmt:     round2((Number(v.insurPer)   || 0) * base / 100),
+      addTaxAmtHdr: round2((Number(v.addTaxPer)  || 0) * base / 100),
+      cessAmt:      round2((Number(v.cessPer)    || 0) * base / 100),
+    })
+  }, [lineItemValue]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <TabPanel>

@@ -75,7 +75,7 @@ export function OrderDetailsTab({
               showSearch optionFilterProp="label" placeholder="Select supplier — type to filter…" disabled={disabled}
               onDropdownVisibleChange={(open) => { if (open) onSupplierOpen() }}
               onChange={(v) => onSupplierChange(suppliers.find((s) => s.slCode === v) ?? null)}
-              options={suppliers.map((s) => ({ value: s.slCode, label: `${s.slCode} — ${s.slName}` }))}
+              options={suppliers.map((s) => ({ value: s.slCode, label: `${s.slCode} — ${s.slName}${s.city ? ` — ${s.city}` : ''}` }))}
             />
           </Form.Item>
         </Col>
@@ -92,11 +92,6 @@ export function OrderDetailsTab({
         <Col span={4}>
           <Form.Item name="inspect" label="Inspect" style={mb}>
             <Select disabled={disabled} options={[{ value: 'YES', label: 'YES' }, { value: 'NO', label: 'NO' }]} />
-          </Form.Item>
-        </Col>
-        <Col span={4}>
-          <Form.Item name="poValue" label="Order Value (₹)" style={mb}>
-            <Input readOnly style={{ fontFamily: 'monospace', color: '#185FA5', textAlign: 'right' }} />
           </Form.Item>
         </Col>
 
@@ -122,6 +117,11 @@ export function OrderDetailsTab({
               precision={2} controls={false} disabled={disabled}
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }}
             />
+          </Form.Item>
+        </Col>
+        <Col span={4}>
+          <Form.Item name="poValue" label="Order Value (₹)" style={mb}>
+            <Input readOnly style={{ fontFamily: 'monospace', color: '#185FA5', textAlign: 'right' }} />
           </Form.Item>
         </Col>
 

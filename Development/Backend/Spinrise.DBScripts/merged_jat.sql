@@ -198,7 +198,8 @@ BEGIN
         RTRIM(ISNULL(s.gststatecode, '')) +
             CASE WHEN RTRIM(ISNULL(s.state, '')) <> ''
                  THEN ' - ' + RTRIM(s.state)
-                 ELSE '' END                                    AS GstStateName
+                 ELSE '' END                                    AS GstStateName,
+        RTRIM(ISNULL(s.city, ''))                               AS City   -- CR-003: ⚠ VERIFY column name in FA_SLMAS
     FROM dbo.FA_SLMAS s
     WHERE UPPER(ISNULL(s.active, 'Y')) = 'Y'
       AND (@Search IS NULL
@@ -535,7 +536,7 @@ BEGIN
            OR RTRIM(l.itemcode) LIKE @Search + '%'
            OR RTRIM(i.itemname) LIKE '%' + @Search + '%'
            OR CAST(l.prno AS VARCHAR(20)) LIKE @Search + '%')
-    ORDER BY h.prdate, l.prno, l.prsno
+    ORDER BY h.prdate DESC, l.prno DESC, l.prsno   -- CR-001: newest PRs first
     OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
 END;
 GO
