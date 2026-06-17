@@ -1,9 +1,10 @@
 -- ============================================================
--- merged_jat.sql — M02 RMI Purchase Order
+-- merged_jat.sql — M01 PO (PR → PO Transfer + PO Approval)
 -- Database: JAT (172.16.16.52\sql2016)
--- Run this file against the JAT database in SSMS.
 -- Contains ALL ksp_PO_* stored procedures.
 -- ============================================================
+USE [JAT];
+GO
 
 -- ============================================================
 -- ksp_PO_GetParameters
