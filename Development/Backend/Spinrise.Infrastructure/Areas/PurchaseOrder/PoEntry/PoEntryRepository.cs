@@ -263,6 +263,24 @@ public class PoEntryRepository : IPoEntryRepository
             new { DivCode = divCode, PoNo = poNo, PoDate = request.PoDate },
             commandType: CommandType.StoredProcedure);
 
+        // SP #15: record LPO rate history — always active, called once per line
+        foreach (var line in request.Lines)
+            await _uow.Connection.ExecuteAsync(
+                StoredProcedures.Po.SaveLpoRateHistory,
+                new
+                {
+                    DivCode   = divCode,
+                    PoNo      = poNo,
+                    PoDate    = request.PoDate,
+                    OrderType = request.Header.OrderType,
+                    Supplier  = request.Header.Supplier,
+                    ItemCode  = line.ItemCode,
+                    Qty       = line.Qty,
+                    Rate      = line.Rate,
+                    UserId    = userId
+                },
+                commandType: CommandType.StoredProcedure);
+
         return new PoSaveResultDto
         {
             PoNo   = poNo,

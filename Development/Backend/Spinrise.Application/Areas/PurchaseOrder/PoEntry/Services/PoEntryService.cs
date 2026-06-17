@@ -71,6 +71,13 @@ public class PoEntryService : IPoEntryService
     public async Task<PoSaveResultDto> AddAsync(string divCode, AddPoRequest request,
         string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate)
     {
+        // OA-03: qty > 0 with no date → 400 (reversed from silent-skip per Sasi/CEO 17-Jun-2026)
+        foreach (var line in request.Lines)
+            foreach (var slot in line.Slots)
+                if (slot.Qty > 0 && slot.ShDate is null)
+                    throw new InvalidOperationException(
+                        $"Delivery slot date is required when quantity is specified (item: {line.ItemCode}, slot {slot.SlotNo}).");
+
         var result = await _repo.SaveAsync(divCode, request, userId, hostName, ipAddress, fDate, lDate);
         _logger.LogInformation("PO Add | Div: {DivCode} | PO: {PoNo} | User: {UserId}", divCode, result.PoNo, userId);
         return result;

@@ -499,6 +499,20 @@ BEGIN
         )
             RAISERROR('Delivery slot quantities must sum to the ordered quantity for each line.', 16, 1);
 
+        -- OA-03: 400 reject — qty > 0 with no date (reversed from silent-skip per Sasi/CEO 17-Jun-2026)
+        IF EXISTS (
+            SELECT 1
+            FROM #Lines l
+            CROSS APPLY OPENJSON(l.SlotsJson)
+            WITH (shDate NVARCHAR(10) '$.shDate', qty NUMERIC(12,3) '$.qty') s
+            WHERE l.SlotsJson IS NOT NULL
+              AND s.qty > 0
+              AND (s.shDate IS NULL
+                   OR RTRIM(ISNULL(s.shDate, '')) = ''
+                   OR TRY_CAST(s.shDate AS DATE) IS NULL)
+        )
+            RAISERROR('Delivery slot date is required when quantity is specified.', 16, 1);
+
         INSERT INTO dbo.PO_ORDL_DETL
         (divcode, pordno, porddt, pordsno, pogrp, itemcode, shdate, Quantity)
         SELECT
@@ -506,7 +520,7 @@ BEGIN
             l.PORDSNO,
             @OrderType,
             l.ItemCode,
-            TRY_CAST(NULLIF(RTRIM(ISNULL(s.shDate, '')), '') AS DATE),
+            TRY_CAST(s.shDate AS DATE),
             s.qty
         FROM #Lines l
         CROSS APPLY OPENJSON(l.SlotsJson)
@@ -515,7 +529,7 @@ BEGIN
             qty     NUMERIC(12,3) '$.qty'
         ) s
         WHERE s.qty > 0
-          AND TRY_CAST(NULLIF(RTRIM(ISNULL(s.shDate, '')), '') AS DATE) IS NOT NULL;
+          AND TRY_CAST(s.shDate AS DATE) IS NOT NULL;
 
         -- ── 11. UPDATE PO_PRL — increment QTYORD, mark as ordered ────────────────
         UPDATE prl
