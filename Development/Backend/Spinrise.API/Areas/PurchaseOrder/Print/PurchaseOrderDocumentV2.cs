@@ -148,7 +148,7 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
                 .Element(logoC =>
                 {
                     if (_po.DivLogo is { Length: > 0 })
-                        logoC.MaxHeight(28, Unit.Millimetre).Image(_po.DivLogo);
+                        logoC.MaxHeight(28, Unit.Millimetre).Image(_po.DivLogo).FitHeight();
                     else
                         logoC.Height(28, Unit.Millimetre);
                 });
@@ -583,7 +583,7 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
                     });
                     if (_po.DivLogo is { Length: > 0 })
                         col.Item().PaddingTop(2).MaxHeight(16, Unit.Millimetre).AlignRight()
-                           .Image(_po.DivLogo);
+                           .Image(_po.DivLogo).FitHeight();
                 });
 
              row.RelativeItem()

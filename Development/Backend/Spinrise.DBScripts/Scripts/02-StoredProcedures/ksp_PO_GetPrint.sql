@@ -65,7 +65,7 @@ BEGIN
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
-        RTRIM(ISNULL(h.createdby, ''))                              AS CreatedBy,
+        RTRIM(ISNULL(cby.user_name, ISNULL(h.createdby, '')))      AS CreatedBy,
         ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
         -- Additional fields for V2 print
         RTRIM(ISNULL(h.refno, ''))                                  AS RefNo,
@@ -86,6 +86,9 @@ BEGIN
         ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
     LEFT JOIN dbo.PO_CAR car
         ON RTRIM(car.CARCODE) = RTRIM(h.CARCODE)
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(h.createdby)
+                   AND RTRIM(divcode) = RTRIM(h.DIVCODE))                 cby
     WHERE h.DIVCODE = @DivCode
       AND h.PORDNO  = @PoNo
       AND CAST(h.PORDDT AS DATE) = @PoDate;

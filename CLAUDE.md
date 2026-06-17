@@ -612,12 +612,19 @@ Filter with: `Where-Object { $_ -match "error CS|Build succeeded" }`
 
 ## Dual-Database Architecture
 
-| | M01 — Purchase Requisition | M02 — RMI Purchase Order |
-|---|---|---|
-| **Database** | `SpinRiseSaranya` | `JAT` |
-| **UnitOfWork** | `IUnitOfWork` | `IJATUnitOfWork` |
-| **Merged deploy file** | `merged.sql` | `merged_jat.sql` |
-| **SP prefix** | `ksp_PR_*` | `ksp_RMI_PO_*` |
+M01 spans two databases — PR and PO sub-modules are on different DBs:
+
+| | M01 PR — Purchase Requisition | M01 PO — PR to PO Transfer + PO Approval | M02 — RMI Purchase Order |
+|---|---|---|---|
+| **Database** | `SpinRiseSaranya` | `JAT` | `JAT` |
+| **UnitOfWork** | `IUnitOfWork` | `IJATUnitOfWork` | `IJATUnitOfWork` |
+| **Merged deploy file** | `merged.sql` | `merged_jat.sql` | `merged_jat.sql` |
+| **SP prefix** | `ksp_PR_*` | `ksp_PO_*` | `ksp_RMI_PO_*` |
+| **Branch** | `feature/m01-pr` | `feature/m01-po` | `feature/m02-*` |
+
+**Critical:** Never commit PO Entry/Approval changes to `feature/m01-pr` — that branch protects live PR code at JAT + SCMTS. PO changes go to `feature/m01-po`.
+
+All `ksp_PO_*` stored procedures deploy via `merged_jat.sql` (not `merged.sql`).
 
 ---
 

@@ -1991,3 +1991,547 @@ BEGIN
       AND b.YEAR     = @Year;
 END;
 GO
+-- ============================================================
+-- ksp_PO_GetDeliverySchedule
+-- Returns delivery slot schedule for a given PO (divCode + poNo + poDate).
+-- Source: PO_ORDL_DETL joined to PO_ORDL + IN_ITEM.
+-- Delivery Schedule field order (CEO-confirmed Option B):
+--   LineNo | ItemCode | ItemName | Uom | PrNo | PoQty |
+--   SlotNo | ShDate | Qty | BalanceQty | Remarks
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetDeliverySchedule
+(
+    @DivCode VARCHAR(2),
+    @PoNo    NUMERIC(10,0),
+    @PoDate  DATE
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        d.PORDSNO                                                   AS [LineNo],
+        RTRIM(l.ITEMCODE)                                           AS ItemCode,
+        RTRIM(ISNULL(i.itemname, ''))                               AS ItemName,
+        RTRIM(ISNULL(i.uom, ''))                                    AS Uom,
+        l.PRNO                                                      AS PrNo,
+        ISNULL(l.ORDqty, 0)                                         AS PoQty,
+        ROW_NUMBER() OVER (PARTITION BY d.PORDSNO ORDER BY d.shdate) AS SlotNo,
+        CASE WHEN d.shdate IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(d.shdate AS DATE), 120) END AS ShDate,
+        ISNULL(d.Quantity, 0)                                       AS Qty,
+        ISNULL(l.ORDqty, 0) - ISNULL(
+            (SELECT SUM(d2.Quantity)
+             FROM dbo.PO_ORDL_DETL d2
+             WHERE d2.divcode = d.divcode
+               AND d2.pordno  = d.pordno
+               AND CAST(d2.porddt AS DATE) = CAST(d.porddt AS DATE)
+               AND d2.PORDSNO = d.PORDSNO), 0)                      AS BalanceQty,
+        ''                                                          AS Remarks
+    FROM dbo.PO_ORDL_DETL d
+    INNER JOIN dbo.PO_ORDL l
+        ON l.DIVCODE = d.divcode AND l.PORDNO = d.pordno
+       AND CAST(l.PORDDT AS DATE) = CAST(d.porddt AS DATE)
+       AND l.PORDSNO = d.PORDSNO
+    INNER JOIN dbo.IN_ITEM i
+        ON i.itemcode = l.ITEMCODE
+    WHERE d.divcode = @DivCode
+      AND d.pordno  = @PoNo
+      AND CAST(d.porddt AS DATE) = @PoDate
+    ORDER BY d.PORDSNO, d.shdate;
+END;
+GO
+
+-- ============================================================
+-- ksp_PO_GetApprovalStatus  [SP #17]
+-- Returns current PO approval flags for a given PO.
+-- Scope: FirstlevelApp + SecondlevelApp + Conflg per FSD v1.1 §5.18
+--        + PO_PARA flags so frontend knows which levels are required.
+-- CEO task list: SP #17 (referred to as GetApprovalHistory — Sasi confirmed
+--                name as GetApprovalStatus and scope as current flag return).
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetApprovalStatus
+(
+    @DivCode VARCHAR(2),
+    @PoNo    NUMERIC(10,0),
+    @PoDate  DATE
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        RTRIM(ISNULL(h.FirstlevelApp, 'N'))   AS FirstLevelApp,
+        RTRIM(ISNULL(h.SecondlevelApp, 'N'))  AS SecondLevelApp,
+        RTRIM(ISNULL(h.Conflg, 'N'))           AS Conflg,
+        CAST(h.row_version AS BIGINT)          AS RowVersion,
+        ISNULL(p.PoFirstLevelApp,   'N')       AS PoFirstLevelRequired,
+        ISNULL(p.PoSecondLevelApp,  'N')       AS PoSecondLevelRequired,
+        ISNULL(p.Po_Confirm,        'N')       AS PoConfirmRequired,
+        RTRIM(ISNULL(h.poprintflg,  'N'))      AS PrintStatus,
+        CAST(CASE WHEN ISNULL(h.CANFLG, '') <> '' THEN 1 ELSE 0 END AS BIT) AS Cancelled
+    FROM dbo.PO_ORDH h
+    LEFT JOIN dbo.PO_PARA p
+        ON p.divcode = h.DIVCODE
+    WHERE h.DIVCODE = @DivCode
+      AND h.PORDNO  = @PoNo
+      AND CAST(h.PORDDT AS DATE) = @PoDate;
+END;
+GO
+
+-- ============================================================
+-- ksp_PO_SetFirstApproval
+-- Sets PO_ORDH.FirstlevelApp = 'Y' for the given PO.
+-- Optimistic concurrency guard via row_version (CD-08 FSD v3.1).
+-- Inserts audit row into LogDet_PO (§7 column set, FSD v1.1).
+-- Returns @Result OUTPUT: 0=success, 3=concurrency conflict, 4=not found.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_SetFirstApproval
+(
+    @DivCode    VARCHAR(2),
+    @PoNo       NUMERIC(10,0),
+    @PoDate     DATE,
+    @UserId     VARCHAR(25),
+    @UserName   VARCHAR(50)   = NULL,
+    @IpAddress  VARCHAR(50)   = NULL,
+    @HostName   VARCHAR(100)  = NULL,
+    @Remarks    VARCHAR(25)   = NULL,
+    @RowVersion BINARY(8)     = NULL,
+    @Result     INT           OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @Result = 0;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Guard: must not already be first-approved
+        IF EXISTS (
+            SELECT 1 FROM dbo.PO_ORDH
+            WHERE DIVCODE = @DivCode
+              AND PORDNO  = @PoNo
+              AND CAST(PORDDT AS DATE) = @PoDate
+              AND RTRIM(ISNULL(FirstlevelApp, 'N')) = 'Y'
+        )
+        BEGIN
+            ROLLBACK TRANSACTION;
+            RAISERROR('PO is already first-approved.', 16, 1);
+            RETURN;
+        END
+
+        UPDATE dbo.PO_ORDH
+        SET FirstlevelApp = 'Y'
+        WHERE DIVCODE = @DivCode
+          AND PORDNO  = @PoNo
+          AND CAST(PORDDT AS DATE) = @PoDate
+          AND (@RowVersion IS NULL OR row_version = @RowVersion);
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+            IF EXISTS (
+                SELECT 1 FROM dbo.PO_ORDH
+                WHERE DIVCODE = @DivCode
+                  AND PORDNO  = @PoNo
+                  AND CAST(PORDDT AS DATE) = @PoDate
+            )
+                SET @Result = 3; -- concurrency conflict
+            ELSE
+                SET @Result = 4; -- record not found
+            RETURN;
+        END
+
+        -- Audit insert into LogDet_PO (§7 column set — lowercase convention)
+        INSERT INTO dbo.LogDet_PO
+            (divcode, pordno, porddt,
+             Trans_Name, Trans_Mod,
+             Trans_UserId, Trans_date,
+             Trans_IPADD, Trans_Host,
+             moduleNo, Reason)
+        VALUES
+            (@DivCode, @PoNo, @PoDate,
+             'PO_FirstLevel', 'M01',
+             @UserId, GETDATE(),
+             ISNULL(@IpAddress, ''), ISNULL(@HostName, ''),
+             1, LEFT(ISNULL(@Remarks, ''), 25));
+
+        COMMIT TRANSACTION;
+        SET @Result = 0;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+-- ============================================================
+-- ksp_PO_SetSecondApproval
+-- Sets PO_ORDH.SecondlevelApp = 'Y' for the given PO.
+-- Prerequisites: FirstlevelApp must be 'Y'. PoSecondLevelApp must be
+--   'Y' in PO_PARA (caller should have verified before invoking).
+-- Optimistic concurrency guard via row_version (CD-08 FSD v3.1).
+-- Inserts audit row into LogDet_PO (§7 column set, FSD v1.1).
+-- Returns @Result OUTPUT: 0=success, 2=first-level not done,
+--   3=concurrency conflict, 4=not found.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_SetSecondApproval
+(
+    @DivCode    VARCHAR(2),
+    @PoNo       NUMERIC(10,0),
+    @PoDate     DATE,
+    @UserId     VARCHAR(25),
+    @UserName   VARCHAR(50)   = NULL,
+    @IpAddress  VARCHAR(50)   = NULL,
+    @HostName   VARCHAR(100)  = NULL,
+    @Remarks    VARCHAR(25)   = NULL,
+    @RowVersion BINARY(8)     = NULL,
+    @Result     INT           OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @Result = 0;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Prerequisite: first-level must already be approved
+        IF NOT EXISTS (
+            SELECT 1 FROM dbo.PO_ORDH
+            WHERE DIVCODE = @DivCode
+              AND PORDNO  = @PoNo
+              AND CAST(PORDDT AS DATE) = @PoDate
+              AND RTRIM(ISNULL(FirstlevelApp, 'N')) = 'Y'
+        )
+        BEGIN
+            ROLLBACK TRANSACTION;
+            SET @Result = 2; -- first-level approval not done
+            RAISERROR('PO first-level approval is not complete.', 16, 1);
+            RETURN;
+        END
+
+        -- Guard: must not already be second-approved
+        IF EXISTS (
+            SELECT 1 FROM dbo.PO_ORDH
+            WHERE DIVCODE = @DivCode
+              AND PORDNO  = @PoNo
+              AND CAST(PORDDT AS DATE) = @PoDate
+              AND RTRIM(ISNULL(SecondlevelApp, 'N')) = 'Y'
+        )
+        BEGIN
+            ROLLBACK TRANSACTION;
+            RAISERROR('PO is already second-approved.', 16, 1);
+            RETURN;
+        END
+
+        UPDATE dbo.PO_ORDH
+        SET SecondlevelApp = 'Y'
+        WHERE DIVCODE = @DivCode
+          AND PORDNO  = @PoNo
+          AND CAST(PORDDT AS DATE) = @PoDate
+          AND (@RowVersion IS NULL OR row_version = @RowVersion);
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+            IF EXISTS (
+                SELECT 1 FROM dbo.PO_ORDH
+                WHERE DIVCODE = @DivCode
+                  AND PORDNO  = @PoNo
+                  AND CAST(PORDDT AS DATE) = @PoDate
+            )
+                SET @Result = 3; -- concurrency conflict
+            ELSE
+                SET @Result = 4; -- record not found
+            RETURN;
+        END
+
+        -- Audit insert into LogDet_PO (§7 column set — lowercase convention)
+        INSERT INTO dbo.LogDet_PO
+            (divcode, pordno, porddt,
+             Trans_Name, Trans_Mod,
+             Trans_UserId, Trans_date,
+             Trans_IPADD, Trans_Host,
+             moduleNo, Reason)
+        VALUES
+            (@DivCode, @PoNo, @PoDate,
+             'PO_SecondLevel', 'M01',
+             @UserId, GETDATE(),
+             ISNULL(@IpAddress, ''), ISNULL(@HostName, ''),
+             1, LEFT(ISNULL(@Remarks, ''), 25));
+
+        COMMIT TRANSACTION;
+        SET @Result = 0;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+-- ============================================================
+-- ksp_PO_SetFinalApproval
+-- Sets PO_ORDH.Conflg = 'Y' (Final Confirmation) for the given PO.
+-- Prerequisites:
+--   - FirstlevelApp = 'Y' (always required)
+--   - SecondlevelApp = 'Y' if PO_PARA.PoSecondLevelApp = 'Y'
+-- Optimistic concurrency guard via row_version (CD-08 FSD v3.1).
+-- Inserts audit row into LogDet_PO (§7 column set, FSD v1.1).
+-- Returns @Result OUTPUT: 0=success, 2=prerequisites not met,
+--   3=concurrency conflict, 4=not found.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_SetFinalApproval
+(
+    @DivCode    VARCHAR(2),
+    @PoNo       NUMERIC(10,0),
+    @PoDate     DATE,
+    @UserId     VARCHAR(25),
+    @UserName   VARCHAR(50)   = NULL,
+    @IpAddress  VARCHAR(50)   = NULL,
+    @HostName   VARCHAR(100)  = NULL,
+    @Remarks    VARCHAR(25)   = NULL,
+    @RowVersion BINARY(8)     = NULL,
+    @Result     INT           OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @Result = 0;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        DECLARE @PoSecondLevelApp CHAR(1);
+        SELECT @PoSecondLevelApp = ISNULL(PoSecondLevelApp, 'N')
+        FROM dbo.PO_PARA
+        WHERE divcode = @DivCode;
+
+        -- Prerequisite: first-level must be approved
+        IF NOT EXISTS (
+            SELECT 1 FROM dbo.PO_ORDH
+            WHERE DIVCODE = @DivCode
+              AND PORDNO  = @PoNo
+              AND CAST(PORDDT AS DATE) = @PoDate
+              AND RTRIM(ISNULL(FirstlevelApp, 'N')) = 'Y'
+        )
+        BEGIN
+            ROLLBACK TRANSACTION;
+            SET @Result = 2;
+            RAISERROR('PO first-level approval is not complete.', 16, 1);
+            RETURN;
+        END
+
+        -- Prerequisite: second-level must be approved (when required)
+        IF @PoSecondLevelApp = 'Y'
+           AND NOT EXISTS (
+               SELECT 1 FROM dbo.PO_ORDH
+               WHERE DIVCODE = @DivCode
+                 AND PORDNO  = @PoNo
+                 AND CAST(PORDDT AS DATE) = @PoDate
+                 AND RTRIM(ISNULL(SecondlevelApp, 'N')) = 'Y'
+           )
+        BEGIN
+            ROLLBACK TRANSACTION;
+            SET @Result = 2;
+            RAISERROR('PO second-level approval is not complete.', 16, 1);
+            RETURN;
+        END
+
+        -- Guard: must not already be confirmed
+        IF EXISTS (
+            SELECT 1 FROM dbo.PO_ORDH
+            WHERE DIVCODE = @DivCode
+              AND PORDNO  = @PoNo
+              AND CAST(PORDDT AS DATE) = @PoDate
+              AND RTRIM(ISNULL(Conflg, 'N')) = 'Y'
+        )
+        BEGIN
+            ROLLBACK TRANSACTION;
+            RAISERROR('PO is already confirmed.', 16, 1);
+            RETURN;
+        END
+
+        UPDATE dbo.PO_ORDH
+        SET Conflg = 'Y'
+        WHERE DIVCODE = @DivCode
+          AND PORDNO  = @PoNo
+          AND CAST(PORDDT AS DATE) = @PoDate
+          AND (@RowVersion IS NULL OR row_version = @RowVersion);
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+            IF EXISTS (
+                SELECT 1 FROM dbo.PO_ORDH
+                WHERE DIVCODE = @DivCode
+                  AND PORDNO  = @PoNo
+                  AND CAST(PORDDT AS DATE) = @PoDate
+            )
+                SET @Result = 3; -- concurrency conflict
+            ELSE
+                SET @Result = 4; -- record not found
+            RETURN;
+        END
+
+        -- Audit insert into LogDet_PO (§7 column set — lowercase convention)
+        INSERT INTO dbo.LogDet_PO
+            (divcode, pordno, porddt,
+             Trans_Name, Trans_Mod,
+             Trans_UserId, Trans_date,
+             Trans_IPADD, Trans_Host,
+             moduleNo, Reason)
+        VALUES
+            (@DivCode, @PoNo, @PoDate,
+             'PO_FinalLevel', 'M01',
+             @UserId, GETDATE(),
+             ISNULL(@IpAddress, ''), ISNULL(@HostName, ''),
+             1, LEFT(ISNULL(@Remarks, ''), 25));
+
+        COMMIT TRANSACTION;
+        SET @Result = 0;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+-- ============================================================
+-- ksp_PO_GetPrint
+-- Returns print data for a PO (PDF generation via QuestPDF).
+-- Returns 2 result sets: (1) header with division letterhead,
+--                        (2) PO lines.
+-- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno,
+--   add1, add2, add3, pincode, email — all verified.
+-- FA_SLMAS confirmed columns: add1, add2, state, gstinno (lowercase). add3/city/pin unverified.
+-- PO_ORDH: GST % columns don't exist — amounts only.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPrint
+(
+    @DivCode VARCHAR(2),
+    @PoNo    NUMERIC(10,0),
+    @PoDate  DATE
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- ─── Result set 1: Print header (div letterhead + PO header) ──────────────
+    SELECT
+        -- Division letterhead
+        div.DIV_LOGO                                                AS DivLogo,
+        RTRIM(ISNULL(div.divname, ''))                              AS DivName,
+        RTRIM(ISNULL(div.div_printname, div.divname))               AS DivPrintName,
+        RTRIM(ISNULL(div.div_unitname, ''))                         AS DivUnitName,
+        RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,
+        RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,
+        RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,
+        RTRIM(ISNULL(div.pincode, ''))                              AS DivPinCode,
+        RTRIM(ISNULL(div.PHONE1, ''))                               AS DivPhone,
+        RTRIM(ISNULL(div.email, ''))                                AS DivEmail,
+        RTRIM(ISNULL(div.gstinno, ''))                              AS DivGstin,
+        RTRIM(ISNULL(div.PAN, ''))                                  AS DivPan,
+        RTRIM(ISNULL(div.WEBADDR, ''))                              AS DivWeb,
+        -- PO header
+        RTRIM(h.DIVCODE)                                            AS DivCode,
+        h.PORDNO                                                    AS PoNo,
+        CONVERT(varchar(10), CAST(h.PORDDT AS DATE), 120)          AS PoDate,
+        RTRIM(ISNULL(h.SLCODE, ''))                                 AS SlCode,
+        RTRIM(ISNULL(sl.slname, ''))                                AS SlName,
+        RTRIM(ISNULL(sl.add1, '')) +
+            CASE WHEN RTRIM(ISNULL(sl.add2,  '')) <> '' THEN ', ' + RTRIM(sl.add2)  ELSE '' END +
+            CASE WHEN RTRIM(ISNULL(sl.state, '')) <> '' THEN ', ' + RTRIM(sl.state) ELSE '' END
+                                                                     AS SlAddress,
+        RTRIM(ISNULL(sl.gstinno, ''))                               AS SlGstin,
+        RTRIM(ISNULL(sl.phone1, ''))                                AS SlPhone,
+        RTRIM(ISNULL(sl.email, ''))                                 AS SlEmail,
+        RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
+        RTRIM(ISNULL(car.CARNAME, h.CARCODE))                       AS Carrier,
+        RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
+        ISNULL(h.FCurRate, 1)                                       AS CurrRate,
+        ISNULL(h.CRDDAYS, 0)                                        AS CreditDays,
+        CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
+        RTRIM(ISNULL(h.REMARKS, ''))                                AS Remarks,
+        -- PO_ORDH has no GST % columns — amounts only
+        CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS TcsPer,
+        ISNULL(h.DISPER, 0)                                         AS DiscPer,
+        ISNULL(h.FREIGHT, 0)                                        AS FreightAmt,
+        ISNULL(h.roff, 0)                                           AS RoundOff,
+        ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
+        RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
+        RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
+        RTRIM(ISNULL(cby.user_name, ISNULL(h.createdby, '')))      AS CreatedBy,
+        ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
+        -- Additional fields for V2 print
+        RTRIM(ISNULL(h.refno, ''))                                  AS RefNo,
+        CASE WHEN h.refDate IS NULL THEN ''
+             ELSE CONVERT(varchar(10), h.refDate, 103) END          AS RefDate,
+        CASE WHEN h.Duedate IS NULL THEN ''
+             ELSE CONVERT(varchar(10), h.Duedate, 103) END          AS DeliveryDate,
+        RTRIM(ISNULL(h.Note, ''))                                   AS Purpose,
+        RTRIM(ISNULL(h.paytermcode, ''))                            AS PayTerms,
+        ISNULL(h.Ins_Amt, 0)                                        AS InsAmt,
+        ISNULL(h.Pack_Amt, 0)                                       AS PackAmt,
+        LEFT(ISNULL(div.gstinno, ''), 2)                            AS DivStateCode,
+        LEFT(ISNULL(sl.gstinno, ''), 2)                             AS SlStateCode
+    FROM dbo.PO_ORDH h
+    LEFT JOIN dbo.pp_divmas div
+        ON RTRIM(div.divcode) = RTRIM(h.DIVCODE)
+    LEFT JOIN dbo.FA_SLMAS sl
+        ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    LEFT JOIN dbo.PO_CAR car
+        ON RTRIM(car.CARCODE) = RTRIM(h.CARCODE)
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(h.createdby)
+                   AND RTRIM(divcode) = RTRIM(h.DIVCODE))                 cby
+    WHERE h.DIVCODE = @DivCode
+      AND h.PORDNO  = @PoNo
+      AND CAST(h.PORDDT AS DATE) = @PoDate;
+
+    -- ─── Result set 2: Print lines ────────────────────────────────────────────
+    SELECT
+        l.PORDSNO                                                   AS [LineNo],
+        RTRIM(l.ITEMCODE)                                           AS ItemCode,
+        RTRIM(ISNULL(i.itemname, ''))                               AS ItemName,
+        RTRIM(ISNULL(i.uom, ''))                                    AS Uom,
+        RTRIM(ISNULL(l.hsncode, ''))                                AS HsnCode,
+        l.PRNO                                                      AS PrNo,
+        l.PRSNO                                                     AS PrSno,
+        ISNULL(l.ORDqty, 0)                                         AS Qty,
+        ISNULL(l.Rate, 0)                                           AS Rate,
+        ISNULL(l.ORDVAL, 0)                                         AS Value,
+        RTRIM(ISNULL(l.Tax_code, ''))                               AS TaxCode,
+        ISNULL(l.taxper, 0)                                         AS TaxPer,
+        ISNULL(l.Taxamt, 0)                                         AS TaxAmt,
+        ISNULL(l.cgstper, 0)                                        AS CgstPer,
+        ISNULL(l.cgstamt, 0)                                        AS CgstAmt,
+        ISNULL(l.sgstper, 0)                                        AS SgstPer,
+        ISNULL(l.sgstamt, 0)                                        AS SgstAmt,
+        ISNULL(l.igstper, 0)                                        AS IgstPer,
+        ISNULL(l.igstamt, 0)                                        AS IgstAmt,
+        ISNULL(l.Tcs_per, 0)                                        AS TcsPer,
+        ISNULL(l.Tcs_amt, 0)                                        AS TcsAmt,
+        ISNULL(l.disper, 0)                                         AS LineDis,
+        ISNULL(l.disamt, 0)                                         AS LineDisAmt
+    FROM dbo.PO_ORDL l
+    INNER JOIN dbo.IN_ITEM i
+        ON i.itemcode = l.ITEMCODE
+    WHERE l.DIVCODE = @DivCode
+      AND l.PORDNO  = @PoNo
+      AND CAST(l.PORDDT AS DATE) = @PoDate
+    ORDER BY l.PORDSNO;
+END;
+GO
