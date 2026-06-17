@@ -241,6 +241,7 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("HostName",        hostName);
         p.Add("IpAddress",       ipAddress);
         p.Add("LinesJson",       linesJson);
+        p.Add("RoundOff",        request.Header.RoundOff);
         p.Add("PoNo", dbType: DbType.Decimal, direction: ParameterDirection.Output);
 
         await _uow.Connection.ExecuteAsync(

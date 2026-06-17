@@ -33,6 +33,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @InsurPer         NUMERIC(10,2)  = 0,
     @SurchargePer     NUMERIC(10,2)  = 0,
     @AddTaxPer        NUMERIC(10,2)  = 0,
+    @RoundOff         NUMERIC(13,2)  = 0,
     @FileNo           VARCHAR(20)    = NULL,
     @FcaFob           NUMERIC(13,2)  = 0,
     @FreightType      VARCHAR(10)    = 'PAID',
@@ -148,6 +149,14 @@ BEGIN
             RTRIM(ISNULL(j.IgstCode,''))     AS IgstCode,
             RTRIM(ISNULL(j.RequesterId,''))  AS RequesterId,
             RTRIM(ISNULL(j.RequesterName,'')) AS RequesterName,
+            ISNULL(j.DiscPer,      0)        AS DiscPer,
+            ISNULL(j.PackingPer,   0)        AS PackingPer,
+            ISNULL(j.FreightPer,   0)        AS FreightPer,
+            ISNULL(j.InsurancePer, 0)        AS InsurancePer,
+            ISNULL(j.CessPer,      0)        AS CessPer,
+            ISNULL(j.FcaFob,       0)        AS FcaFob,
+            RTRIM(ISNULL(j.AddTaxCode, ''))  AS AddTaxCode,
+            ISNULL(j.AddTaxPer,    0)        AS AddTaxPer,
             j.SlotsJson
         INTO #Lines
         FROM OPENJSON(@LinesJson)
@@ -169,6 +178,14 @@ BEGIN
             IgstCode      VARCHAR(10)    '$.igstCode',
             RequesterId   VARCHAR(20)    '$.requesterId',
             RequesterName VARCHAR(100)   '$.requesterName',
+            DiscPer       NUMERIC(10,2)  '$.discPer',
+            PackingPer    NUMERIC(10,2)  '$.packingPer',
+            FreightPer    NUMERIC(10,2)  '$.freightPer',
+            InsurancePer  NUMERIC(10,2)  '$.insurancePer',
+            CessPer       NUMERIC(10,2)  '$.cessPer',
+            FcaFob        NUMERIC(13,2)  '$.fcaFob',
+            AddTaxCode    VARCHAR(10)    '$.addTaxCode',
+            AddTaxPer     NUMERIC(10,2)  '$.addTaxPer',
             SlotsJson     NVARCHAR(MAX)  '$.slots' AS JSON
         ) j
         WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
@@ -354,7 +371,7 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@Insurance,'')),        ''),
             NULLIF(RTRIM(ISNULL(@Freight,'')),          ''),
             ISNULL(@OrdVal, 0),
-            0,                        -- roff: round-off (computed by client, stored as 0 here)
+            ISNULL(@RoundOff, 0),     -- roff: client-supplied round-off
             ISNULL(@CgstAmt, 0),
             ISNULL(@SgstAmt, 0),
             ISNULL(@IgstAmt, 0),
@@ -392,7 +409,14 @@ BEGIN
             sgstper,  sgstamt,  sgst_tax_code,
             igstper,  igstamt,  igst_tax_code,
             Tcs_per,  Tcs_amt,
-            reqidpo,  reqnamepo
+            reqidpo,  reqnamepo,
+            disper,   disamt,
+            PACKPER,  Packamt,
+            Frgt1per, Frgt1Amt,
+            Ins_per,  Ins_amt,
+            cess_per, cess_amt,
+            ADDTAX_CODE, ADDTAXPER, ADDTAXAMT,
+            FCACharg
         )
         SELECT
             @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
@@ -419,7 +443,21 @@ BEGIN
             l.TcsPer,
             ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2),
             NULLIF(l.RequesterId, ''),
-            NULLIF(l.RequesterName, '')
+            NULLIF(l.RequesterName, ''),
+            l.DiscPer,
+            ROUND((l.Rate * l.Qty) * l.DiscPer      / 100.0, 2),
+            l.PackingPer,
+            ROUND((l.Rate * l.Qty) * l.PackingPer   / 100.0, 2),
+            l.FreightPer,
+            ROUND((l.Rate * l.Qty) * l.FreightPer   / 100.0, 2),
+            l.InsurancePer,
+            ROUND((l.Rate * l.Qty) * l.InsurancePer / 100.0, 2),
+            l.CessPer,
+            ROUND((l.Rate * l.Qty) * l.CessPer      / 100.0, 2),
+            NULLIF(l.AddTaxCode, ''),
+            l.AddTaxPer,
+            ROUND((l.Rate * l.Qty) * l.AddTaxPer    / 100.0, 2),
+            l.FcaFob
         FROM #Lines l
         INNER JOIN dbo.PO_PRL prl
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo

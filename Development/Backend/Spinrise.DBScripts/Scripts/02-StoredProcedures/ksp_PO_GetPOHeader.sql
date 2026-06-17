@@ -160,7 +160,21 @@ BEGIN
         RTRIM(ISNULL(l.reqidpo, ''))                                AS RequesterId,
         RTRIM(ISNULL(l.reqnamepo, ''))                              AS RequesterName,
         CASE WHEN ISNULL(l.igstper, 0) > 0 THEN 'IGST' ELSE 'LOCAL' END AS Route,
-        RTRIM(ISNULL(l.deletereason, ''))                           AS DeleteReason
+        RTRIM(ISNULL(l.deletereason, ''))                           AS DeleteReason,
+        ISNULL(l.disper,    0)                                      AS DiscPer,
+        ISNULL(l.disamt,    0)                                      AS DiscAmt,
+        ISNULL(l.PACKPER,   0)                                      AS PackingPer,
+        ISNULL(l.Packamt,   0)                                      AS PackingAmt,
+        ISNULL(l.Frgt1per,  0)                                      AS FreightPer,
+        ISNULL(l.Frgt1Amt,  0)                                      AS FreightAmt,
+        ISNULL(l.Ins_per,   0)                                      AS InsurancePer,
+        ISNULL(l.Ins_amt,   0)                                      AS InsuranceAmt,
+        ISNULL(l.cess_per,  0)                                      AS CessPer,
+        ISNULL(l.cess_amt,  0)                                      AS CessAmt,
+        RTRIM(ISNULL(l.ADDTAX_CODE, ''))                            AS AddTaxCode,
+        ISNULL(l.ADDTAXPER, 0)                                      AS AddTaxPer,
+        ISNULL(l.ADDTAXAMT, 0)                                      AS AddTaxAmt,
+        ISNULL(l.FCACharg,  0)                                      AS FcaFob
     FROM dbo.PO_ORDL l
     INNER JOIN dbo.IN_ITEM i
         ON i.itemcode = l.ITEMCODE
