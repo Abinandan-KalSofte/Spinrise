@@ -60,6 +60,13 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
         var totalIgst      = _po.Lines.Sum(l => l.IgstAmt);
         var totalTcs       = _po.Lines.Sum(l => l.TcsAmt);
 
+        var isIntraState = !string.IsNullOrWhiteSpace(_po.DivStateCode)
+                           && _po.DivStateCode == _po.SlStateCode;
+        var grandTotal = totalLineValue - totalDiscount
+            + (isIntraState ? totalCgst + totalSgst : totalIgst)
+            + _po.FreightAmt + _po.InsAmt + _po.PackAmt
+            + totalTcs + _po.RoundOff;
+
         var companyName = string.IsNullOrWhiteSpace(_po.DivPrintName) ? _po.DivName : _po.DivPrintName;
 
         container.Page(page =>
@@ -95,7 +102,7 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
 
                 // Footer (terms left + amounts right)
                 col.Item().Border(BdCell).BorderColor(Black).BorderTop(0)
-                   .Element(c => ComposeFooter(c, totalLineValue, totalDiscount, totalCgst, totalSgst, totalIgst, totalTcs));
+                   .Element(c => ComposeFooter(c, totalLineValue, totalDiscount, totalCgst, totalSgst, totalIgst, totalTcs, grandTotal, isIntraState));
 
                 // H-01: "Total PO Value(In Words)"
                 col.Item()
@@ -105,7 +112,7 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
                    {
                        t.AlignLeft();
                        t.Span("Total PO Value(In Words) : ").Bold().FontSize(FsData);
-                       t.Span(AmountToWords.Convert(_po.OrderValue)).FontSize(FsData);
+                       t.Span(AmountToWords.Convert(grandTotal)).FontSize(FsData);
                    });
 
                 // I-01: GSTIN strip REMOVED — GSTIN now in footer left (G-03)
@@ -296,7 +303,10 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
                    if (!string.IsNullOrWhiteSpace(_po.RefNo) || !string.IsNullOrWhiteSpace(_po.RefDate))
                        DetailRow("Ref. No. & Date", $"{_po.RefNo} & {_po.RefDate}");
 
-                   // C-06: Order Type, Pay Mode, Credit Days, Pay Terms, Delivery Date, Carrier — REMOVED
+                   DetailRow("Order Type",   _po.OrderType);
+                   DetailRow("Pay Mode",     _po.PayMode);
+                   if (_po.CreditDays > 0)
+                       DetailRow("Credit Days", _po.CreditDays.ToString());
 
                    // C-07: italic note below detail rows
                    col.Item()
@@ -434,7 +444,8 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
     private void ComposeFooter(
         IContainer c,
         decimal totalLineValue, decimal totalDiscount,
-        decimal totalCgst, decimal totalSgst, decimal totalIgst, decimal totalTcs)
+        decimal totalCgst, decimal totalSgst, decimal totalIgst, decimal totalTcs,
+        decimal grandTotal, bool isIntraState)
     {
         c.Row(row =>
         {
@@ -532,9 +543,15 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
 
                    AmtRow("Total",                   F2(totalLineValue));
                    AmtRow("Discount",                totalDiscount == 0m ? "" : F2(totalDiscount)); // F-01: always show
-                   if (totalCgst != 0m) AmtRow("CGST", F2(totalCgst));
-                   if (totalSgst != 0m) AmtRow("SGST", F2(totalSgst));
-                   if (totalIgst != 0m) AmtRow("IGST", F2(totalIgst));
+                   if (isIntraState)
+                   {
+                       if (totalCgst != 0m) AmtRow("CGST", F2(totalCgst));
+                       if (totalSgst != 0m) AmtRow("SGST", F2(totalSgst));
+                   }
+                   else
+                   {
+                       if (totalIgst != 0m) AmtRow("IGST", F2(totalIgst));
+                   }
                    AmtRow("Freight",                 _po.FreightAmt == 0m ? "" : F2(_po.FreightAmt)); // F-02: always show
                    AmtRow("Insurance Amt.",          _po.InsAmt     == 0m ? "" : F2(_po.InsAmt));      // F-03: always show
                    AmtRow("Packing & Forwarding",    _po.PackAmt    == 0m ? "" : F2(_po.PackAmt));     // F-04: always show
@@ -542,7 +559,7 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
                    var tcsPer = _po.Lines.FirstOrDefault(l => l.TcsPer != 0m)?.TcsPer ?? 0m;
                    AmtRow($"TCS {F3(tcsPer)}%",      F2(totalTcs));                                    // F-06: always show
                    AmtRow("Round off",               F2(_po.RoundOff));                                // F-07: always show
-                   AmtRow("Total Amount",            $"INR  {F2(_po.OrderValue)}", bold: true);        // F-08: INR in value
+                   AmtRow("Total Amount",            $"INR  {F2(grandTotal)}", bold: true);             // F-08: INR in value
                });
         });
     }

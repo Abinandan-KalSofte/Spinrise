@@ -60,6 +60,17 @@ function triggerSessionExpired() {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiResponse<unknown>>) => {
+    // When responseType:'blob' is set, Axios wraps non-2xx bodies as Blob instead of
+    // parsing JSON. Read it back so downstream error handlers can access `.message`.
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await (error.response.data as Blob).text()
+        ;(error.response as typeof error.response & { data: unknown }).data = JSON.parse(text)
+      } catch {
+        // non-JSON blob — leave as-is, getErrorMessage falls back to status code
+      }
+    }
+
     const originalRequest = error.config as RetryableRequest | undefined
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {

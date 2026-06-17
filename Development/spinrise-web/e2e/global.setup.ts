@@ -41,13 +41,12 @@ setup('authenticate', async ({ page }) => {
   await companyInput.click()
   await page.waitForTimeout(200)
 
-  // pressSequentially fires key events React can observe; type to filter the list
+  // Type to filter the list
   await companyInput.pressSequentially(DB, { delay: 50 })
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(400)
 
-  // ArrowDown selects the first (filtered) option; Enter confirms — no portal click needed
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('Enter')
+  // Click the first rendered option in the AntD dropdown — JAT sorts before JATNEW
+  await page.locator('.ant-select-item-option').first().click()
   await page.waitForTimeout(200)
 
   // ── Division select ────────────────────────────────────────────────────────

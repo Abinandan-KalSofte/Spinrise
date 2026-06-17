@@ -15,10 +15,12 @@ namespace Spinrise.API.Areas.PurchaseOrder.Controllers;
 public class PoEntryController : BaseApiController
 {
     private readonly IPoEntryService _service;
+    private readonly ILogger<PoEntryController> _logger;
 
-    public PoEntryController(IPoEntryService service)
+    public PoEntryController(IPoEntryService service, ILogger<PoEntryController> logger)
     {
         _service = service;
+        _logger  = logger;
     }
 
     // ── Screen init ────────────────────────────────────────────────────────────
@@ -193,7 +195,12 @@ public class PoEntryController : BaseApiController
     [HttpGet("{poNo}/print")]
     public async Task<IActionResult> Print(decimal poNo, [FromQuery] string divCode, [FromQuery] DateOnly poDate)
     {
-        var parameters = await _service.GetParametersAsync(divCode);
+        _logger.LogInformation("Print: GetParameters div={DivCode}", divCode);
+        PoParametersDto? parameters = null;
+        try { parameters = await _service.GetParametersAsync(divCode); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Print: GetParameters failed — treating as no parameters"); }
+
+        _logger.LogInformation("Print: GetPrintData PO={PoNo}", poNo);
         var po = await _service.GetPrintDataAsync(divCode, poNo, poDate);
         if (po is null)
             return NotFoundResponse("No records to print.");
@@ -201,15 +208,24 @@ public class PoEntryController : BaseApiController
         if (parameters?.PoPrintApp == "Y" && po.Conflg == "N")
             return FailResponse("Approval Not Complete For This PO", 403);
 
+        _logger.LogInformation("Print: Generating PDF PO={PoNo}", poNo);
         var pdfBytes = PurchaseOrderDocument.Generate(po);
-        await _service.UpdatePrintFlagAsync(divCode, poNo, poDate);
+
+        try { await _service.UpdatePrintFlagAsync(divCode, poNo, poDate); }
+        catch (Exception ex) { _logger.LogError(ex, "Print: SetPrintFlag failed PO={PoNo} — PDF still returned", poNo); }
+
         return File(pdfBytes, "application/pdf", $"PO-{(long)poNo:D6}.pdf");
     }
 
     [HttpGet("{poNo}/print-v2")]
     public async Task<IActionResult> PrintV2(decimal poNo, [FromQuery] string divCode, [FromQuery] DateOnly poDate)
     {
-        var parameters = await _service.GetParametersAsync(divCode);
+        _logger.LogInformation("PrintV2: GetParameters div={DivCode}", divCode);
+        PoParametersDto? parameters = null;
+        try { parameters = await _service.GetParametersAsync(divCode); }
+        catch (Exception ex) { _logger.LogWarning(ex, "PrintV2: GetParameters failed — treating as no parameters"); }
+
+        _logger.LogInformation("PrintV2: GetPrintData PO={PoNo}", poNo);
         var po = await _service.GetPrintDataAsync(divCode, poNo, poDate);
         if (po is null)
             return NotFoundResponse("No records to print.");
@@ -217,8 +233,12 @@ public class PoEntryController : BaseApiController
         if (parameters?.PoPrintApp == "Y" && po.Conflg == "N")
             return FailResponse("Approval Not Complete For This PO", 403);
 
+        _logger.LogInformation("PrintV2: Generating PDF PO={PoNo}", poNo);
         var pdfBytes = PurchaseOrderDocumentV2.Generate(po);
-        await _service.UpdatePrintFlagAsync(divCode, poNo, poDate);
+
+        try { await _service.UpdatePrintFlagAsync(divCode, poNo, poDate); }
+        catch (Exception ex) { _logger.LogError(ex, "PrintV2: SetPrintFlag failed PO={PoNo} — PDF still returned", poNo); }
+
         return File(pdfBytes, "application/pdf", $"PO-{(long)poNo:D6}.pdf");
     }
 

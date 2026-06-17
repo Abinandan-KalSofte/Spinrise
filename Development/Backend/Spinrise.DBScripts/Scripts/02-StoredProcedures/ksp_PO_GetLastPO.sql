@@ -97,9 +97,9 @@ BEGIN
         RTRIM(ISNULL(h.FILENO, ''))                                 AS FileNo,
         ISNULL(h.FCACharg, 0)                                       AS FcaFob,
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
-        'BEFORE'                                                    AS DiscApp,
-        'BEFORE'                                                    AS PackApp,
-        'BEFORE'                                                    AS CessApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
+        'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,

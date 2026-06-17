@@ -2,7 +2,10 @@
  * PoTransferPage.ts — Page Object Model for PR→PO Transfer screen
  * FSD v3.1 | ksp_PO_* stored procedures | JAT database
  *
- * Covers: ADD, VIEW, DELETE flows + all business rule validations.
+ * Toolbar labels (from PoToolbar.tsx):
+ *   "New PO" (F1) | "Find" (F2) | "Delete" (F3)
+ *   "Save PO" / "Confirm Delete" | "Cancel" (F6) | "Print" (F7)
+ *   Nav buttons: icon-only with title="First/Previous/Next/Last record"
  */
 import { type Page, type Locator, expect } from '@playwright/test'
 
@@ -10,22 +13,22 @@ export class PoTransferPage {
   readonly page: Page
 
   // ── Toolbar buttons ──────────────────────────────────────────────────────────
-  readonly btnAdd:    Locator
-  readonly btnSave:   Locator
-  readonly btnDelete: Locator
-  readonly btnCancel: Locator
-  readonly btnPrint:  Locator
-  readonly btnFirst:  Locator
-  readonly btnPrev:   Locator
-  readonly btnNext:   Locator
-  readonly btnLast:   Locator
+  readonly btnAdd:    Locator   // "New PO"
+  readonly btnSave:   Locator   // "Save PO" (ADD) / "Confirm Delete" (DELETE)
+  readonly btnDelete: Locator   // "Delete"
+  readonly btnCancel: Locator   // "Cancel"
+  readonly btnPrint:  Locator   // "Print"
+  readonly btnFirst:  Locator   // icon-only, title="First record"
+  readonly btnPrev:   Locator   // icon-only, title="Previous record"
+  readonly btnNext:   Locator   // icon-only, title="Next record"
+  readonly btnLast:   Locator   // icon-only, title="Last record"
 
   // ── Doc Band (read-only display) ────────────────────────────────────────────
   readonly poNoDisplay:    Locator
   readonly poValueDisplay: Locator
 
   // ── Order Details tab fields ─────────────────────────────────────────────────
-  readonly poDateInput:    Locator
+  readonly poDateInput:     Locator
   readonly orderTypeSelect: Locator
   readonly supplierSelect:  Locator
   readonly gstinField:      Locator
@@ -54,15 +57,18 @@ export class PoTransferPage {
   constructor(page: Page) {
     this.page = page
 
-    this.btnAdd    = page.getByRole('button', { name: 'Add' }).first()
-    this.btnSave   = page.getByRole('button', { name: 'Save' }).first()
-    this.btnDelete = page.getByRole('button', { name: 'Delete' }).first()
-    this.btnCancel = page.getByRole('button', { name: 'Cancel' }).first()
-    this.btnPrint  = page.getByRole('button', { name: /Print/i }).first()
-    this.btnFirst  = page.getByRole('button', { name: 'First' })
-    this.btnPrev   = page.getByRole('button', { name: 'Prev' })
-    this.btnNext   = page.getByRole('button', { name: 'Next' })
-    this.btnLast   = page.getByRole('button', { name: 'Last' })
+    // Toolbar: match on label text inside the button span (kbd shortcut text is separate)
+    this.btnAdd    = page.locator('button').filter({ hasText: /New PO/ }).first()
+    this.btnSave   = page.locator('button').filter({ hasText: /Save PO|Confirm Delete/ }).first()
+    this.btnDelete = page.locator('button').filter({ hasText: /^Delete/ }).first()
+    this.btnCancel = page.locator('button').filter({ hasText: /^Cancel/ }).first()
+    this.btnPrint  = page.locator('button').filter({ hasText: /^Print/ }).first()
+
+    // Nav buttons are icon-only — located by their title attribute
+    this.btnFirst = page.locator('button[title="First record"]')
+    this.btnPrev  = page.locator('button[title="Previous record"]')
+    this.btnNext  = page.locator('button[title="Next record"]')
+    this.btnLast  = page.locator('button[title="Last record"]')
 
     this.poNoDisplay    = page.locator('[data-testid="doc-band-po-no"], .po-doc-band .po-no')
     this.poValueDisplay = page.locator('[data-testid="kpi-order-value"], .kpi-order-value')
@@ -93,7 +99,7 @@ export class PoTransferPage {
   async goto() {
     await this.page.goto('/po/transfer')
     await this.page.waitForLoadState('networkidle')
-    // Wait for lookups to load
+    // "New PO" button is enabled in VIEW mode once lookups finish loading
     await expect(this.btnAdd).toBeEnabled({ timeout: 15_000 })
   }
 
@@ -107,17 +113,15 @@ export class PoTransferPage {
     await this.page.waitForTimeout(200)
     await this.orderTypeSelect.pressSequentially(code, { delay: 50 })
     await this.page.waitForTimeout(200)
-    await this.page.keyboard.press('ArrowDown')
-    await this.page.keyboard.press('Enter')
+    await this.page.locator('.ant-select-item-option').first().click()
   }
 
   async selectSupplier(code: string) {
     await this.supplierSelect.click()
     await this.page.waitForTimeout(200)
     await this.supplierSelect.pressSequentially(code, { delay: 50 })
-    await this.page.waitForTimeout(500) // wait for supplier list to filter
-    await this.page.keyboard.press('ArrowDown')
-    await this.page.keyboard.press('Enter')
+    await this.page.waitForTimeout(500)
+    await this.page.locator('.ant-select-item-option').first().click()
     await this.page.waitForTimeout(500) // wait for GST routing call
   }
 
@@ -127,15 +131,21 @@ export class PoTransferPage {
     await this.page.keyboard.press('Tab')
   }
 
+  /** Click a header tab by its label (uses role="tab" for AntD Tabs) */
   async clickTab(tabName: string) {
-    await this.page.getByRole('button', { name: tabName }).click()
+    const tab = this.page.getByRole('tab', { name: tabName })
+    if (await tab.isVisible().catch(() => false)) {
+      await tab.click()
+    } else {
+      // Fallback: some tab implementations use buttons or divs
+      await this.page.locator(`[role="tab"]:has-text("${tabName}"), button:has-text("${tabName}")`).first().click()
+    }
     await this.page.waitForTimeout(200)
   }
 
   async pickFirstPrLine() {
     await this.addPrLinesBtn.click()
     await expect(this.prPickerModal).toBeVisible({ timeout: 10_000 })
-    // Select the first row checkbox
     await this.prPickerModal.locator('.ant-checkbox-input').first().click()
     await this.prPickerConfirm.click()
     await expect(this.prPickerModal).toBeHidden({ timeout: 8_000 })
@@ -150,7 +160,6 @@ export class PoTransferPage {
 
   async clickSave() {
     await this.btnSave.click()
-    // Wait for notification or for save to complete
     await this.page.waitForTimeout(500)
   }
 
@@ -168,7 +177,6 @@ export class PoTransferPage {
     await this.page.waitForTimeout(500)
   }
 
-  /** Returns the PO number text from the doc band (empty string if pre-save) */
   async getPoNoText(): Promise<string> {
     try {
       return (await this.poNoDisplay.textContent()) ?? ''
@@ -177,7 +185,6 @@ export class PoTransferPage {
     }
   }
 
-  /** Returns true if a success notification appeared */
   async waitForSuccess(timeout = 10_000): Promise<boolean> {
     try {
       await expect(this.successNotif).toBeVisible({ timeout })
@@ -187,23 +194,24 @@ export class PoTransferPage {
     }
   }
 
-  /** Returns the first visible notification text */
   async getNotificationText(): Promise<string> {
     try {
-      const notif = this.page.locator('.ant-notification-notice').first()
+      // Wait briefly for any notification to appear
+      await this.page.waitForTimeout(800)
+      const notif = this.page.locator('.ant-notification-notice, .ant-message-notice').first()
       return (await notif.textContent()) ?? ''
     } catch {
       return ''
     }
   }
 
-  /** Returns true if the screen is in VIEW mode (Save button hidden/disabled) */
+  /** True when in VIEW mode: "New PO" is enabled and "Save PO" is disabled */
   async isViewMode(): Promise<boolean> {
-    return !(await this.btnSave.isVisible().catch(() => false))
+    return this.btnSave.isDisabled().catch(() => true)
   }
 
-  /** Returns true if the screen is in ADD mode (Save button visible) */
+  /** True when in ADD mode: "Save PO" is enabled */
   async isAddMode(): Promise<boolean> {
-    return this.btnSave.isVisible().catch(() => false)
+    return this.btnSave.isEnabled().catch(() => false)
   }
 }

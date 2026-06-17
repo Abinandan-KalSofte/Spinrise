@@ -36,9 +36,9 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @FileNo           VARCHAR(20)    = NULL,
     @FcaFob           NUMERIC(13,2)  = 0,
     @FreightType      VARCHAR(10)    = 'PAID',
-    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- accepted, not yet stored
-    @PackApp          VARCHAR(10)    = 'BEFORE',
-    @CessApp          VARCHAR(10)    = 'BEFORE',
+    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- disflg: 'BEFORE'→'B', 'AFTER'→'A' (wired 16-Jun-2026)
+    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG: 'BEFORE'→'B', 'AFTER'→'A' (wired 16-Jun-2026)
+    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026). Not wired in SPINRISE.
     -- Payment
     @PayMode          VARCHAR(10)    = 'DIRECT',
     @DirectInstr      VARCHAR(200)   = NULL,
@@ -298,7 +298,7 @@ BEGIN
             CurrCode,  FCurRate, CARCODE, INSPECT,
             Form_type, refno,   refDate, REMARKS,
             DISPER, Cessper, FREIGHT, PCKPER, INSPER, SURPER, ADDTAXPER,
-            FILENO, FCACharg, FRTFLG,
+            FILENO, FCACharg, FRTFLG, disflg, PACK_FLG,
             PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS,
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
@@ -331,6 +331,8 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@FileNo,'')),       ''),
             ISNULL(@FcaFob, 0),
             CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE '' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(@DiscApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- disflg
+            CASE WHEN UPPER(RTRIM(ISNULL(@PackApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- PACK_FLG
             CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
             NULLIF(RTRIM(ISNULL(@DirectInstr,'')),  ''),
             NULLIF(RTRIM(ISNULL(@BankCode,'')),     ''),

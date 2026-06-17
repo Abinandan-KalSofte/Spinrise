@@ -5,7 +5,7 @@
 --                        (2) PO lines.
 -- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno,
 --   add1, add2, add3, pincode, email — all verified.
--- FA_SLMAS confirmed columns: add1, add2, gstinno (lowercase).
+-- FA_SLMAS confirmed columns: add1, add2, state, gstinno (lowercase). add3/city/pin unverified.
 -- PO_ORDH: GST % columns don't exist — amounts only.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPrint
@@ -41,13 +41,14 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS SlCode,
         RTRIM(ISNULL(sl.slname, ''))                                AS SlName,
         RTRIM(ISNULL(sl.add1, '')) +
-            CASE WHEN RTRIM(ISNULL(sl.add2, '')) <> ''
-                 THEN ' ' + RTRIM(sl.add2) ELSE '' END              AS SlAddress,
+            CASE WHEN RTRIM(ISNULL(sl.add2,  '')) <> '' THEN ', ' + RTRIM(sl.add2)  ELSE '' END +
+            CASE WHEN RTRIM(ISNULL(sl.state, '')) <> '' THEN ', ' + RTRIM(sl.state) ELSE '' END
+                                                                     AS SlAddress,
         RTRIM(ISNULL(sl.gstinno, ''))                               AS SlGstin,
         RTRIM(ISNULL(sl.phone1, ''))                                AS SlPhone,
         RTRIM(ISNULL(sl.email, ''))                                 AS SlEmail,
         RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
-        RTRIM(ISNULL(h.CARCODE, ''))                                AS Carrier,
+        RTRIM(ISNULL(car.CARNAME, h.CARCODE))                       AS Carrier,
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         ISNULL(h.CRDDAYS, 0)                                        AS CreditDays,
@@ -83,6 +84,8 @@ BEGIN
         ON RTRIM(div.divcode) = RTRIM(h.DIVCODE)
     LEFT JOIN dbo.FA_SLMAS sl
         ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    LEFT JOIN dbo.PO_CAR car
+        ON RTRIM(car.CARCODE) = RTRIM(h.CARCODE)
     WHERE h.DIVCODE = @DivCode
       AND h.PORDNO  = @PoNo
       AND CAST(h.PORDDT AS DATE) = @PoDate;
