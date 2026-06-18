@@ -207,7 +207,7 @@ export default function PrToPoTransferPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F5F5F3', minWidth: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F4F6F9', minWidth: 0 }}>
       <PoDocBand mode={f.mode} poNo={f.currentPo?.poNo ?? null} fy={fy} />
 
       <PoToolbar
@@ -235,24 +235,39 @@ export default function PrToPoTransferPage() {
           action={<span style={{ fontSize: 12, color: '#185FA5', cursor: 'pointer' }} onClick={() => void f.loadLookups()}>Retry</span>} />
       )}
       {f.mode === 'ADD' && (
-        <div style={{ background: '#E6F1FB', borderBottom: '2px solid #185FA5', padding: '5px 16px', fontSize: 11, color: '#185FA5', fontWeight: 600, flexShrink: 0 }}>
-          ADD MODE — Select approved PR lines, set rates, and save to generate the Purchase Order.
+        <div style={{
+          background: '#EFF6FF', borderBottom: '2px solid #3B82F6', borderLeft: '4px solid #3B82F6',
+          padding: '7px 16px', fontSize: 11, color: '#1D4ED8', fontWeight: 500,
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{
+            background: '#3B82F6', color: '#fff', borderRadius: 5,
+            padding: '1px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
+          }}>
+            ADD MODE
+          </span>
+          Select approved PR lines, set rates, and save to generate the Purchase Order.
         </div>
       )}
       {f.mode === 'DELETE' && (
         <div style={{
-          background: '#FCEBEB', borderBottom: '2px solid #A32D2D', padding: '7px 16px',
-          display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+          background: '#FEF2F2', borderBottom: '2px solid #DC2626', borderLeft: '4px solid #DC2626',
+          padding: '7px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
         }}>
-          <strong style={{ color: '#A32D2D', fontSize: 12 }}>⚠ DELETE MODE</strong>
-          <span style={{ fontSize: 11, color: '#1a1a1a' }}>GRN guard is verified on the server.</span>
+          <span style={{
+            background: '#DC2626', color: '#fff', borderRadius: 5,
+            padding: '1px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
+          }}>
+            DELETE MODE
+          </span>
+          <span style={{ fontSize: 11, color: '#7F1D1D' }}>GRN guard is verified on the server.</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#A32D2D' }}>Default Delete Reason *</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#DC2626' }}>Default Delete Reason *</label>
             <input
               value={deleteReason}
               onChange={(e) => handleDefaultReason(e.target.value)}
               placeholder="Enter reason — auto-fills all lines…"
-              style={{ height: 26, width: 300, border: '1px solid #A32D2D', borderRadius: 4, padding: '0 8px', fontSize: 12, outline: 'none' }}
+              style={{ height: 26, width: 300, border: '1px solid #DC2626', borderRadius: 5, padding: '0 8px', fontSize: 12, outline: 'none', background: '#fff' }}
             />
           </div>
         </div>
@@ -295,22 +310,32 @@ export default function PrToPoTransferPage() {
       {/* PR selection bar (ADD only) */}
       {f.mode === 'ADD' && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px',
-          background: '#fffbf0', borderBottom: '1px solid #f0e6c8', flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px',
+          background: '#FFFBEB', borderBottom: '1px solid #FDE68A',
+          borderLeft: '4px solid #F59E0B', flexShrink: 0,
         }}>
-          <span style={{ fontSize: 12, color: '#BA7517', fontWeight: 600 }}>Select PR Lines</span>
-          <span style={{ fontSize: 11, color: '#888' }}>Browse and select approved Purchase Requisition lines to add to this PO</span>
+          <div>
+            <span style={{ fontSize: 12, color: '#92400E', fontWeight: 700 }}>Select PR Lines</span>
+            <span style={{ fontSize: 11, color: '#B45309', marginLeft: 8 }}>
+              Browse and select approved Purchase Requisition lines to add to this PO
+            </span>
+          </div>
           <span style={{
-            marginLeft: 'auto', background: '#FAEEDA', color: '#BA7517', border: '1px solid #f0e6c8',
-            fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 20,
+            marginLeft: 'auto',
+            background: f.draftLines.length > 0 ? '#FEF3C7' : '#FEF9EC',
+            color: '#B45309', border: '1px solid #FDE68A',
+            fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
           }}>
             {f.draftLines.length} line{f.draftLines.length !== 1 ? 's' : ''} selected
           </span>
           <button
             onClick={() => setPrPickerOpen(true)}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 5,
-              border: '1px solid #185FA5', background: '#185FA5', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '5px 14px', borderRadius: 6,
+              border: '1px solid #185FA5', background: '#185FA5',
+              color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(24,95,165,0.2)',
             }}
           >
             <SearchOutlined /> Browse PR Lines

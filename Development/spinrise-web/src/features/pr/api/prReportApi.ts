@@ -1,7 +1,7 @@
 import api, { apiHelpers } from '@/shared/api/client'
 import type { DeptOption, DownloadReportParams, PrItemOption } from '../types/prReportTypes'
 
-const BASE = 'pr/report'
+const BASE = 'pr'
 
 // ── Lookups ────────────────────────────────────────────────────────────────────
 
