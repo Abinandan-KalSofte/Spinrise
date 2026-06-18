@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { RouterProvider, createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import ProtectedRoute from './shared/components/ProtectedRoute'
 import AppShell from './shared/components/AppShell'
 import SessionExpiredModal from './shared/components/SessionExpiredModal'
@@ -16,33 +16,37 @@ const FinalLevelApprovalPage  = lazy(() => import('./features/pr/pages/FinalLeve
 const PrToPoTransferPage      = lazy(() => import('./features/po/pages/PrToPoTransferPage'))
 const PrReportPage            = lazy(() => import('./features/pr/pages/PrReportPage'))
 
+const RouteShell = () => (
+  <>
+    <SessionExpiredModal />
+    <Outlet />
+  </>
+)
+
+const router = createBrowserRouter([
+  {
+    element: <RouteShell />,
+    children: [
+      { path: '/login', element: <Suspense fallback={<AppLoader />}><LoginPage /></Suspense> },
+      {
+        element: <Suspense fallback={<AppLoader />}><ProtectedRoute><AppShell /></ProtectedRoute></Suspense>,
+        children: [
+          { path: '/dashboard', element: <DashboardPage /> },
+          { path: '/purchase-requisition', element: <PurchaseRequisitionPage /> },
+          { path: '/pr-amendment', element: <PrAmendmentPage /> },
+          { path: '/pr-foreclosure', element: <PrForeclosurePage /> },
+          { path: '/pr-cancellation', element: <PrCancellationPage /> },
+          { path: '/pr-first-approval', element: <PrFirstApprovalPage /> },
+          { path: '/pr-final-approval', element: <FinalLevelApprovalPage /> },
+          { path: '/po/transfer', element: <PrToPoTransferPage /> },
+          { path: '/pr-report', element: <PrReportPage /> },
+        ],
+      },
+      { path: '*', element: <Navigate to="/login" replace /> },
+    ],
+  },
+])
+
 export default function App() {
-  return (
-    <BrowserRouter>
-      <SessionExpiredModal />
-      <Suspense fallback={<AppLoader />}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppShell />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/purchase-requisition"             element={<PurchaseRequisitionPage />} />
-            <Route path="/pr-amendment"                   element={<PrAmendmentPage />} />
-            <Route path="/pr-foreclosure"                 element={<PrForeclosurePage />} />
-            <Route path="/pr-cancellation"                element={<PrCancellationPage />} />
-            <Route path="/pr-first-approval"              element={<PrFirstApprovalPage />} />
-            <Route path="/pr-final-approval"              element={<FinalLevelApprovalPage />} />
-            <Route path="/po/transfer"                    element={<PrToPoTransferPage />} />
-            <Route path="/pr-report"                      element={<PrReportPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
-  )
+  return <RouterProvider router={router} />
 }

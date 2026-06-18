@@ -6,8 +6,9 @@ import { TabPanel } from './_fieldKit'
 import { formatPoNo } from '../../../types'
 import type { ScreenMode, SupplierOption, OrderTypeOption, FormTypeOption, CurrencyOption } from '../../../types'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
-import { getFYBounds } from '@/shared/lib/dateUtils'
+import { getFYBounds, fyPastDisabledDate } from '@/shared/lib/dateUtils'
 import { prefixFilterOption, priorityFilterSort } from '@/shared/utils/selectUtils'
+import { NON_NEGATIVE_INPUT_PROPS } from '../../../utils/poTransferRules'
 
 // ── Order Details tab (HTML #htab-panel-order) ───────────────────────────────
 // Mandatory: Order Type (BR-11), Supplier (BR-12), Currency (BR-13) — validated
@@ -28,12 +29,14 @@ interface OrderDetailsTabProps {
   suppliers:        SupplierOption[]
   formTypes:        FormTypeOption[]
   currencies:       CurrencyOption[]
+  lastPoDate?:      string | null   // CR-024: lower bound for PO Date picker
   onSupplierChange: (s: SupplierOption | null) => void
   onSupplierOpen:   () => void
 }
 
 export function OrderDetailsTab({
   mode, disabled, poNo, orderValue, orderTypes, suppliers, formTypes, currencies,
+  lastPoDate,
   onSupplierChange, onSupplierOpen,
 }: OrderDetailsTabProps) {
   const form = Form.useFormInstance()
@@ -65,6 +68,7 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={2}>
+          {/* CR-024: disabledDate uses fyPastDisabledDate with lastPoDate lower bound */}
           <Form.Item name="poDate" label="PO Date"
             validateTrigger={['onChange', 'onBlur']}
             rules={[{
@@ -74,14 +78,14 @@ export function OrderDetailsTab({
                   return Promise.reject(`Date must be within the financial year (${fyStart.format('DD-MMM-YYYY')} – ${fyEnd.format('DD-MMM-YYYY')}).`)
                 if (val.isAfter(today, 'day'))
                   return Promise.reject('PO Date cannot be a future date.')
+                if (lastPoDate && val.isBefore(dayjs(lastPoDate), 'day'))
+                  return Promise.reject(`PO Date cannot be earlier than the last PO date (${dayjs(lastPoDate).format('DD-MMM-YYYY')}).`)
                 return Promise.resolve()
               },
             }]}
             style={mb}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} allowClear={false}
-              disabledDate={(d) =>
-                d.isBefore(fyStart, 'day') || d.isAfter(fyEnd, 'day') || d.isAfter(today, 'day')
-              }
+              disabledDate={fyPastDisabledDate(processingDate, lastPoDate)}
             />
           </Form.Item>
         </Col>
@@ -136,16 +140,35 @@ export function OrderDetailsTab({
             <Input placeholder="Optional" disabled={disabled} />
           </Form.Item>
         </Col>
+        {/* CR-025 / CR-028: Ref Date cannot be a future date and must be within FY */}
         <Col span={4}>
-          <Form.Item name="refDate" label="Ref. Date" style={mb}>
+          <Form.Item name="refDate" label="Ref. Date"
+            validateTrigger={['onChange', 'onBlur']}
+            rules={[{
+              validator: (_, val: Dayjs | null) => {
+                if (!val) return Promise.resolve()
+                if (val.isBefore(fyStart, 'day') || val.isAfter(fyEnd, 'day'))
+                  return Promise.reject(`Ref. Date must be within the financial year (${fyStart.format('DD-MMM-YYYY')} – ${fyEnd.format('DD-MMM-YYYY')}).`)
+                if (val.isAfter(today, 'day'))
+                  return Promise.reject('Reference Date cannot be a future date.')
+                return Promise.resolve()
+              },
+            }]}
+            style={mb}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled}
-              disabledDate={(d) => !!poDateVal && d.isAfter(poDateVal, 'day')}
+              disabledDate={(d) => {
+                if (d.isBefore(fyStart, 'day') || d.isAfter(fyEnd, 'day')) return true
+                if (d.isAfter(today, 'day')) return true
+                if (poDateVal && d.isAfter(poDateVal, 'day')) return true
+                return false
+              }}
             />
           </Form.Item>
         </Col>
         <Col span={4}>
           <Form.Item name="roundOff" label="Round Off" style={mb}>
             <InputNumber
+              {...NON_NEGATIVE_INPUT_PROPS}
               precision={2} controls={false} disabled={disabled}
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }}
             />
@@ -170,7 +193,7 @@ export function OrderDetailsTab({
         </Col>
         <Col span={4}>
           <Form.Item name="currRate" label="Curr. Rate" style={mb}>
-            <InputNumber disabled precision={4} controls={false}
+            <InputNumber {...NON_NEGATIVE_INPUT_PROPS} disabled precision={4} controls={false}
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} />
           </Form.Item>
         </Col>

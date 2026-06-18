@@ -42,7 +42,7 @@ export function NotificationBridge() {
 function notify(type: NotifyType, message: string, description?: string) {
   const api = boundApi ?? staticNotification
   api[type]({
-    message,
+    title:        message,
     description,
     placement:    'topRight',
     duration:     DURATION[type],

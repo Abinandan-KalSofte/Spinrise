@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { HeaderTabKey } from '../hooks/usePoTransferForm'
 import { Alert, ConfigProvider, Form, Skeleton } from 'antd'
+import { useNavigationGuardStore } from '@/shared/store/useNavigationGuardStore'
 import { PageLoader, ApiLoader } from '@/components/common/loading'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -32,6 +33,24 @@ export default function PrToPoTransferPage() {
   usePageTitle('PR to PO Transfer')
 
   const f = usePoTransferForm()
+
+  // CR-023: Register navigation guard when form has unsaved changes (mode ≠ VIEW).
+  // AppShell reads this store before any sidebar/logo navigation and shows the
+  // confirm dialog. beforeunload handles browser close/refresh.
+  const setGuard  = useNavigationGuardStore((s) => s.setGuard)
+  const clearGuard = useNavigationGuardStore((s) => s.clearGuard)
+  useEffect(() => {
+    const dirty = f.mode !== 'VIEW'
+    setGuard(dirty, dirty ? f.cancelMode : null)
+  }, [f.mode]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (f.mode !== 'VIEW') e.preventDefault() }
+    window.addEventListener('beforeunload', handler)
+    return () => {
+      window.removeEventListener('beforeunload', handler)
+      clearGuard()
+    }
+  }, [f.mode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [prPickerOpen,   setPrPickerOpen]   = useState(false)
   const [findOpen,       setFindOpen]       = useState(false)
@@ -168,6 +187,10 @@ export default function PrToPoTransferPage() {
           if (f.deleteModalOpen) void f.handleDeleteConfirm(deleteReason)
           else if (f.mode === 'DELETE' && !busy) f.handleDeleteClick()
           break
+        case 's':
+        case 'S':
+          if (e.ctrlKey) { e.preventDefault(); if (!isView && !busy) handleSave() }
+          break
       }
     }
   })
@@ -259,6 +282,7 @@ export default function PrToPoTransferPage() {
               deliveryLocations={f.deliveryLocations}
               billingAddresses={f.billingAddresses}
               pricingTermsOpts={f.pricingTermsOpts}
+              lastPoDate={f.preChecks?.lastPoDate ?? null}
               activeTab={headerTab}
               onTabChange={setHeaderTab}
               onSupplierChange={(s) => void f.onSupplierChange(s)}
@@ -340,12 +364,24 @@ export default function PrToPoTransferPage() {
         onLoad={(lines) => {
           f.addPrLines(lines)
           setPrPickerOpen(false)
+          // CR-002: focus Order Type after PR lines are selected so the user can
+          // immediately fill in the required header field without clicking.
           setTimeout(() => {
             const inst = f.headerForm.getFieldInstance('orderType') as { focus?: () => void } | null
             inst?.focus?.()
           }, 100)
         }}
-        onCancel={() => setPrPickerOpen(false)}
+        onCancel={() => {
+          setPrPickerOpen(false)
+          // CR-002: also focus Order Type when the picker is dismissed (Escape /
+          // mouse close / cancel button) so focus is never lost in ADD mode.
+          if (f.mode === 'ADD') {
+            setTimeout(() => {
+              const inst = f.headerForm.getFieldInstance('orderType') as { focus?: () => void } | null
+              inst?.focus?.()
+            }, 100)
+          }
+        }}
       />
 
       <GstTaxDetailsModal

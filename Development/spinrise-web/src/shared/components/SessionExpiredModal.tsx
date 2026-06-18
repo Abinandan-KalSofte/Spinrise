@@ -19,7 +19,7 @@ export default function SessionExpiredModal() {
       onOk={handleLogin}
       okText="Login Again"
       closable={false}
-      maskClosable={false}
+      mask={{ closable: false }}
       cancelButtonProps={{ style: { display: 'none' } }}
       centered
     >

@@ -3,6 +3,7 @@ import { Button, Input, InputNumber, Tooltip } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { erpTh, ERP_TD as TD } from '@/shared/styles/erpTable'
 import type { PoLine, ScreenMode } from '../../types'
+import { NON_NEGATIVE_INPUT_PROPS, clampNonNegativeNumber } from '../../utils/poTransferRules'
 
 // ── PO Line Item grid (HTML #po-grid / .po-table) ────────────────────────────
 //
@@ -18,6 +19,9 @@ const TD_TXT = { ...TD, fontSize: 11, color: '#1e293b', textAlign: 'right' } as 
 const fmt2 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmt3 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 const fmt4 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+const pctOf  = (base: number, pct: number) => round2((base * (pct || 0)) / 100)
 
 interface PoLineGridProps {
   mode:                 ScreenMode
@@ -52,6 +56,17 @@ const Row = memo(function Row({
   const isDelete = mode === 'DELETE'
   const hsnBlank = !line.hsnCode.trim()
 
+  // CR-008: charge amount columns computed from existing line fields
+  const taxable    = line.value || round2((line.rate || 0) * (line.qty || 0))
+  const discAmt    = pctOf(taxable, line.discPer)
+  const packAmt    = pctOf(taxable - discAmt, line.packingPer)
+  const freightAmt = pctOf(taxable, line.freightPer)
+  const insurAmt   = pctOf(taxable, line.insurancePer)
+  const otherAmt   = pctOf(taxable, line.cessPer)
+  const gstAmt     = round2((line.cgstAmt || 0) + (line.sgstAmt || 0) + (line.igstAmt || 0))
+  const tcsCharge  = line.tcsAmt || 0
+  const landingCost= line.netAmount || 0
+
   return (
     <tr
       onClick={onSelect}
@@ -76,10 +91,11 @@ const Row = memo(function Row({
         onDoubleClick={(e) => isAdd && e.stopPropagation()}>
         {isAdd ? (
           <InputNumber
-            size="small" min={0} precision={4} controls={false} value={line.rate}
+            {...NON_NEGATIVE_INPUT_PROPS}
+            size="small" precision={4} controls={false} value={line.rate}
             style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
             status={line.rate <= 0 ? 'error' : undefined}
-            onChange={(v) => onRateQty({ rate: v ?? 0 })}
+            onChange={(v) => onRateQty({ rate: clampNonNegativeNumber(v) })}
           />
         ) : (
           <span style={{ fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>{fmt4(line.rate)}</span>
@@ -95,10 +111,11 @@ const Row = memo(function Row({
         {isAdd ? (
           <Tooltip title={`Balance: ${fmt3(line.balanceQty)}`} mouseEnterDelay={0.8}>
             <InputNumber
-              size="small" min={0} precision={3} controls={false} value={line.qty}
+              {...NON_NEGATIVE_INPUT_PROPS}
+              size="small" precision={3} controls={false} value={line.qty}
               style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
               status={line.qty <= 0 ? 'error' : undefined}
-              onChange={(v) => onRateQty({ qty: v ?? 0 })}
+              onChange={(v) => onRateQty({ qty: clampNonNegativeNumber(v) })}
             />
           </Tooltip>
         ) : (
@@ -107,6 +124,17 @@ const Row = memo(function Row({
       </td>
 
       <td style={numTd(96)}>{fmt2(line.value)}</td>
+
+      {/* CR-008 charge columns – Discount, Packing, Freight, Insurance, Other, GST, TCS, Landing Cost
+          CR-022: Discount displayed as positive (deduction amount, not a negative value) */}
+      <td style={numTd(80)}>{fmt2(discAmt)}</td>
+      <td style={numTd(80)}>{fmt2(packAmt)}</td>
+      <td style={numTd(80)}>{fmt2(freightAmt)}</td>
+      <td style={numTd(80)}>{fmt2(insurAmt)}</td>
+      <td style={numTd(80)}>{fmt2(otherAmt)}</td>
+      <td style={numTd(80)}>{fmt2(gstAmt)}</td>
+      <td style={numTd(80)}>{fmt2(tcsCharge)}</td>
+      <td style={{ ...numTd(90), fontWeight: 600, color: '#185FA5' }}>{fmt2(landingCost)}</td>
 
       {/* Tax Code — opens GST & Tax modal (HTML "Click GST to enter tax details") */}
       <td style={{ ...TD_TXT, width: 80, textAlign: 'center' }} onClick={(e) => { e.stopPropagation(); onOpenGst() }}>
@@ -173,7 +201,7 @@ export function PoLineGrid({
 }: PoLineGridProps) {
   const isAdd    = mode === 'ADD'
   const isDelete = mode === 'DELETE'
-  const baseCols = 22
+  const baseCols = 30   // CR-008: 22 original + 8 charge columns
   const colSpan  = baseCols + (isDelete ? 1 : 0) + (isAdd ? 1 : 0)
 
   return (
@@ -208,6 +236,14 @@ export function PoLineGrid({
               <th style={{ ...TH, width: 88, textAlign: 'right' }}>Rate</th>
               <th style={{ ...TH, width: 82, textAlign: 'right' }}>Quantity</th>
               <th style={{ ...TH, width: 96, textAlign: 'right' }}>Value</th>
+              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Discount</th>
+              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Packing</th>
+              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Freight</th>
+              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Insurance</th>
+              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Other</th>
+              <th style={{ ...TH, width: 80, textAlign: 'right' }}>GST</th>
+              <th style={{ ...TH, width: 80, textAlign: 'right' }}>TCS</th>
+              <th style={{ ...TH, width: 90, textAlign: 'right' }}>Landing Cost</th>
               <th style={{ ...TH, width: 80, textAlign: 'center' }}>Tax Code</th>
               <th style={{ ...TH, width: 60, textAlign: 'right' }}>Tax %</th>
               <th style={{ ...TH, width: 80, textAlign: 'right' }}>Tax Amount</th>

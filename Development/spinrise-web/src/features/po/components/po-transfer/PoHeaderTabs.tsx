@@ -37,6 +37,7 @@ interface PoHeaderTabsProps {
   deliveryLocations: AddressOption[]
   billingAddresses:  AddressOption[]
   pricingTermsOpts:  AddressOption[]
+  lastPoDate?:       string | null   // CR-024: lower bound for PO Date picker
   activeTab:         TabKey
   onTabChange:       (tab: TabKey) => void
   onSupplierChange:  (s: SupplierOption | null) => void
@@ -48,6 +49,7 @@ export function PoHeaderTabs(props: PoHeaderTabsProps) {
     mode, poNo, orderValue, lineItemValue, currentPo,
     orderTypes, suppliers, carriers, formTypes, banks,
     currencies, deliveryLocations, billingAddresses, pricingTermsOpts,
+    lastPoDate,
     activeTab, onTabChange, onSupplierChange, onSupplierOpen,
   } = props
 
@@ -117,7 +119,7 @@ export function PoHeaderTabs(props: PoHeaderTabsProps) {
         <OrderDetailsTab
           mode={mode} disabled={disabled} poNo={poNo} orderValue={orderValue}
           orderTypes={orderTypes} suppliers={suppliers} formTypes={formTypes}
-          currencies={currencies}
+          currencies={currencies} lastPoDate={lastPoDate}
           onSupplierChange={onSupplierChange} onSupplierOpen={onSupplierOpen}
         />
       </div>
