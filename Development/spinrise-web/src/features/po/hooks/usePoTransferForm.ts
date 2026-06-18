@@ -20,11 +20,20 @@ import { Form } from 'antd'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
-import { getFYBounds } from '@/shared/lib/dateUtils'
+import { getFYBounds, getFYEndDate } from '@/shared/lib/dateUtils'
 import { getErrorMessage, AppError } from '@/shared/lib/errorHandler'
 import { formatPoNo, resolveGstStateDisplay } from '../types'
 import { usePoTransferStore } from '../store/usePoTransferStore'
 import { notificationService } from '@/shared/lib/notification'
+import {
+  applyGstRouteToDetail,
+  applyGstRouteToLine,
+  clampNonNegativeNumber,
+  getCurrentSystemDate,
+  getCurrentSystemDateIso,
+  getGstRouteFromState,
+  isNegativeNumber,
+} from '../utils/poTransferRules'
 import * as poApi from '../api/poTransferApi'
 import type {
   PoHeader, PoLine, PoParameters, PoPreAddChecks,
@@ -359,15 +368,24 @@ export function usePoTransferForm() {
       if (l.taxSaved) return l
       return recalcLine({
         ...l,
-        discPer:      hDiscPer    ?? 0,
-        packingPer:   hPackPer    ?? 0,
-        freightPer:   hFreightPer ?? 0,
-        insurancePer: hInsurPer   ?? 0,
-        addTaxPer:    hAddTaxPer  ?? 0,
-        tcsPer:       hTcsPer     ?? 0,
+        discPer:          hDiscPer          ?? 0,
+        packingPer:       hPackPer          ?? 0,
+        freightPer:       hFreightPer       ?? 0,
+        insurancePer:     hInsurPer         ?? 0,
+        addTaxPer:        hAddTaxPer        ?? 0,
+        tcsPer:           hTcsPer           ?? 0,
+        // CR-010: Before/After flag changes propagate immediately to unsaved lines
+        freightPos:       (hFreightPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        insuranceDuty:    (hInsuranceDuty    as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        cessTaxPos:       (hCessTaxPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        discApp:          (hDiscApp          as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        packApp:          (hPackApp          as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        exciseIncPacking: (hExciseIncPacking as 'Y' | 'N'           | undefined) ?? 'N',
+        freightType:      (hFreightType      as 'PAID' | 'TOPAY'    | undefined) ?? 'PAID',
       })
     }))
-  }, [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hTcsPer]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hTcsPer, // eslint-disable-line react-hooks/exhaustive-deps
+      hFreightPos, hInsuranceDuty, hCessTaxPos, hDiscApp, hPackApp, hExciseIncPacking, hFreightType])
 
   // ── Load lookups on mount ───────────────────────────────────────────────────
   const loadLookups = useCallback(async () => {
@@ -443,23 +461,27 @@ export function usePoTransferForm() {
   // ── GST routing adapter — SERVER-SIDE placeholder (Q4) ─────────────────────
   // The ONLY source of a line's route. UI displays the result; never derives it.
   // TODO[Q4]: confirm contract — inline on supplier select vs dedicated call.
-  const resolveGstRoute = useCallback(async (supplier: string): Promise<GstRoute> => {
-    if (!supplier) return 'LOCAL'
-    try {
-      const res = await poApi.getGstRouting(divCode, supplier)
-      return res.route
-    } catch {
-      // Provisional fallback until Q4 is confirmed — flagged, not authoritative.
-      return 'LOCAL'
+  const normalizeLineForGstState = useCallback((line: PoLine, gstState: string) => {
+    const route = getGstRouteFromState(gstState)
+    return recalcLine(applyGstRouteToLine(line, route, gstTaxCodes))
+  }, [gstTaxCodes])
+
+  const normalizePoForGstState = useCallback((po: PoHeader): PoHeader => {
+    const gstState = resolveGstStateDisplay(po.gstState)
+    return {
+      ...po,
+      gstState,
+      lines: po.lines.map((line) => normalizeLineForGstState(line, gstState)),
     }
-  }, [divCode])
+  }, [normalizeLineForGstState])
 
   // Supplier selection: fill GSTIN/GST State (UX-06) and re-route all lines (Q4).
   const onSupplierChange = useCallback(async (supplier: SupplierOption | null) => {
+    const gstState = resolveGstStateDisplay(supplier?.gstStateName ?? '', supplier?.gstStateCode)
     headerForm.setFieldsValue({
       supplier: supplier?.slCode ?? '',
       gstin:    supplier?.gstinNo ?? '',
-      gstState: resolveGstStateDisplay(supplier?.gstStateName ?? '', supplier?.gstStateCode),
+      gstState,
     })
     // GST State Code validation — must not be empty for GST compliance.
     if (supplier && !supplier.gstStateCode?.trim()) {
@@ -468,16 +490,10 @@ export function usePoTransferForm() {
         'GST State Code is not available for this supplier.',
       )
     }
-    const route = supplier ? await resolveGstRoute(supplier.slCode) : 'LOCAL'
+    const route = supplier ? getGstRouteFromState(gstState) : 'LOCAL'
     setGstRoute(route)
-    // Use the ref (kept current every render) to avoid stale closure — the async
-    // resolveGstRoute call may return after draftLines has been updated by the user.
-    setDraftLines(draftLinesRef.current.map((l) => recalcLine({
-      ...l,
-      route,
-      igstPer: route === 'LOCAL' ? 0 : l.igstPer,
-    })))
-  }, [headerForm, resolveGstRoute, setDraftLines])
+    setDraftLines(draftLinesRef.current.map((line) => normalizeLineForGstState(line, gstState)))
+  }, [headerForm, normalizeLineForGstState, setDraftLines])
 
   // ── Header tax propagation — SERVER-SIDE handler (Q5) ──────────────────────
   // Abstracted so final behaviour can be wired without touching callers.
@@ -494,7 +510,7 @@ export function usePoTransferForm() {
       return
     }
     try {
-      const updated = await poApi.applyHeaderTax(divCode, poNo, currentPo!.poDate, changes)
+      const updated = normalizePoForGstState(await poApi.applyHeaderTax(divCode, poNo, currentPo!.poDate, changes))
       setCurrentPo(updated)
       notificationService.success('Header Tax Applied', 'Header tax has been applied to all lines.')
     } catch (err) {
@@ -504,7 +520,7 @@ export function usePoTransferForm() {
 
   // ── PR Picker → add lines (VB6 delmodok_Click) ─────────────────────────────
   const mapEligibleToLine = (pr: EligiblePrLine, lineNo: number): PoLine =>
-    recalcLine({
+    normalizeLineForGstState({
       lineNo,
       prSno:         pr.prSno,
       itemCode:      pr.itemCode,
@@ -528,11 +544,9 @@ export function usePoTransferForm() {
       igstAmt:       0,
       tcsPer:        gstHeaderDefaults.tcsPer,
       tcsAmt:        0,
-      // Auto-derive tax code references from PR gstTaxCode based on server-resolved route.
-      // LOCAL → cgst/sgst code = taxCode; IGST → igst code = taxCode.
-      cgstCode:      gstRoute === 'LOCAL' ? pr.gstTaxCode : '',
-      sgstCode:      gstRoute === 'LOCAL' ? pr.gstTaxCode : '',
-      igstCode:      gstRoute === 'LOCAL' ? '' : pr.gstTaxCode,
+      cgstCode:      pr.gstTaxCode,
+      sgstCode:      pr.gstTaxCode,
+      igstCode:      pr.gstTaxCode,
       // Commercial charges + additional tax — seeded from the header (§3/§7).
       discPer:       gstHeaderDefaults.discPer,
       packingPer:    gstHeaderDefaults.packingPer,
@@ -556,9 +570,9 @@ export function usePoTransferForm() {
       taxSaved:      false,
       requesterId:   pr.requesterId,
       requesterName: pr.requesterName,
-      route:         gstRoute,          // server-resolved route (Q4)
+      route:         gstRoute,
       deleteReason:  '',
-    })
+    }, headerForm.getFieldValue('gstState') ?? '')
 
   const toDeliveryLine = (line: PoLine): DeliveryScheduleLine => ({
     lineNo:   line.lineNo,
@@ -567,7 +581,7 @@ export function usePoTransferForm() {
     uom:      line.uom,
     prNo:     line.prNo,
     poQty:    line.qty,
-    slots:    [{ slotNo: 1, shDate: null, qty: line.qty, remarks: '' }],
+    slots:    [{ slotNo: 1, shDate: getCurrentSystemDateIso(), qty: line.qty, remarks: '' }],
   })
 
   const addPrLines = (selected: EligiblePrLine[]) => {
@@ -587,6 +601,14 @@ export function usePoTransferForm() {
   const updateLineRateQty = (lineNo: number, patch: { rate?: number; qty?: number }) => {
     const target = draftLines.find((l) => l.lineNo === lineNo)
     if (!target) return
+    if (patch.rate !== undefined && patch.rate < 0) {
+      notificationService.warning('Invalid Value', 'Rate cannot be negative.')
+      patch = { ...patch, rate: 0 }
+    }
+    if (patch.qty !== undefined && patch.qty < 0) {
+      notificationService.warning('Invalid Value', 'Quantity cannot be negative.')
+      patch = { ...patch, qty: 0 }
+    }
     if (patch.qty !== undefined && patch.qty > target.balanceQty) {
       notificationService.warning(
         'Quantity Exceeded',
@@ -597,9 +619,21 @@ export function usePoTransferForm() {
     const merged = recalcLine({ ...target, ...patch })
     updateDraftLine(lineNo, merged)
     if (patch.qty !== undefined) {
-      setDeliveryLines(deliveryLines.map((d) =>
-        d.lineNo === lineNo ? { ...d, poQty: merged.qty } : d,
-      ))
+      // CR-035: sync delivery poQty AND clamp each slot's qty to the new PO Qty.
+      // Prevents the Scheduled Qty from silently exceeding the PO Qty after an inline edit.
+      const newPoQty = merged.qty
+      let slotWasClamped = false
+      setDeliveryLines(deliveryLines.map((d) => {
+        if (d.lineNo !== lineNo) return d
+        const slots = d.slots.map((s) => {
+          const clamped = round3(Math.min(s.qty, newPoQty))
+          if (clamped < s.qty) slotWasClamped = true
+          return { ...s, qty: clamped }
+        })
+        return { ...d, poQty: newPoQty, slots }
+      }))
+      if (slotWasClamped)
+        notificationService.warning('Delivery Schedule Adjusted', 'Scheduled Qty has been automatically reduced to match the updated PO Qty.')
     }
   }
 
@@ -609,18 +643,42 @@ export function usePoTransferForm() {
   const applyGstDetail = (lineNo: number, detail: LineTaxDetail) => {
     const target = draftLines.find((l) => l.lineNo === lineNo)
     if (!target) return
+    const safeDetail = applyGstRouteToDetail({
+      ...detail,
+      rate: detail.rate !== undefined ? clampNonNegativeNumber(detail.rate) : undefined,
+      qty:  detail.qty  !== undefined ? clampNonNegativeNumber(detail.qty)  : undefined,
+      tcsPer:        clampNonNegativeNumber(detail.tcsPer),
+      discPer:       clampNonNegativeNumber(detail.discPer),
+      packingPer:    clampNonNegativeNumber(detail.packingPer),
+      freightPer:    clampNonNegativeNumber(detail.freightPer),
+      insurancePer:  clampNonNegativeNumber(detail.insurancePer),
+      cessPer:       clampNonNegativeNumber(detail.cessPer),
+      fcaFob:        clampNonNegativeNumber(detail.fcaFob),
+      addTaxPer:     clampNonNegativeNumber(detail.addTaxPer),
+    }, target.route, gstTaxCodes)
     const merged = {
       ...target,
-      ...detail,
-      rate: detail.rate ?? target.rate,
-      qty:  detail.qty  ?? target.qty,
+      ...safeDetail,
+      rate: safeDetail.rate ?? target.rate,
+      qty:  safeDetail.qty  ?? target.qty,
       taxSaved: true,
     }
-    updateDraftLine(lineNo, recalcLine(merged))
-    if (detail.qty !== undefined && detail.qty !== target.qty) {
-      setDeliveryLines(deliveryLines.map((d) =>
-        d.lineNo === lineNo ? { ...d, poQty: detail.qty! } : d,
-      ))
+    updateDraftLine(lineNo, recalcLine(applyGstRouteToLine(merged, target.route, gstTaxCodes)))
+    if (safeDetail.qty !== undefined && safeDetail.qty !== target.qty) {
+      // CR-035: clamp delivery slot quantities when GST modal changes the line qty.
+      const newPoQty = safeDetail.qty!
+      let slotWasClamped = false
+      setDeliveryLines(deliveryLines.map((d) => {
+        if (d.lineNo !== lineNo) return d
+        const slots = d.slots.map((s) => {
+          const clamped = round3(Math.min(s.qty, newPoQty))
+          if (clamped < s.qty) slotWasClamped = true
+          return { ...s, qty: clamped }
+        })
+        return { ...d, poQty: newPoQty, slots }
+      }))
+      if (slotWasClamped)
+        notificationService.warning('Delivery Schedule Adjusted', 'Scheduled Qty has been automatically reduced to match the updated PO Qty.')
     }
     closeGstModal()
   }
@@ -651,7 +709,8 @@ export function usePoTransferForm() {
     payMode:     'DIRECT',
     cancelled:   false,
     formType:    formTypes[0]?.formCode ?? '',   // auto-default first available form type
-    carrier:     carriers[0]?.carCode  ?? '',   // CR-020: default first carrier
+    carrier:     '',
+    deliveryDate: getCurrentSystemDate(),
     // Numeric fields default to 0 so validateFields() never returns null.
     cgstPer: 0, sgstPer: 0, igstPer: 0, tcsPer: 0,
     discPer: 0, discAmt: 0,
@@ -676,7 +735,7 @@ export function usePoTransferForm() {
     headerForm.setFieldsValue(headerDefaults())
     setDraftLines([])
     setDeliveryLines([])
-    setGstRoute('LOCAL')
+    setGstRoute(getGstRouteFromState(''))
     setMode('ADD')
     resetToHeaderTab()   // Add Mode opens the Header (Order Details) tab
     return true
@@ -732,6 +791,7 @@ export function usePoTransferForm() {
 
   // ── Load existing PO (VIEW) ────────────────────────────────────────────────
   function fillHeaderFromPo(po: PoHeader) {
+    setGstRoute(getGstRouteFromState(po.gstState))
     headerForm.setFieldsValue({
       poDate:        dayjs(po.poDate),
       orderType:     po.orderType,
@@ -808,7 +868,7 @@ export function usePoTransferForm() {
     if (!divCode) return null
     setNavLoading(true)
     try {
-      const po = await poApi.getById(divCode, poNo, poDate)
+      const po = normalizePoForGstState(await poApi.getById(divCode, poNo, poDate))
       // Supplier list is lazy-loaded (on dropdown open) and may be empty in VIEW.
       // Inject a synthetic option so the Select resolves the label immediately.
       // React 18 batches this with fillHeaderFromPo — zero flash, single render.
@@ -840,20 +900,21 @@ export function usePoTransferForm() {
     try {
       const po = await poApi.getLastRecord(divCode, yfDate, ylDate)
       if (po) {
+        const normalizedPo = normalizePoForGstState(po)
         setSuppliers((prev) =>
-          prev.some((s) => s.slCode === po.supplier) ? prev : [
-            { slCode: po.supplier, slName: po.supplierName, gstinNo: po.gstin, gstStateCode: '', gstStateName: po.gstState, city: '' },
+          prev.some((s) => s.slCode === normalizedPo.supplier) ? prev : [
+            { slCode: normalizedPo.supplier, slName: normalizedPo.supplierName, gstinNo: normalizedPo.gstin, gstStateCode: '', gstStateName: normalizedPo.gstState, city: '' },
             ...prev,
           ],
         )
-        setCurrentPo(po)
-        fillHeaderFromPo(po)
-        setDeliveryLines(po.delivery ?? [])
+        setCurrentPo(normalizedPo)
+        fillHeaderFromPo(normalizedPo)
+        setDeliveryLines(normalizedPo.delivery ?? [])
         resetToHeaderTab()
       }
     } catch { /* empty list is fine */ }
     finally { setNavLoading(false) }
-  }, [divCode, processingDate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [divCode, normalizePoForGstState, processingDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build the navigation index (all PO numbers in the FY, ascending) for the
   // First / Prev / Next / Last toolbar buttons. Refreshed after Save/Delete.
@@ -868,12 +929,99 @@ export function usePoTransferForm() {
     } catch { setNavList([]) }
   }, [divCode, processingDate])
 
+  const headerNegativeFields: { key: keyof PoHeaderFormValues; label: string }[] = [
+    { key: 'currRate', label: 'Currency Rate' },
+    { key: 'roundOff', label: 'Round Off' },
+    { key: 'tcsPer', label: 'TCS %' },
+    { key: 'discPer', label: 'Discount %' },
+    { key: 'discAmt', label: 'Discount Amount' },
+    { key: 'freightPer', label: 'Freight %' },
+    { key: 'freightAmt', label: 'Freight Amount' },
+    { key: 'packPer', label: 'Packing %' },
+    { key: 'packAmt', label: 'Packing Amount' },
+    { key: 'insurPer', label: 'Insurance %' },
+    { key: 'insurAmt', label: 'Insurance Amount' },
+    { key: 'addTaxPer', label: 'GST %' },
+    { key: 'addTaxAmtHdr', label: 'GST Amount' },
+    { key: 'cessPer', label: 'Other %' },
+    { key: 'cessAmt', label: 'Other Amount' },
+    { key: 'fcaFob', label: 'FCA / FOB' },
+    { key: 'creditDays', label: 'Credit Days' },
+    { key: 'advAmt', label: 'Advance Amount' },
+  ]
+
+  const lineNegativeFields: { key: keyof PoLine; label: string }[] = [
+    { key: 'qty', label: 'Quantity' },
+    { key: 'rate', label: 'Rate' },
+    { key: 'discPer', label: 'Discount %' },
+    { key: 'packingPer', label: 'Packing %' },
+    { key: 'freightPer', label: 'Freight %' },
+    { key: 'insurancePer', label: 'Insurance %' },
+    { key: 'cessPer', label: 'Other %' },
+    { key: 'cgstPer', label: 'CGST %' },
+    { key: 'cgstAmt', label: 'CGST Amount' },
+    { key: 'sgstPer', label: 'SGST %' },
+    { key: 'sgstAmt', label: 'SGST Amount' },
+    { key: 'igstPer', label: 'IGST %' },
+    { key: 'igstAmt', label: 'IGST Amount' },
+    { key: 'tcsPer', label: 'TCS %' },
+    { key: 'tcsAmt', label: 'TCS Amount' },
+    { key: 'addTaxPer', label: 'GST %' },
+    { key: 'addTaxAmt', label: 'GST Amount' },
+    { key: 'fcaFob', label: 'FCA / FOB' },
+    { key: 'value', label: 'Line Value' },
+    { key: 'taxableValue', label: 'Taxable Value' },
+    { key: 'taxAmt', label: 'GST Amount' },
+    { key: 'netAmount', label: 'Landing Cost' },
+  ]
+
+  const findNegativeHeaderField = (values: PoHeaderFormValues) => {
+    for (const field of headerNegativeFields) {
+      if (isNegativeNumber(values[field.key])) return field
+    }
+    return null
+  }
+
+  const findNegativeLineIssue = (working: PoLine[]) => {
+    for (const line of working) {
+      for (const field of lineNegativeFields) {
+        if (isNegativeNumber(line[field.key])) {
+          return { itemCode: line.itemCode, label: field.label }
+        }
+      }
+    }
+    return null
+  }
+
+  const findNegativeDeliveryIssue = () => {
+    for (const delivery of deliveryLines) {
+      for (const slot of delivery.slots) {
+        if (isNegativeNumber(slot.qty)) {
+          return { itemCode: delivery.itemCode, label: 'Scheduled Qty' }
+        }
+      }
+    }
+    return null
+  }
+
   // ── Client-side validation (mirrors BR register; server is authoritative) ──
   const validateLines = (onBodyTab?: (tab: 'lines' | 'delivery') => void): boolean => {
     const working = draftLines.filter((l) => l.itemCode.trim() !== '')
     if (working.length === 0) {
       notificationService.warning('No Line Items', 'Add at least one PR line before saving.')
       onBodyTab?.('lines')
+      return false
+    }
+    const negativeLine = findNegativeLineIssue(working)
+    if (negativeLine) {
+      notificationService.warning('Invalid Value', `${negativeLine.label} cannot be negative for item ${negativeLine.itemCode}.`)
+      onBodyTab?.('lines')
+      return false
+    }
+    const negativeDelivery = findNegativeDeliveryIssue()
+    if (negativeDelivery) {
+      notificationService.warning('Invalid Value', `${negativeDelivery.label} cannot be negative for item ${negativeDelivery.itemCode}.`)
+      onBodyTab?.('delivery')
       return false
     }
     // BR-07 Rate > 0
@@ -919,6 +1067,16 @@ export function usePoTransferForm() {
       onBodyTab?.('lines')
       return false
     }
+    // CR-027: Delivery slot dates must not be in the past
+    const today = dayjs().startOf('day')
+    const pastSlots = deliveryLines.filter((d) =>
+      d.slots.some((s) => s.shDate && dayjs(s.shDate).isBefore(today, 'day')),
+    )
+    if (pastSlots.length) {
+      notificationService.warning('Invalid Delivery Date', `Delivery Date cannot be in the past for: ${pastSlots.map((d) => d.itemCode).join(', ')}. Delivery dates must be today or a future date.`)
+      onBodyTab?.('delivery')
+      return false
+    }
     // UX-01 delivery reconciliation — block over-allocation; under is allowed.
     const overSched = deliveryLines.filter((d) =>
       round3(d.slots.reduce((s, x) => s + (Number(x.qty) || 0), 0)) > round3(d.poQty),
@@ -948,11 +1106,21 @@ export function usePoTransferForm() {
   // Returns true on success, or the offending field name (string) on failure so
   // the caller can navigate to the correct tab and focus the invalid field.
   const validateHeaderConditionals = (v: PoHeaderFormValues): true | string => {
+    const negativeHeader = findNegativeHeaderField(v)
+    if (negativeHeader) {
+      notificationService.warning('Invalid Value', `${negativeHeader.label} cannot be negative.`)
+      return negativeHeader.key
+    }
     // GST State Code guard: a selected supplier that has no gstStateCode cannot
     // route GST correctly. Block save so the SP never receives an empty state.
     if (v.supplier?.trim() && !v.gstState?.trim()) {
       notificationService.error('GST State Missing', 'The selected supplier does not have a GST State Code. Select a valid supplier before saving.')
       return 'supplier'
+    }
+    // BR-14 Carrier mandatory (CR-020: inline rule removed from form; validated here at save)
+    if (!v.carrier?.trim()) {
+      notificationService.warning('Mandatory Fields Missing', 'Carrier is required.')
+      return 'carrier'
     }
     // BR-15 Bank → Bank Code + Cheque No.
     if (v.payMode === 'BANK') {
@@ -977,10 +1145,33 @@ export function usePoTransferForm() {
       notificationService.warning('Invalid PO Date', 'PO Date cannot be a future date.')
       return 'poDate'
     }
+    // CR-024: PO Date must be >= last PO Date
+    if (preChecks?.lastPoDate && v.poDate && v.poDate.isBefore(dayjs(preChecks.lastPoDate), 'day')) {
+      notificationService.warning('Invalid PO Date', `PO Date cannot be earlier than the last PO date (${dayjs(preChecks.lastPoDate).format('DD-MMM-YYYY')}). Allowed range: ${dayjs(preChecks.lastPoDate).format('DD-MMM-YYYY')} – ${dayjs(processingDate ?? undefined).format('DD-MMM-YYYY')}.`)
+      return 'poDate'
+    }
     // CR-018: Reference Date cannot be later than PO Date
     if (v.refDate && v.poDate && v.refDate.isAfter(v.poDate, 'day')) {
       notificationService.warning('Invalid Reference Date', 'Reference Date cannot be later than PO Date.')
       return 'refDate'
+    }
+    // CR-025: Reference Date cannot be a future date
+    if (v.refDate && v.refDate.isAfter(dayjs(), 'day')) {
+      notificationService.warning('Invalid Reference Date', 'Reference Date cannot be a future date.')
+      return 'refDate'
+    }
+    // CR-027 / CR-028: Delivery Date must be today or future and within FY
+    if (v.deliveryDate) {
+      const { yfDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
+      const fyEndFull  = dayjs(getFYEndDate(processingDate))
+      if (v.deliveryDate.isBefore(dayjs(), 'day')) {
+        notificationService.warning('Invalid Delivery Date', 'Delivery Date must be greater than or equal to today\'s date.')
+        return 'deliveryDate'
+      }
+      if (v.deliveryDate.isBefore(dayjs(yfDate), 'day') || v.deliveryDate.isAfter(fyEndFull, 'day')) {
+        notificationService.warning('Invalid Delivery Date', 'Selected date must be within the active financial year.')
+        return 'deliveryDate'
+      }
     }
     return true
   }
@@ -1055,13 +1246,13 @@ export function usePoTransferForm() {
         cgstPer:       v.cgstPer ?? 0, sgstPer: v.sgstPer ?? 0, igstPer: v.igstPer ?? 0, tcsPer: v.tcsPer ?? 0,
         discPer:       v.discPer,
         freightAmt:    v.freightAmt, packPer: v.packPer, insurPer: v.insurPer,
-        addTaxPer:     v.addTaxPer, fileNo: v.fileNo, fcaFob: v.fcaFob,
+        addTaxPer:     v.addTaxPer ?? 0, fileNo: v.fileNo, fcaFob: v.fcaFob,
         freightType:   v.freightType, discApp: v.discApp, packApp: v.packApp,
         discountAmt:          v.discAmt         ?? 0,
         freightPer:           v.freightPer      ?? 0,
         packingAmt:           v.packAmt         ?? 0,
         insuranceAmt:         v.insurAmt        ?? 0,
-        addTaxAmt:            v.addTaxAmtHdr    ?? 0,
+        addTaxAmt:            0,
         cessPer:              v.cessPer         ?? 0,
         cessAmt:              v.cessAmt         ?? 0,
         freightPosition:      v.freightPos,
@@ -1120,7 +1311,7 @@ export function usePoTransferForm() {
       const request = buildAddRequest(values)
       // Server allocates the PO number atomically after validation (CD-03 / UX-04).
       const result = await poApi.addPo(divCode, yfDate, ylDate, request)
-      const saved = await poApi.getById(divCode, result.poNo, result.poDate)
+      const saved = normalizePoForGstState(await poApi.getById(divCode, result.poNo, result.poDate))
       setCurrentPo(saved)
       fillHeaderFromPo(saved)
       resetToView()

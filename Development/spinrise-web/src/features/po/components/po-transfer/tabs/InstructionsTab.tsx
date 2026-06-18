@@ -1,7 +1,12 @@
 import { Col, DatePicker, Form, Input, InputNumber, Row, Select } from 'antd'
+import type { Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
 import { TabPanel } from './_fieldKit'
 import type { CarrierOption, AddressOption } from '../../../types'
+import { useAuthStore } from '@/features/auth/store/useAuthStore'
+import { getFYBounds, getFYEndDate, fyFutureDisabledDate } from '@/shared/lib/dateUtils'
 import { prefixFilterOption, priorityFilterSort } from '@/shared/utils/selectUtils'
+import { NON_NEGATIVE_INPUT_PROPS } from '../../../utils/poTransferRules'
 
 // ── Instructions tab (HTML #htab-panel-instructions) ─────────────────────────
 // Carrier is mandatory (BR-14, validated on Save). Pricing Terms becomes
@@ -21,14 +26,24 @@ const mb   = { marginBottom: 8 }
 const full = { width: '100%' }
 
 export function InstructionsTab({ disabled, carriers, deliveryLocations, billingAddresses, pricingTermsOpts }: InstructionsTabProps) {
+  // CR-027 / CR-028: FY bounds for delivery date (full FY end — future dates allowed)
+  const processingDate = useAuthStore((s) => s.processingDate)
+  const today     = dayjs()
+  const { yfDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
+  const fyStart   = dayjs(yfDate)
+  const fyEndFull = dayjs(getFYEndDate(processingDate))
+
   return (
     <TabPanel>
       <Row gutter={[12, 0]}>
         <Col span={6}>
+          {/* CR-034: Carrier is mandatory. No default — starts blank in ADD mode.
+              BR-14 is enforced here (field-level) AND at save time in the hook. */}
           <Form.Item name="carrier" label="Carrier" required
-            rules={[{ required: true, message: 'Carrier is required' }]}
-            validateTrigger="onBlur" style={mb}>
-            <Select showSearch optionFilterProp="label" placeholder="02 — COURIER"
+            validateTrigger="onBlur"
+            rules={[{ required: true, message: 'Please select Carrier.' }]}
+            style={mb}>
+            <Select showSearch optionFilterProp="label" placeholder="Select carrier…"
               allowClear disabled={disabled}
               filterOption={prefixFilterOption} filterSort={priorityFilterSort}
               options={carriers.map((c) => ({ value: c.carCode, label: `${c.carCode} – ${c.carName}` }))} />
@@ -58,13 +73,28 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
         </Col>
         <Col span={4}>
           <Form.Item name="creditDays" label="Credit Days" style={mb}>
-            <InputNumber min={0} controls={false} disabled={disabled}
+            <InputNumber {...NON_NEGATIVE_INPUT_PROPS} controls={false} disabled={disabled}
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} />
           </Form.Item>
         </Col>
+        {/* CR-027 / CR-028: Delivery Date must be today or future, within active FY */}
         <Col span={4}>
-          <Form.Item name="deliveryDate" label="Delivery Date" style={mb}>
-            <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} />
+          <Form.Item name="deliveryDate" label="Delivery Date"
+            validateTrigger={['onChange', 'onBlur']}
+            rules={[{
+              validator: (_, val: Dayjs | null) => {
+                if (!val) return Promise.resolve()
+                if (val.isBefore(fyStart, 'day') || val.isAfter(fyEndFull, 'day'))
+                  return Promise.reject(`Delivery Date must be within the active financial year (${fyStart.format('DD-MMM-YYYY')} – ${fyEndFull.format('DD-MMM-YYYY')}).`)
+                if (val.isBefore(today, 'day'))
+                  return Promise.reject('Delivery Date must be greater than or equal to today\'s date.')
+                return Promise.resolve()
+              },
+            }]}
+            style={mb}>
+            <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled}
+              disabledDate={fyFutureDisabledDate(processingDate)}
+            />
           </Form.Item>
         </Col>
         <Col span={4}>

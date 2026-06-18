@@ -1,22 +1,34 @@
 import { useEffect } from 'react'
 import { Col, Form, Input, InputNumber, Radio, Row } from 'antd'
 import { TabPanel, Section } from './_fieldKit'
+import { NON_NEGATIVE_INPUT_PROPS, clampNonNegativeNumber } from '../../../utils/poTransferRules'
 
 // ── Tax / Discount tab (HTML #htab-panel-tax) ────────────────────────────────
-// Header-level rates/charges. CGST/SGST/IGST removed from UI per spec — GST
-// percentages come from item-level GST Tax Details modal only.
-//
-// Each charge has both % and Amount fields; entering either recalculates the other
-// using lineItemValue (Σ Rate × Qty across all lines) as the base.
+// CR-026: Deductions & Charges now use a compact paired layout — each charge
+// shows its label once with % and Amount inputs side by side beneath it.
+// All calculations and API mappings are unchanged from Sprint 1.
 
 interface TaxDiscountTabProps {
   disabled:      boolean
   lineItemValue: number   // Σ Rate × Qty — base for % ↔ Amount calculations
 }
 
-const pct = { precision: 2, controls: false as const, style: { width: '100%', fontFamily: 'monospace', textAlign: 'right' as const } }
+const pct = {
+  ...NON_NEGATIVE_INPUT_PROPS,
+  precision: 2,
+  controls: false as const,
+  style: { width: '100%', fontFamily: 'monospace', textAlign: 'right' as const },
+}
 const mb  = { marginBottom: 8 }
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+const CHARGES: { label: string; perName: string; amtName: string }[] = [
+  { label: 'Discount',  perName: 'discPer',    amtName: 'discAmt'    },
+  { label: 'Packing',   perName: 'packPer',    amtName: 'packAmt'    },
+  { label: 'Freight',   perName: 'freightPer', amtName: 'freightAmt' },
+  { label: 'Insurance', perName: 'insurPer',   amtName: 'insurAmt'   },
+  { label: 'Cess',      perName: 'cessPer',    amtName: 'cessAmt'    },
+]
 
 export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps) {
   const form = Form.useFormInstance()
@@ -24,12 +36,12 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
   const base = lineItemValue || 0
 
   const onPerChange = (amtField: string, value: number | string | null) => {
-    const per = Number(value) || 0
+    const per = clampNonNegativeNumber(value)
     form.setFieldValue(amtField, round2(per * base / 100))
   }
 
   const onAmtChange = (perField: string, value: number | string | null) => {
-    const amt = Number(value) || 0
+    const amt = clampNonNegativeNumber(value)
     const per = base > 0 ? round2(amt / base * 100) : 0
     form.setFieldValue(perField, per)
   }
@@ -41,15 +53,14 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
   useEffect(() => {
     if (disabled || base === 0) return
     const v = form.getFieldsValue([
-      'discPer', 'freightPer', 'packPer', 'insurPer', 'addTaxPer', 'cessPer',
+      'discPer', 'freightPer', 'packPer', 'insurPer', 'cessPer',
     ])
     form.setFieldsValue({
-      discAmt:      round2((Number(v.discPer)    || 0) * base / 100),
-      freightAmt:   round2((Number(v.freightPer) || 0) * base / 100),
-      packAmt:      round2((Number(v.packPer)    || 0) * base / 100),
-      insurAmt:     round2((Number(v.insurPer)   || 0) * base / 100),
-      addTaxAmtHdr: round2((Number(v.addTaxPer)  || 0) * base / 100),
-      cessAmt:      round2((Number(v.cessPer)    || 0) * base / 100),
+      discAmt:    round2((Number(v.discPer)    || 0) * base / 100),
+      freightAmt: round2((Number(v.freightPer) || 0) * base / 100),
+      packAmt:    round2((Number(v.packPer)    || 0) * base / 100),
+      insurAmt:   round2((Number(v.insurPer)   || 0) * base / 100),
+      cessAmt:    round2((Number(v.cessPer)    || 0) * base / 100),
     })
   }, [lineItemValue]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -63,87 +74,59 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
         <Col span={3}><Form.Item name="fileNo" label="File No." style={mb}><Input disabled={disabled} style={{ fontFamily: 'monospace' }} /></Form.Item></Col>
       </Row>
 
-      {/* Deductions & Charges — dual % + Amount fields */}
+      {/* CR-026: Deductions & Charges — compact paired layout */}
       <Section label="Deductions &amp; Charges" />
-      <Row gutter={[12, 0]}>
-        <Col span={2}>
-          <Form.Item name="discPer" label="Discount %" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onPerChange('discAmt', v)} />
-          </Form.Item>
-        </Col>
-        <Col span={2}>
-          <Form.Item name="discAmt" label="Discount Amount" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onAmtChange('discPer', v)} />
-          </Form.Item>
-        </Col>
+      <div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, minmax(180px, 1fr))',
+    gap: '12px',
+    padding: '2px 0 10px',
+  }}
+>
+  {CHARGES.map(({ label, perName, amtName }) => (
+    <div
+      key={perName}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: '#475569',
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </div>
 
-        <Col span={2}>
-          <Form.Item name="freightPer" label="Freight %" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onPerChange('freightAmt', v)} />
-          </Form.Item>
-        </Col>
-        <Col span={2}>
-          <Form.Item name="freightAmt" label="Freight Amount" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onAmtChange('freightPer', v)} />
-          </Form.Item>
-        </Col>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <Form.Item
+          name={perName}
+          style={{ marginBottom: 0, flex: 1 }}
+        >
+          <InputNumber
+            {...pct}
+            addonAfter="%"
+            disabled={disabled}
+            onChange={(v) => onPerChange(amtName, v)}
+          />
+        </Form.Item>
 
-        <Col span={2}>
-          <Form.Item name="packPer" label="Packing %" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onPerChange('packAmt', v)} />
-          </Form.Item>
-        </Col>
-        <Col span={2}>
-          <Form.Item name="packAmt" label="Packing Amount" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onAmtChange('packPer', v)} />
-          </Form.Item>
-        </Col>
-
-        <Col span={2}>
-          <Form.Item name="insurPer" label="Insurance %" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onPerChange('insurAmt', v)} />
-          </Form.Item>
-        </Col>
-        <Col span={2}>
-          <Form.Item name="insurAmt" label="Insurance Amount" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onAmtChange('insurPer', v)} />
-          </Form.Item>
-        </Col>
-
-        <Col span={2}>
-          <Form.Item name="addTaxPer" label="Add. Tax %" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onPerChange('addTaxAmtHdr', v)} />
-          </Form.Item>
-        </Col>
-        <Col span={2}>
-          <Form.Item name="addTaxAmtHdr" label="Add. Tax Amount" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onAmtChange('addTaxPer', v)} />
-          </Form.Item>
-        </Col>
-
-        <Col span={2}>
-          <Form.Item name="cessPer" label="Cess %" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onPerChange('cessAmt', v)} />
-          </Form.Item>
-        </Col>
-        <Col span={2}>
-          <Form.Item name="cessAmt" label="Cess Amount" style={mb}>
-            <InputNumber {...pct} disabled={disabled}
-              onChange={(v) => onAmtChange('cessPer', v)} />
-          </Form.Item>
-        </Col>
-      </Row>
+        <Form.Item
+          name={amtName}
+          style={{ marginBottom: 0, flex: 1 }}
+        >
+          <InputNumber
+            {...pct}
+            addonAfter="₹"
+            disabled={disabled}
+            onChange={(v) => onAmtChange(perName, v)}
+          />
+        </Form.Item>
+      </div>
+    </div>
+  ))}
+</div>
 
       {/* Applicability */}
       <Section label="Applicability" />

@@ -3,11 +3,12 @@ import { Button, ConfigProvider, Input, InputNumber, Modal, Radio, Select } from
 import type { PoLine, LineTaxDetail, ScreenMode, GstTaxCodeOption } from '../types'
 import type { GstHeaderDefaults } from '../hooks/usePoTransferForm'
 import { notificationService } from '@/shared/lib/notification'
+import { NON_NEGATIVE_INPUT_PROPS, clampNonNegativeNumber } from '../utils/poTransferRules'
 
 // ── GST & Tax Details modal ──────────────────────────────────────────────────
 //
 // Layout (no business logic changes):
-//   A. Tax Config       — 3-col grid: HSN / Route / Code · AddTaxCode / TCS% / FCA-FOB
+//   A. Tax Config       — 3-col grid: HSN / Route / Code · TCS% / FCA-FOB  (AddTaxCode removed CR-011a)
 //   B. Charges + Applic — 2-col side-by-side: charge grid LEFT, applicability RIGHT
 //   D. Tax Breakdown    — compact right panel with collapsible detail
 //
@@ -49,8 +50,6 @@ interface DraftTax {
   insurancePer:     number
   cessPer:          number
   fcaFob:           number
-  addTaxCode:       string
-  addTaxPer:        number
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
   cessTaxPos:       'BEFORE' | 'AFTER'
@@ -88,7 +87,6 @@ const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
     cgstPer:          line?.cgstPer    ?? 0,
     sgstPer:          line?.sgstPer    ?? 0,
     igstPer:          line?.igstPer    ?? 0,
-    addTaxCode:       line?.addTaxCode ?? '',
     tcsPer:           useHeader ? hd.tcsPer       : (line?.tcsPer       ?? 0),
     discPer,
     packingPer,
@@ -96,7 +94,6 @@ const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
     insurancePer,
     cessPer,
     fcaFob:           useHeader ? hd.fcaFob       : (line?.fcaFob       ?? 0),
-    addTaxPer:        useHeader ? hd.addTaxPer    : (line?.addTaxPer    ?? 0),
     // Applicability: saved lines use their stored value; unsaved lines use Header.
     freightPos:       line?.taxSaved ? (line.freightPos       ?? hd.freightPos)       : hd.freightPos,
     insuranceDuty:    line?.taxSaved ? (line.insuranceDuty    ?? hd.insuranceDuty)    : hd.insuranceDuty,
@@ -152,13 +149,12 @@ export function GstTaxDetailsModal({
   if (tax.packApp      === 'BEFORE') gstBase = round2(gstBase + tax.packingAmt)
   if (tax.insuranceDuty === 'BEFORE') gstBase = round2(gstBase + tax.insuranceAmt)
 
-  const addTaxAmt = pctOf(taxable, tax.addTaxPer)
   const cgstAmt   = isLocal ? pctOf(gstBase, tax.cgstPer) : 0
   const sgstAmt   = isLocal ? pctOf(gstBase, tax.sgstPer) : 0
   const igstAmt   = isLocal ? 0 : pctOf(gstBase, tax.igstPer)
   const tcsAmt    = pctOf(taxable, tax.tcsPer)
   const gstTotal  = round2(cgstAmt + sgstAmt + igstAmt)
-  const totalTax  = round2(gstTotal + addTaxAmt + tax.cessAmt + tcsAmt)
+  const totalTax  = round2(gstTotal + tax.cessAmt + tcsAmt)
   const netAmount = round2(
     taxable - tax.discAmt + tax.packingAmt + tax.freightAmt + tax.insuranceAmt + totalTax,
   )
@@ -183,38 +179,43 @@ export function GstTaxDetailsModal({
 
   // CR-011: % change → update per + re-derive stored amount (no snap-back)
   const setDiscPer  = (v: number | null) => {
-    const per = v ?? 0; setTax((p) => ({ ...p, discPer: per, discAmt: pctOf(taxable, per) }))
+    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, discPer: per, discAmt: pctOf(taxable, per) }))
   }
   const setPackPer  = (v: number | null) => {
-    const per = v ?? 0; setTax((p) => ({ ...p, packingPer: per, packingAmt: pctOf(taxable - p.discAmt, per) }))
+    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, packingPer: per, packingAmt: pctOf(taxable - p.discAmt, per) }))
   }
   const setFrePer   = (v: number | null) => {
-    const per = v ?? 0; setTax((p) => ({ ...p, freightPer: per, freightAmt: pctOf(taxable, per) }))
+    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, freightPer: per, freightAmt: pctOf(taxable, per) }))
   }
   const setInsurPer = (v: number | null) => {
-    const per = v ?? 0; setTax((p) => ({ ...p, insurancePer: per, insuranceAmt: pctOf(taxable, per) }))
+    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, insurancePer: per, insuranceAmt: pctOf(taxable, per) }))
   }
   const setCessPer  = (v: number | null) => {
-    const per = v ?? 0; setTax((p) => ({ ...p, cessPer: per, cessAmt: pctOf(taxable, per) }))
+    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, cessPer: per, cessAmt: pctOf(taxable, per) }))
   }
 
   // Amount change → store directly + back-compute per only (amount stays as typed)
   const onDiscAmt  = (v: number | null) =>
-    setTax((p) => ({ ...p, discAmt: v ?? 0, discPer: backCalcPer(v ?? 0, taxable) }))
+    setTax((p) => ({ ...p, discAmt: clampNonNegativeNumber(v), discPer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
   const onPackAmt  = (v: number | null) =>
-    setTax((p) => ({ ...p, packingAmt: v ?? 0, packingPer: backCalcPer(v ?? 0, taxable - p.discAmt) }))
+    setTax((p) => ({ ...p, packingAmt: clampNonNegativeNumber(v), packingPer: backCalcPer(clampNonNegativeNumber(v), taxable - p.discAmt) }))
   const onFreAmt   = (v: number | null) =>
-    setTax((p) => ({ ...p, freightAmt: v ?? 0, freightPer: backCalcPer(v ?? 0, taxable) }))
+    setTax((p) => ({ ...p, freightAmt: clampNonNegativeNumber(v), freightPer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
   const onInsurAmt = (v: number | null) =>
-    setTax((p) => ({ ...p, insuranceAmt: v ?? 0, insurancePer: backCalcPer(v ?? 0, taxable) }))
+    setTax((p) => ({ ...p, insuranceAmt: clampNonNegativeNumber(v), insurancePer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
   const onCessAmt  = (v: number | null) =>
-    setTax((p) => ({ ...p, cessAmt: v ?? 0, cessPer: backCalcPer(v ?? 0, taxable) }))
+    setTax((p) => ({ ...p, cessAmt: clampNonNegativeNumber(v), cessPer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
 
   // ── Apply ─────────────────────────────────────────────────────────────────
   const handleApply = () => {
     if (isDelete && !deleteReason.trim()) {
       setReasonError(true)
       notificationService.warning('Delete Reason Required', 'A delete reason is mandatory.')
+      return
+    }
+    // CR-036: qty must be > 0 — same rule enforced in the PO Grid (status='error' on qty ≤ 0)
+    if (!isDelete && tax.localQty <= 0) {
+      notificationService.warning('Invalid Quantity', 'Quantity must be greater than zero.')
       return
     }
     if (!isDelete && !tax.hsnCode.trim()) {
@@ -237,8 +238,8 @@ export function GstTaxDetailsModal({
       insurancePer:     tax.insurancePer,
       cessPer:          tax.cessPer,
       fcaFob:           tax.fcaFob,
-      addTaxCode:       tax.addTaxCode.trim(),
-      addTaxPer:        tax.addTaxPer,
+      addTaxCode:       '',    // CR-011a: removed from modal; header-level addTaxPer still propagates via hook
+      addTaxPer:        0,     // CR-011a: removed from modal
       freightPos:       tax.freightPos,
       insuranceDuty:    tax.insuranceDuty,
       cessTaxPos:       tax.cessTaxPos,
@@ -284,17 +285,19 @@ export function GstTaxDetailsModal({
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <label style={{ fontSize: 11, color: '#888' }}>Qty</label>
               <InputNumber
-                size="small" min={0} precision={3} controls={false} disabled={isDelete || isView}
+                {...NON_NEGATIVE_INPUT_PROPS}
+                size="small" precision={3} controls={false} disabled={isDelete || isView}
                 value={tax.localQty}
                 style={{ width: 90, fontFamily: 'monospace', textAlign: 'right' }}
-                onChange={(v) => set('localQty', v ?? 0)}
+                onChange={(v) => set('localQty', clampNonNegativeNumber(v))}
               />
               <label style={{ fontSize: 11, color: '#888', marginLeft: 4 }}>Rate</label>
               <InputNumber
-                size="small" min={0} precision={4} controls={false} disabled={isDelete || isView}
+                {...NON_NEGATIVE_INPUT_PROPS}
+                size="small" precision={4} controls={false} disabled={isDelete || isView}
                 value={tax.localRate}
                 style={{ width: 110, fontFamily: 'monospace', textAlign: 'right' }}
-                onChange={(v) => set('localRate', v ?? 0)}
+                onChange={(v) => set('localRate', clampNonNegativeNumber(v))}
               />
             </span>
           </div>
@@ -336,17 +339,19 @@ export function GstTaxDetailsModal({
             </Field>
             <Field label="TCS %">
               <InputNumber
-                size="small" min={0} precision={2} controls={false}
+                {...NON_NEGATIVE_INPUT_PROPS}
+                size="small" precision={2} controls={false}
                 style={{ ...full, ...monoR }} value={tax.tcsPer}
-                onChange={(v) => set('tcsPer', v ?? 0)}
+                onChange={(v) => set('tcsPer', clampNonNegativeNumber(v))}
                 disabled={isDelete || isView}
               />
             </Field>
             <Field label="FCA / FOB">
               <InputNumber
-                size="small" min={0} precision={2} controls={false}
+                {...NON_NEGATIVE_INPUT_PROPS}
+                size="small" precision={2} controls={false}
                 style={{ ...full, ...monoR }} value={tax.fcaFob}
-                onChange={(v) => set('fcaFob', v ?? 0)} disabled={isDelete || isView}
+                onChange={(v) => set('fcaFob', clampNonNegativeNumber(v))} disabled={isDelete || isView}
               />
             </Field>
           </div>
@@ -373,13 +378,13 @@ export function GstTaxDetailsModal({
               <ChargeRow label="Discount"      per={tax.discPer}      amt={tax.discAmt}      disabled={isDelete || isView}
                 onPer={setDiscPer}  onAmt={onDiscAmt}  />
               <ChargeRow label="Packing"        per={tax.packingPer}   amt={tax.packingAmt}   disabled={isDelete || isView}
-                onPer={setPackPer}  onAmt={onPackAmt}  />
-              <ChargeRow label="Freight"        per={tax.freightPer}   amt={tax.freightAmt}   disabled={isDelete || isView}
-                onPer={setFrePer}   onAmt={onFreAmt}   />
+                onPer={setPackPer}  onAmt={onPackAmt}  />              
               <ChargeRow label="Insurance"      per={tax.insurancePer} amt={tax.insuranceAmt} disabled={isDelete || isView}
                 onPer={setInsurPer} onAmt={onInsurAmt} />
-              <ChargeRow label="Cess"           per={tax.cessPer}      amt={tax.cessAmt}      disabled={isDelete || isView}
+              <ChargeRow label="Other"           per={tax.cessPer}      amt={tax.cessAmt}      disabled={isDelete || isView}
                 onPer={setCessPer} onAmt={onCessAmt}  />
+                <ChargeRow label="Freight"        per={tax.freightPer}   amt={tax.freightAmt}   disabled={isDelete || isView}
+                onPer={setFrePer}   onAmt={onFreAmt}   />
             </div>
 
             {/* Right: Applicability — compact Radio controls */}
@@ -390,18 +395,6 @@ export function GstTaxDetailsModal({
               flexDirection: 'column',
               gap: 5,
             }}>
-              <AppRadio label="Freight Position"    value={tax.freightPos}       disabled={isDelete || isView}
-                onChange={(v) => set('freightPos',       v as 'BEFORE' | 'AFTER')}
-                options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Freight Payment"     value={tax.freightType}      disabled={isDelete || isView}
-                onChange={(v) => set('freightType',      v as 'PAID' | 'TOPAY')}
-                options={[{ value: 'PAID', label: 'Paid' }, { value: 'TOPAY', label: 'To Pay' }]} />
-              <AppRadio label="Insurance Position"  value={tax.insuranceDuty}    disabled={isDelete || isView}
-                onChange={(v) => set('insuranceDuty',    v as 'BEFORE' | 'AFTER')}
-                options={[{ value: 'BEFORE', label: 'Before Duty' }, { value: 'AFTER', label: 'After Duty' }]} />
-              <AppRadio label="Cess Position"       value={tax.cessTaxPos}       disabled={isDelete || isView}
-                onChange={(v) => set('cessTaxPos',       v as 'BEFORE' | 'AFTER')}
-                options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
               <AppRadio label="Discount Application" value={tax.discApp}         disabled={isDelete || isView}
                 onChange={(v) => set('discApp',          v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
@@ -410,7 +403,19 @@ export function GstTaxDetailsModal({
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
               <AppRadio label="Excise Inc. Packing" value={tax.exciseIncPacking} disabled={isDelete || isView}
                 onChange={(v) => set('exciseIncPacking', v as 'Y' | 'N')}
-                options={[{ value: 'Y', label: 'Yes' }, { value: 'N', label: 'No' }]} />
+                options={[{ value: 'Y', label: 'Yes' }, { value: 'N', label: 'No' }]} />              
+              <AppRadio label="Insurance Position"  value={tax.insuranceDuty}    disabled={isDelete || isView}
+                onChange={(v) => set('insuranceDuty',    v as 'BEFORE' | 'AFTER')}
+                options={[{ value: 'BEFORE', label: 'Before Duty' }, { value: 'AFTER', label: 'After Duty' }]} />
+              <AppRadio label="Cess Position"       value={tax.cessTaxPos}       disabled={isDelete || isView}
+                onChange={(v) => set('cessTaxPos',       v as 'BEFORE' | 'AFTER')}
+                options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
+              <AppRadio label="Freight Position"    value={tax.freightPos}       disabled={isDelete || isView}
+                onChange={(v) => set('freightPos',       v as 'BEFORE' | 'AFTER')}
+                options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
+              <AppRadio label="Freight Payment"     value={tax.freightType}      disabled={isDelete || isView}
+                onChange={(v) => set('freightType',      v as 'PAID' | 'TOPAY')}
+                options={[{ value: 'PAID', label: 'Paid' }, { value: 'TOPAY', label: 'To Pay' }]} />
             </div>
 
           </div>
@@ -461,7 +466,7 @@ export function GstTaxDetailsModal({
             ) : (
               <SR label={`IGST ${fmt2(tax.igstPer)}%`}    value={igstAmt} />
             )}
-            <SR label={`Cess ${fmt2(tax.cessPer)}%`}       value={tax.cessAmt} />
+            <SR label={`Other ${fmt2(tax.cessPer)}%`}      value={tax.cessAmt} />
             <SR label={`TCS ${fmt2(tax.tcsPer)}%`}         value={tcsAmt} />
             {/* Net Amount — last row of the card, always visible */}
             <div style={{ marginTop: 'auto' }}>
@@ -546,12 +551,14 @@ function ChargeRow({
     <>
       <span style={{ fontSize: 11, color: '#444' }}>{label}</span>
       <InputNumber
-        size="small" min={0} precision={2} controls={false}
+        {...NON_NEGATIVE_INPUT_PROPS}
+        size="small" precision={2} controls={false}
         style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
         value={per} onChange={onPer} disabled={disabled}
       />
       <InputNumber
-        size="small" min={0} precision={2} controls={false}
+        {...NON_NEGATIVE_INPUT_PROPS}
+        size="small" precision={2} controls={false}
         style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
         value={amt} onChange={onAmt} disabled={disabled}
       />

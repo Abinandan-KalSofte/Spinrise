@@ -1,6 +1,7 @@
 import { Col, DatePicker, Form, Input, InputNumber, Radio, Row, Select } from 'antd'
 import { TabPanel } from './_fieldKit'
 import type { BankOption } from '../../../types'
+import { NON_NEGATIVE_INPUT_PROPS } from '../../../utils/poTransferRules'
 
 // ── Payment tab (HTML #htab-panel-payment) ───────────────────────────────────
 // Mode radio toggles Direct vs Bank field sets. BR-15 (Bank → Bank Code +
@@ -34,7 +35,7 @@ export function PaymentTab({ disabled, banks }: PaymentTabProps) {
       {!isBank ? (
         <Row gutter={[12, 0]}>
           <Col span={5}><Form.Item name="directInstr" label="Direct Instruction" style={mb}><Input disabled={disabled} placeholder="Enter payment instruction…" /></Form.Item></Col>
-          <Col span={4}><Form.Item name="advAmt" label="Advance Amount" style={mb}><InputNumber precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
+          <Col span={4}><Form.Item name="advAmt" label="Advance Amount" style={mb}><InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
           <Col span={4}><Form.Item name="modeOfPayment" label="Mode of Payment" style={mb}>
             <Select disabled={disabled} options={['NEFT', 'RTGS', 'Cheque', 'Cash'].map((v) => ({ value: v, label: v }))} />
           </Form.Item></Col>
@@ -48,7 +49,7 @@ export function PaymentTab({ disabled, banks }: PaymentTabProps) {
               options={banks.map((b) => ({ value: b.bankCode, label: `${b.bankCode} – ${b.bankName}` }))} />
           </Form.Item></Col>
           <Col span={4}><Form.Item name="paymentTerms" label="Payment Terms" style={mb}><Input disabled={disabled} placeholder="e.g. 30 days net" /></Form.Item></Col>
-          <Col span={3}><Form.Item name="advAmt" label="Advance Amount" style={mb}><InputNumber precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
+          <Col span={3}><Form.Item name="advAmt" label="Advance Amount" style={mb}><InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
           <Col span={3}><Form.Item name="modeOfPayment" label="Mode of Payment" style={mb}>
             <Select disabled={disabled} options={['NEFT', 'RTGS', 'LC'].map((v) => ({ value: v, label: v }))} />
           </Form.Item></Col>

@@ -36,6 +36,7 @@ export interface PoPreAddChecks {
   docParaExists:        boolean   // PO_DOC_PARA entry for 'PURCHASE ORDER'
   backDateFlag:         string
   maxPoDate:            string | null   // BR-01 ceiling
+  lastPoDate:           string | null   // CR-024: last saved PO date — lower bound for new PO date
 }
 
 // ── Lookups (provisional) ────────────────────────────────────────────────────

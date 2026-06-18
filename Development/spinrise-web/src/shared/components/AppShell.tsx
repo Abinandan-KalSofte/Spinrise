@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Layout, Menu, Button, Dropdown, ConfigProvider } from 'antd'
+import { Layout, Menu, Button, Dropdown, ConfigProvider, Modal } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useNavigationGuardStore } from '@/shared/store/useNavigationGuardStore'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -85,6 +86,25 @@ export default function AppShell() {
   const tokens           = useAuthStore((s) => s.tokens)
   const clearAuthSession = useAuthStore((s) => s.clearAuthSession)
 
+  const isDirty          = useNavigationGuardStore((s) => s.isDirty)
+  const onConfirmDiscard = useNavigationGuardStore((s) => s.onConfirmDiscard)
+
+  // Guard-aware navigate: shows confirm dialog when page has unsaved changes.
+  const guardedNavigate = (to: string, replace?: boolean) => {
+    if (isDirty) {
+      Modal.confirm({
+        title:      'Unsaved Changes',
+        content:    'You have unsaved changes in the current screen. Do you want to discard the changes and continue?',
+        okText:     'YES',
+        cancelText: 'NO',
+        okButtonProps: { danger: true },
+        onOk: () => { onConfirmDiscard?.(); navigate(to, { replace }) },
+      })
+    } else {
+      navigate(to, { replace })
+    }
+  }
+
   const handleLogout = async () => {
     await authApi.logout(tokens?.refreshToken).catch(() => {})
     clearAuthSession()
@@ -137,7 +157,7 @@ export default function AppShell() {
             flexShrink: 0,
             cursor: 'pointer',
           }}
-          onClick={() => navigate('/dashboard')}
+          onClick={() => guardedNavigate('/dashboard')}
         >
           <div style={{
             width: 32, height: 32, borderRadius: 8, flexShrink: 0,
@@ -187,7 +207,7 @@ export default function AppShell() {
               defaultOpenKeys={getOpenKeys(location.pathname)}
               items={NAV_ITEMS}
               style={{ background: 'transparent', borderRight: 'none' }}
-              onClick={({ key }) => { if (key.startsWith('/')) navigate(key) }}
+              onClick={({ key }) => { if (key.startsWith('/')) guardedNavigate(key) }}
             />
           </ConfigProvider>
         </div>

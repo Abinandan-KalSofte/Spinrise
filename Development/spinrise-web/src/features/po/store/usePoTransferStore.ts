@@ -7,6 +7,7 @@ import type {
   DeliveryScheduleLine,
   DeliverySlot,
 } from '../types'
+import { getCurrentSystemDateIso } from '../utils/poTransferRules'
 
 interface PoTransferState {
   // Screen mode — VIEW / ADD / DELETE (no EDIT; Modify is a separate screen)
@@ -113,7 +114,7 @@ export const usePoTransferStore = create<PoTransferState>()((set) => ({
         const balance = d.poQty - d.slots.reduce((a, x) => a + (Number(x.qty) || 0), 0)
         const next: DeliverySlot = {
           slotNo:  d.slots.length + 1,
-          shDate:  null,
+          shDate:  getCurrentSystemDateIso(),
           qty:     balance > 0 ? balance : 0,
           remarks: '',
         }

@@ -3,6 +3,8 @@ import { PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { erpTh, ERP_TD as TD } from '@/shared/styles/erpTable'
 import { type DeliveryScheduleLine, type ScreenMode } from '../../types'
+import { NON_NEGATIVE_INPUT_PROPS, clampNonNegativeNumber } from '../../utils/poTransferRules'
+import { notificationService } from '@/shared/lib/notification'
 
 // ── Delivery Schedule (HTML #ds-table — VB6 childgrd / PO_ORDL_DETL) ─────────
 // OQ-NEW Option B (approved): item-wise OPEN child grid — UNLIMITED delivery
@@ -121,10 +123,17 @@ export function DeliveryScheduleGrid({
                     {/* Column 8: Scheduled Qty — quantity for this specific delivery slot */}
                     <td style={{ ...TD, textAlign: 'right' }}>
                       <InputNumber
-                        size="small" min={0} precision={3} controls={false} disabled={ro}
+                        {...NON_NEGATIVE_INPUT_PROPS}
+                        size="small" precision={3} controls={false} disabled={ro}
                         value={slot.qty}
                         style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
-                        onChange={(v) => onUpdateSlot(d.lineNo, slot.slotNo, { qty: v ?? 0 })}
+                        onChange={(v) => {
+                          const raw     = clampNonNegativeNumber(v)
+                          const clamped = Math.min(raw, d.poQty)
+                          if (raw > d.poQty)
+                            notificationService.warning('Qty Exceeded', `Scheduled Qty cannot exceed PO Qty (${d.poQty.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}). Reset to PO Qty.`)
+                          onUpdateSlot(d.lineNo, slot.slotNo, { qty: clamped })
+                        }}
                       />
                     </td>
 
@@ -135,12 +144,13 @@ export function DeliveryScheduleGrid({
                       </td>
                     )}
 
-                    {/* Column 10: Delivery Date */}
+                    {/* Column 10: Delivery Date — CR-027: past dates disabled */}
                     <td style={TD}>
                       <DatePicker
                         size="small" disabled={ro} format="DD-MMM-YYYY"
                         value={slot.shDate ? dayjs(slot.shDate) : null}
                         style={{ width: '100%' }}
+                        disabledDate={(d) => d.isBefore(dayjs(), 'day')}
                         onChange={(dt) => onUpdateSlot(d.lineNo, slot.slotNo, { shDate: dt ? dt.format('YYYY-MM-DD') : null })}
                       />
                     </td>
