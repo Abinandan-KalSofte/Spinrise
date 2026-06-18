@@ -378,8 +378,7 @@ export function GstTaxDetailsModal({
                 onPer={setFrePer}   onAmt={onFreAmt}   />
               <ChargeRow label="Insurance"      per={tax.insurancePer} amt={tax.insuranceAmt} disabled={isDelete || isView}
                 onPer={setInsurPer} onAmt={onInsurAmt} />
-              <ChargeRow label="Cess"           per={tax.cessPer}      amt={tax.cessAmt}      disabled={isDelete || isView}
-                onPer={setCessPer} onAmt={onCessAmt}  />
+              {/* Cess retired per FSD v3.1 Stage 3 — not displayed */}
             </div>
 
             {/* Right: Applicability — compact Radio controls */}
@@ -399,9 +398,7 @@ export function GstTaxDetailsModal({
               <AppRadio label="Insurance Position"  value={tax.insuranceDuty}    disabled={isDelete || isView}
                 onChange={(v) => set('insuranceDuty',    v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Duty' }, { value: 'AFTER', label: 'After Duty' }]} />
-              <AppRadio label="Cess Position"       value={tax.cessTaxPos}       disabled={isDelete || isView}
-                onChange={(v) => set('cessTaxPos',       v as 'BEFORE' | 'AFTER')}
-                options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
+              {/* Cess Position retired per FSD v3.1 Stage 3 — not displayed */}
               <AppRadio label="Discount Application" value={tax.discApp}         disabled={isDelete || isView}
                 onChange={(v) => set('discApp',          v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
@@ -461,7 +458,7 @@ export function GstTaxDetailsModal({
             ) : (
               <SR label={`IGST ${fmt2(tax.igstPer)}%`}    value={igstAmt} />
             )}
-            <SR label={`Cess ${fmt2(tax.cessPer)}%`}       value={tax.cessAmt} />
+            {/* Cess retired per FSD v3.1 Stage 3 — not displayed */}
             <SR label={`TCS ${fmt2(tax.tcsPer)}%`}         value={tcsAmt} />
             {/* Net Amount — last row of the card, always visible */}
             <div style={{ marginTop: 'auto' }}>

@@ -43,6 +43,7 @@ public class AddPoHeaderRequest
     public decimal CessPer      { get; init; }
     public decimal AedPer       { get; init; }
     public decimal FreightAmt   { get; init; }
+    public decimal FreightPer   { get; init; }
     public decimal PackPer      { get; init; }
     public decimal InsurPer     { get; init; }
     public decimal SurchargePer { get; init; }

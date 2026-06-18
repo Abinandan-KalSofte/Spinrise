@@ -29,6 +29,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @CessPer          NUMERIC(10,2)  = 0,
     @AedPer           NUMERIC(10,2)  = 0,    -- legacy pass-through (D-11)
     @FreightAmt       NUMERIC(13,2)  = 0,
+    @FreightPer       NUMERIC(10,2)  = 0,    -- CR-009: derives FreightAmt when FreightAmt=0
     @PackPer          NUMERIC(10,2)  = 0,
     @InsurPer         NUMERIC(10,2)  = 0,
     @SurchargePer     NUMERIC(10,2)  = 0,
@@ -112,18 +113,28 @@ BEGIN
             AND RTRIM(ISNULL(@PricingTerms, '')) = ''
             RAISERROR('Pricing Term Cannot be empty', 16, 1);
 
-        -- ── 3. BR-01: Backdate check (FSD §4.6) ─────────────────────────────────
-        -- When BACKDATE='N', PO date must strictly equal the system processing date.
+        -- ── 3. Date validations (CR-017, CR-018, BR-01) ─────────────────────────
+        -- CR-017: Always reject future PO dates.
+        DECLARE @Today DATE = CAST(GETDATE() AS DATE);
+        IF @PoDate > @Today
+            RAISERROR('PO Date cannot be a future date.', 16, 1);
+
+        -- CR-017: Always reject if earlier than last PO date in this division.
+        DECLARE @MaxPoDate DATE;
+        SELECT @MaxPoDate = CAST(MAX(PORDDT) AS DATE) FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode;
+        IF @MaxPoDate IS NOT NULL AND @PoDate < @MaxPoDate
+            RAISERROR('PO Date cannot be earlier than the last Purchase Order date for this division.', 16, 1);
+
+        -- CR-018: Reference Date must not be after PO Date.
+        IF @RefDate IS NOT NULL AND @RefDate > @PoDate
+            RAISERROR('Reference Date cannot be later than the PO Date.', 16, 1);
+
+        -- BR-01: Backdate check (FSD §4.6) — when BACKDATE='N', date must equal today or max PO date.
         DECLARE @BackDate CHAR(1) = 'Y';
         SELECT TOP 1 @BackDate = ISNULL(UPPER(RTRIM(BACKDATE)), 'Y') FROM dbo.IN_PARA;
-
         IF @BackDate <> 'Y'
         BEGIN
-            DECLARE @ProcessingDate DATE = CAST(GETDATE() AS DATE);
-            DECLARE @MaxPoDate      DATE;
-            SELECT @MaxPoDate = CAST(MAX(PORDDT) AS DATE) FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode;
-
-            IF @PoDate <> @ProcessingDate
+            IF @PoDate <> @Today
                AND NOT (@MaxPoDate IS NOT NULL AND @PoDate = @MaxPoDate)
                 RAISERROR('PO Date must be equal to Current Date Or Max Purchase Order Date.', 16, 1);
         END
@@ -296,6 +307,10 @@ BEGIN
             @SgstAmt = SUM(ROUND((Rate * Qty) * SgstPer / 100.0, 2)),
             @IgstAmt = SUM(ROUND((Rate * Qty) * IgstPer / 100.0, 2))
         FROM #Lines;
+
+        -- CR-009: Derive FreightAmt from FreightPer when FreightAmt not supplied.
+        IF @FreightPer > 0 AND @FreightAmt = 0
+            SET @FreightAmt = ROUND(@OrdVal * @FreightPer / 100.0, 2);
 
         -- Supplier GSTIN + state code (authoritative from master, not client-sent)
         DECLARE @SupGstin    VARCHAR(50)   = NULL;
@@ -484,6 +499,22 @@ BEGIN
         )
             RAISERROR('Maximum 4 delivery slots are allowed per order line.', 16, 1);
 
+        -- CR-014: Scheduled qty cannot exceed PO line ordered qty (item-specific message).
+        DECLARE @OverScheduleError NVARCHAR(500);
+        SELECT TOP 1 @OverScheduleError =
+            'Scheduled quantity exceeds PO quantity for item ' + RTRIM(l.ItemCode)
+        FROM #Lines l
+        CROSS APPLY (
+            SELECT SUM(s.qty) AS SlotTotal
+            FROM OPENJSON(l.SlotsJson) WITH (qty NUMERIC(12,3) '$.qty') s
+            WHERE s.qty > 0
+        ) st
+        WHERE l.SlotsJson IS NOT NULL
+          AND st.SlotTotal IS NOT NULL
+          AND st.SlotTotal > l.Qty + 0.001;
+        IF @OverScheduleError IS NOT NULL
+            RAISERROR(@OverScheduleError, 16, 1);
+
         -- Reconciliation: slot qty total must equal line ordered qty
         IF EXISTS (
             SELECT 1
@@ -498,6 +529,20 @@ BEGIN
               AND ABS(st.SlotTotal - l.Qty) > 0.001
         )
             RAISERROR('Delivery slot quantities must sum to the ordered quantity for each line.', 16, 1);
+
+        -- CR-016: Duplicate delivery date — same line, same date within this save batch.
+        IF EXISTS (
+            SELECT 1
+            FROM #Lines l
+            CROSS APPLY OPENJSON(l.SlotsJson)
+            WITH (shDate NVARCHAR(10) '$.shDate', qty NUMERIC(12,3) '$.qty') s
+            WHERE l.SlotsJson IS NOT NULL
+              AND s.qty > 0
+              AND TRY_CAST(s.shDate AS DATE) IS NOT NULL
+            GROUP BY l.PORDSNO, TRY_CAST(s.shDate AS DATE)
+            HAVING COUNT(*) > 1
+        )
+            RAISERROR('Duplicate delivery date: the same delivery date cannot appear more than once for an order line.', 16, 1);
 
         -- OA-03: 400 reject — qty > 0 with no date (reversed from silent-skip per Sasi/CEO 17-Jun-2026)
         IF EXISTS (

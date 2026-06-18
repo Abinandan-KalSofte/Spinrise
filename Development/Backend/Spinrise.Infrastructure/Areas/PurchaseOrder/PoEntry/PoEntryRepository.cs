@@ -176,10 +176,38 @@ public class PoEntryRepository : IPoEntryRepository
     public async Task<PoSaveResultDto> SaveAsync(string divCode, AddPoRequest request,
         string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate)
     {
-        var linesJson = JsonSerializer.Serialize(request.Lines, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        // CR-006: zero out IGST for LOCAL route, zero out CGST/SGST for IGST route.
+        var linesJson = JsonSerializer.Serialize(
+            request.Lines.Select(l => new
+            {
+                prNo          = l.PrNo,
+                prSno         = l.PrSno,
+                prDate        = l.PrDate,
+                itemCode      = l.ItemCode,
+                rate          = l.Rate,
+                qty           = l.Qty,
+                taxCode       = l.TaxCode,
+                hsnCode       = l.HsnCode,
+                cgstPer       = l.Route == "IGST" ? 0m : l.CgstPer,
+                sgstPer       = l.Route == "IGST" ? 0m : l.SgstPer,
+                igstPer       = l.Route == "LOCAL" ? 0m : l.IgstPer,
+                tcsPer        = l.TcsPer,
+                cgstCode      = l.Route == "IGST" ? "" : l.CgstCode,
+                sgstCode      = l.Route == "IGST" ? "" : l.SgstCode,
+                igstCode      = l.Route == "LOCAL" ? "" : l.IgstCode,
+                requesterId   = l.RequesterId,
+                requesterName = l.RequesterName,
+                discPer       = l.DiscPer,
+                packingPer    = l.PackingPer,
+                freightPer    = l.FreightPer,
+                insurancePer  = l.InsurancePer,
+                cessPer       = l.CessPer,
+                fcaFob        = l.FcaFob,
+                addTaxCode    = l.AddTaxCode,
+                addTaxPer     = l.AddTaxPer,
+                slots         = l.Slots.Select(s => new { shDate = s.ShDate, qty = s.Qty }),
+            }),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
         var p = new DynamicParameters();
         p.Add("DivCode",         divCode);
@@ -202,6 +230,7 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("CessPer",         request.Header.CessPer);
         p.Add("AedPer",          request.Header.AedPer);
         p.Add("FreightAmt",      request.Header.FreightAmt);
+        p.Add("FreightPer",      request.Header.FreightPer);
         p.Add("PackPer",         request.Header.PackPer);
         p.Add("InsurPer",        request.Header.InsurPer);
         p.Add("SurchargePer",    request.Header.SurchargePer);
