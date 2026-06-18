@@ -1,6 +1,7 @@
 import { Col, DatePicker, Form, Input, InputNumber, Row, Select } from 'antd'
 import { TabPanel } from './_fieldKit'
 import type { CarrierOption, AddressOption } from '../../../types'
+import { prefixFilterOption, priorityFilterSort } from '@/shared/utils/selectUtils'
 
 // ── Instructions tab (HTML #htab-panel-instructions) ─────────────────────────
 // Carrier is mandatory (BR-14, validated on Save). Pricing Terms becomes
@@ -29,7 +30,8 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
             validateTrigger="onBlur" style={mb}>
             <Select showSearch optionFilterProp="label" placeholder="02 — COURIER"
               allowClear disabled={disabled}
-              options={carriers.map((c) => ({ value: c.carCode, label: `${c.carCode} — ${c.carName}` }))} />
+              filterOption={prefixFilterOption} filterSort={priorityFilterSort}
+              options={carriers.map((c) => ({ value: c.carCode, label: `${c.carCode} – ${c.carName}` }))} />
           </Form.Item>
         </Col>        
         <Col span={7}>
@@ -37,7 +39,8 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
             <Select
               showSearch optionFilterProp="label" allowClear
               placeholder="Select delivery location…" disabled={disabled}
-              options={deliveryLocations.map((l) => ({ value: l.code, label: `${l.code} — ${l.name}` }))}
+              filterOption={prefixFilterOption} filterSort={priorityFilterSort}
+              options={deliveryLocations.map((l) => ({ value: l.code, label: `${l.code} – ${l.name}` }))}
               notFoundContent={deliveryLocations.length === 0 ? 'Loading…' : 'Not found'}
             />
           </Form.Item>
@@ -47,7 +50,8 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
             <Select
               showSearch optionFilterProp="label" allowClear
               placeholder="Select billing address…" disabled={disabled}
-              options={billingAddresses.map((a) => ({ value: a.code, label: `${a.code} — ${a.name}` }))}
+              filterOption={prefixFilterOption} filterSort={priorityFilterSort}
+              options={billingAddresses.map((a) => ({ value: a.code, label: `${a.code} – ${a.name}` }))}
               notFoundContent={billingAddresses.length === 0 ? 'Loading…' : 'Not found'}
             />
           </Form.Item>
@@ -89,7 +93,8 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
             <Select
               showSearch optionFilterProp="label" allowClear
               placeholder="Mandatory for HO order type" disabled={disabled}
-              options={pricingTermsOpts.map((p) => ({ value: p.code, label: `${p.code} — ${p.name}` }))}
+              filterOption={prefixFilterOption} filterSort={priorityFilterSort}
+              options={pricingTermsOpts.map((p) => ({ value: p.code, label: `${p.code} – ${p.name}` }))}
               notFoundContent={pricingTermsOpts.length === 0 ? 'Loading…' : 'Not found'}
             />
           </Form.Item>

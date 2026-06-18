@@ -1,4 +1,5 @@
 import dayjs from 'dayjs'
+import { CalendarOutlined } from '@ant-design/icons'
 import { OrderDetailsTab } from './tabs/OrderDetailsTab'
 import { TaxDiscountTab } from './tabs/TaxDiscountTab'
 import { PaymentTab } from './tabs/PaymentTab'
@@ -98,7 +99,7 @@ export function PoHeaderTabs(props: PoHeaderTabsProps) {
             background: '#E6F1FB', border: '1px solid #b8d4ee', borderRadius: 4,
             fontSize: 11, fontWeight: 600, color: '#185FA5',
           }}>
-            📅 {dateChip}
+            <CalendarOutlined style={{ color: '#185FA5', fontSize: 10 }} /> {dateChip}
           </span>
           {createdBy && (
             <span style={{ fontSize: 11, color: '#888' }}>
