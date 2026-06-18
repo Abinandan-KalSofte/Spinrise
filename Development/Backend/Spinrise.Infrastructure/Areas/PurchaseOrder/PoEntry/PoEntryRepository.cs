@@ -237,10 +237,13 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("AddTaxPer",       request.Header.AddTaxPer);
         p.Add("FileNo",          request.Header.FileNo);
         p.Add("FcaFob",          request.Header.FcaFob);
-        p.Add("FreightType",     request.Header.FreightType);
-        p.Add("DiscApp",         request.Header.DiscApp);
-        p.Add("PackApp",         request.Header.PackApp);
-        p.Add("CessApp",         request.Header.CessApp);
+        p.Add("FreightType",          request.Header.FreightType);
+        p.Add("DiscApp",              request.Header.DiscApp);
+        p.Add("PackApp",              request.Header.PackApp);
+        p.Add("FreightPosition",      request.Header.FreightPosition);
+        p.Add("InsurancePosition",    request.Header.InsurancePosition);
+        p.Add("ExciseIncludePacking", request.Header.ExciseIncludePacking);
+        p.Add("CessApp",              request.Header.CessApp);
         p.Add("PayMode",         request.Header.PayMode);
         p.Add("DirectInstr",     request.Header.DirectInstr);
         p.Add("BankCode",        request.Header.BankCode);

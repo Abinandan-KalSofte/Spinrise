@@ -38,8 +38,11 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @FileNo           VARCHAR(20)    = NULL,
     @FcaFob           NUMERIC(13,2)  = 0,
     @FreightType      VARCHAR(10)    = 'PAID',
-    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- disflg: 'BEFORE'→'B', 'AFTER'→'A' (wired 16-Jun-2026)
-    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG: 'BEFORE'→'B', 'AFTER'→'A' (wired 16-Jun-2026)
+    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- disflg:   'BEFORE'→'B', 'AFTER'→'A'
+    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG: 'BEFORE'→'B', 'AFTER'→'A'
+    @FreightPosition  VARCHAR(10)    = 'BEFORE',  -- FRT_FLG:  'BEFORE'→'B', 'AFTER'→'A'
+    @InsurancePosition VARCHAR(10)   = 'BEFORE',  -- Ins_Flg:  'BEFORE'→'B', 'AFTER'→'A'
+    @ExciseIncPacking VARCHAR(5)     = 'N',        -- EXC_FLG:  'Y'/'N'
     @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026). Not wired in SPINRISE.
     -- Payment
     @PayMode          VARCHAR(10)    = 'DIRECT',
@@ -330,7 +333,7 @@ BEGIN
             CurrCode,  FCurRate, CARCODE, INSPECT,
             Form_type, refno,   refDate, REMARKS,
             DISPER, Cessper, FREIGHT, PCKPER, INSPER, SURPER, ADDTAXPER,
-            FILENO, FCACharg, FRTFLG, disflg, PACK_FLG,
+            FILENO, FCACharg, FRTFLG, disflg, PACK_FLG, FRT_FLG, EXC_FLG, Ins_Flg,
             PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS,
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
@@ -364,7 +367,10 @@ BEGIN
             ISNULL(@FcaFob, 0),
             CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE '' END,
             CASE WHEN UPPER(RTRIM(ISNULL(@DiscApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- disflg
-            CASE WHEN UPPER(RTRIM(ISNULL(@PackApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- PACK_FLG
+            CASE WHEN UPPER(RTRIM(ISNULL(@PackApp,'')))          = 'AFTER' THEN 'A' ELSE 'B' END,  -- PACK_FLG
+            CASE WHEN UPPER(RTRIM(ISNULL(@FreightPosition,'')))  = 'AFTER' THEN 'A' ELSE 'B' END,  -- FRT_FLG
+            ISNULL(UPPER(RTRIM(@ExciseIncPacking)), 'N'),                                           -- EXC_FLG
+            CASE WHEN UPPER(RTRIM(ISNULL(@InsurancePosition,''))) = 'AFTER' THEN 'A' ELSE 'B' END, -- Ins_Flg
             CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
             NULLIF(RTRIM(ISNULL(@DirectInstr,'')),  ''),
             NULLIF(RTRIM(ISNULL(@BankCode,'')),     ''),

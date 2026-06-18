@@ -51,10 +51,13 @@ public class AddPoHeaderRequest
     public decimal RoundOff     { get; init; }
     public string  FileNo       { get; init; } = "";
     public decimal FcaFob       { get; init; }
-    public string  FreightType  { get; init; } = "PAID";
-    public string  DiscApp      { get; init; } = "BEFORE";
-    public string  PackApp      { get; init; } = "BEFORE";
-    public string  CessApp      { get; init; } = "BEFORE";
+    public string  FreightType          { get; init; } = "PAID";
+    public string  DiscApp              { get; init; } = "BEFORE";
+    public string  PackApp              { get; init; } = "BEFORE";
+    public string  FreightPosition      { get; init; } = "BEFORE";
+    public string  InsurancePosition    { get; init; } = "BEFORE";
+    public string  ExciseIncludePacking { get; init; } = "N";
+    public string  CessApp              { get; init; } = "BEFORE";
     // Payment
     public string   PayMode       { get; init; } = "DIRECT";
     public string   DirectInstr   { get; init; } = "";
