@@ -1,16 +1,78 @@
-import { FileExcelOutlined, CloseOutlined, BarChartOutlined } from '@ant-design/icons'
-import { SectionLoader } from '@/components/common/loading'
+import {
+  BarChartOutlined,
+  CalendarOutlined,
+  CloseOutlined,
+  FileExcelOutlined,
+  FunnelPlotOutlined,
+  LoadingOutlined,
+} from '@ant-design/icons'
+import { Spin, Tag } from 'antd'
+import dayjs from 'dayjs'
 import { PRDocBand, TbBtn, TbSep } from '../components/pr-form/PRToolbar'
 import PrReportFilterBar from '../components/pr-report/PrReportFilterBar'
 import { usePrReport } from '../hooks/usePrReport'
 import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
-// ── Report type hint shown in the empty-state body ────────────────────────────
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const BG     = '#F4F6F9'
+const CARD   = '#fff'
+const BORDER = '#E2E8F0'
+
+// ── Report-type hint text ─────────────────────────────────────────────────────
 const HINT: Record<string, string> = {
-  Datewise:       'Select a date range and click Report to download the Datewise PR list.',
-  Departmentwise: 'Select a date range and at least one Department, then click Report.',
-  Itemwise:       'Select a date range. Use All Items or choose specific items, then click Report.',
+  Datewise:       'Select a date range and click Generate Report to download the Datewise PR list as an Excel file.',
+  Departmentwise: 'Select a date range and at least one Department, then click Generate Report.',
+  Itemwise:       'Select a date range. Use All Items or choose specific items, then click Generate Report.',
 }
+
+// ── KPI mini-card ─────────────────────────────────────────────────────────────
+
+interface KpiCardProps {
+  icon:   React.ReactNode
+  label:  string
+  value:  string
+  accent: string
+}
+
+function KpiCard({ icon, label, value, accent }: KpiCardProps) {
+  return (
+    <div style={{
+      flex: 1, minWidth: 0,
+      background: CARD,
+      border: `1px solid ${BORDER}`,
+      borderRadius: 8,
+      padding: '10px 12px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+    }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+        background: `${accent}1A`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: accent, fontSize: 16,
+      }}>
+        {icon}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{
+          fontSize: 10, fontWeight: 700, color: '#A0AEC0',
+          textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2,
+        }}>
+          {label}
+        </div>
+        <div style={{
+          fontSize: 12, fontWeight: 700, color: '#1A202C',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {value}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PrReportPage() {
   usePageTitle('Purchase Requisition Report')
@@ -20,31 +82,59 @@ export default function PrReportPage() {
     setFilter, setReportType, handleGenerate, handleExit,
   } = usePrReport()
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+  // ── KPI computed values ──────────────────────────────────────────────────────
+  const dateRangeLabel =
+    filter.fromDate && filter.toDate
+      ? `${dayjs(filter.fromDate).format('DD MMM YY')} – ${dayjs(filter.toDate).format('DD MMM YY')}`
+      : 'Not configured'
 
-      {/* ── Doc Band ─────────────────────────────────────────────────────────── */}
+  const filterLabel =
+    filter.reportType === 'Departmentwise'
+      ? filter.selectedDeptCodes.length > 0
+        ? `${filter.selectedDeptCodes.length} dept${filter.selectedDeptCodes.length !== 1 ? 's' : ''}`
+        : 'No dept'
+      : filter.reportType === 'Itemwise'
+        ? filter.allItems
+          ? 'All items'
+          : filter.selectedItemCodes.length > 0
+            ? `${filter.selectedItemCodes.length} item${filter.selectedItemCodes.length !== 1 ? 's' : ''}`
+            : 'No items'
+        : 'Date range only'
+
+  // Type badge color
+  const typeColor: Record<string, string> = {
+    Datewise: 'blue', Departmentwise: 'purple', Itemwise: 'gold',
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: BG }}>
+
+      {/* ── Doc Band ──────────────────────────────────────────────────────────── */}
       <PRDocBand
         breadcrumb={['Purchase Order', 'Purchase Requisition Report']}
         subLabel="Report Type"
         subValue={filter.reportType}
       />
 
-      {/* ── Toolbar — Report + Exit only (CR §4.2: no Crystal, no Preview) ──── */}
+      {/* ── Toolbar ───────────────────────────────────────────────────────────── */}
       <div style={{
-        background:   '#fff',
-        borderBottom: '1px solid #e2e2e2',
+        background:   CARD,
+        borderBottom: `1px solid ${BORDER}`,
         display:      'flex',
         alignItems:   'center',
-        gap:           4,
-        padding:      '0 12px',
-        height:        44,
+        gap:           6,
+        padding:      '0 16px',
+        height:        48,
         flexShrink:    0,
       }}>
         <TbBtn
           variant="success"
-          icon={<FileExcelOutlined style={{ fontSize: 11 }} />}
-          label="Report"
+          icon={
+            generating
+              ? <Spin indicator={<LoadingOutlined style={{ fontSize: 11, color: '#fff' }} />} size="small" />
+              : <FileExcelOutlined style={{ fontSize: 12 }} />
+          }
+          label={generating ? 'Generating…' : 'Generate Report'}
           kbd="Alt+R"
           disabled={generating}
           onClick={() => void handleGenerate()}
@@ -56,64 +146,223 @@ export default function PrReportPage() {
           label="Exit"
           onClick={handleExit}
         />
+        <div style={{ flex: 1 }} />
+        {generating && (
+          <span style={{ fontSize: 11, color: '#185FA5', fontWeight: 500, fontStyle: 'italic' }}>
+            Building Excel file — please wait…
+          </span>
+        )}
       </div>
 
-      {/* ── Filter Panel ─────────────────────────────────────────────────────── */}
-      <PrReportFilterBar
-        filter={filter}
-        departments={departments}
-        items={items}
-        loadingLookups={loadingLookups}
-        onFilterChange={setFilter}
-        onReportTypeChange={setReportType}
-      />
+      {/* ── Main layout: filter left + preview right ───────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-      {/* ── Body ─────────────────────────────────────────────────────────────── */}
-      <div style={{
-        flex:          1,
-        display:       'flex',
-        flexDirection: 'column',
-        overflow:      'hidden',
-        background:    '#fff',
-      }}>
-        {generating ? (
-          <SectionLoader message="Generating Excel report…" />
-        ) : (
+        {/* ─ Left: Filter panel ──────────────────────────────────────────────── */}
+        <div style={{
+          width:      460,
+          flexShrink: 0,
+          background: BG,
+          borderRight: `1px solid ${BORDER}`,
+          overflowY:  'auto',
+          padding:    '14px 14px 24px',
+          display:    'flex',
+          flexDirection: 'column',
+          gap:         12,
+        }}>
+          {/* Panel header */}
           <div style={{
-            flex:          1,
-            display:       'flex',
-            flexDirection: 'column',
-            alignItems:    'center',
-            justifyContent:'center',
-            padding:        48,
-            gap:            12,
+            fontSize: 11, fontWeight: 700, color: '#4A5568',
+            textTransform: 'uppercase', letterSpacing: '0.07em',
+            paddingBottom: 6, borderBottom: `1px solid ${BORDER}`,
           }}>
-            <BarChartOutlined style={{ fontSize: 44, color: '#185FA5', opacity: 0.18 }} />
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#555' }}>
-              Ready to Generate Report
-            </div>
+            Filter Configuration
+          </div>
+
+          <PrReportFilterBar
+            filter={filter}
+            departments={departments}
+            items={items}
+            loadingLookups={loadingLookups}
+            onFilterChange={setFilter}
+            onReportTypeChange={setReportType}
+          />
+        </div>
+
+        {/* ─ Right: Summary + Preview ────────────────────────────────────────── */}
+        <div style={{
+          flex:           1,
+          overflow:       'hidden',
+          display:        'flex',
+          flexDirection:  'column',
+          padding:        '14px 16px 16px',
+          gap:             12,
+        }}>
+
+          {/* KPI summary row */}
+          <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+            <KpiCard
+              icon={<CalendarOutlined />}
+              label="Date Range"
+              value={dateRangeLabel}
+              accent="#185FA5"
+            />
+            <KpiCard
+              icon={<BarChartOutlined />}
+              label="Report Type"
+              value={filter.reportType}
+              accent="#6B46C1"
+            />
+            <KpiCard
+              icon={<FunnelPlotOutlined />}
+              label="Filters"
+              value={filterLabel}
+              accent="#B7791F"
+            />
+            <KpiCard
+              icon={<FileExcelOutlined />}
+              label="Output"
+              value="Excel · A4 Landscape"
+              accent="#276749"
+            />
+          </div>
+
+          {/* Preview card */}
+          <div style={{
+            flex:           1,
+            background:     CARD,
+            border:         `1px solid ${BORDER}`,
+            borderRadius:    10,
+            overflow:       'hidden',
+            display:        'flex',
+            flexDirection:  'column',
+          }}>
+
+            {/* Preview card header bar */}
             <div style={{
-              fontSize:   12,
-              color:      '#999',
-              textAlign:  'center',
-              maxWidth:   480,
-              lineHeight: 1.8,
-            }}>
-              {HINT[filter.reportType]}
-            </div>
-            <div style={{
-              marginTop:    8,
-              fontSize:     11,
-              color:        '#bbb',
+              padding:      '9px 16px',
+              borderBottom: `1px solid ${BORDER}`,
               display:      'flex',
               alignItems:   'center',
-              gap:           6,
+              gap:           8,
+              background:   '#FAFBFD',
+              flexShrink:   0,
             }}>
-              <FileExcelOutlined />
-              <span>Output: EPPlus Excel (.xlsx) — Landscape, A4</span>
+              <BarChartOutlined style={{ color: '#185FA5', fontSize: 13 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#2D3748' }}>Report Preview</span>
+              <div style={{ flex: 1 }} />
+              <Tag
+                color={typeColor[filter.reportType] ?? 'blue'}
+                style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}
+              >
+                {filter.reportType}
+              </Tag>
+              {filter.fromDate && filter.toDate && (
+                <Tag color="default" style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}>
+                  {dayjs(filter.fromDate).format('DD MMM YY')} – {dayjs(filter.toDate).format('DD MMM YY')}
+                </Tag>
+              )}
+            </div>
+
+            {/* Preview body */}
+            <div style={{
+              flex:           1,
+              display:        'flex',
+              flexDirection:  'column',
+              alignItems:     'center',
+              justifyContent: 'center',
+              padding:        40,
+            }}>
+              {generating ? (
+
+                /* ── Generating state ── */
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+                  <div style={{
+                    width: 72, height: 72, borderRadius: 16,
+                    background: 'linear-gradient(135deg, #1D6F42 0%, #21A362 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 4px 20px rgba(33,163,98,0.3)',
+                  }}>
+                    <Spin
+                      indicator={<LoadingOutlined style={{ fontSize: 32, color: '#fff' }} />}
+                      size="large"
+                    />
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#1A202C', marginBottom: 6 }}>
+                      Generating Report
+                    </div>
+                    <div style={{ fontSize: 12, color: '#718096', lineHeight: 1.8 }}>
+                      Building your {filter.reportType} PR report from the database.
+                      <br />The file will download automatically when ready.
+                    </div>
+                  </div>
+                </div>
+
+              ) : (
+
+                /* ── Ready state ── */
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxWidth: 440, textAlign: 'center' }}>
+
+                  {/* Excel icon */}
+                  <div style={{
+                    width: 72, height: 72, borderRadius: 16,
+                    background: 'linear-gradient(135deg, #1D6F42 0%, #21A362 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 4px 20px rgba(33,163,98,0.2)',
+                  }}>
+                    <FileExcelOutlined style={{ fontSize: 34, color: '#fff' }} />
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#1A202C', marginBottom: 8 }}>
+                      Ready to Generate
+                    </div>
+                    <div style={{ fontSize: 12, color: '#718096', lineHeight: 1.9 }}>
+                      {HINT[filter.reportType]}
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div style={{ width: 48, height: 2, background: '#E2E8F0', borderRadius: 1 }} />
+
+                  {/* Output format badge */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 16px',
+                    background: '#F0FFF4',
+                    border: '1px solid #C6F6D5',
+                    borderRadius: 8,
+                  }}>
+                    <FileExcelOutlined style={{ color: '#276749', fontSize: 13 }} />
+                    <span style={{ fontSize: 11, color: '#276749', fontWeight: 600 }}>
+                      EPPlus Excel (.xlsx) · A4 · Landscape
+                    </span>
+                  </div>
+
+                  {/* Keyboard hint */}
+                  <div style={{ fontSize: 11, color: '#A0AEC0', marginTop: -4 }}>
+                    Press{' '}
+                    <kbd style={{
+                      display: 'inline-block',
+                      padding: '1px 5px',
+                      background: '#EDF2F7',
+                      border: '1px solid #CBD5E0',
+                      borderRadius: 4,
+                      fontFamily: 'monospace',
+                      fontSize: 10,
+                      color: '#4A5568',
+                    }}>
+                      Alt+R
+                    </kbd>
+                    {' '}to generate instantly
+                  </div>
+
+                </div>
+              )}
             </div>
           </div>
-        )}
+
+        </div>
       </div>
 
     </div>

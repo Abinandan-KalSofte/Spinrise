@@ -18,6 +18,7 @@ import {
   SafetyCertificateOutlined, // PR Final Level Approval
   RetweetOutlined,
   FileExcelOutlined,
+  FileExclamationOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { authApi } from '@/features/auth/api/authApi'
@@ -63,10 +64,14 @@ const NAV_ITEMS: MenuItem[] = [
       mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'), <CloseCircleOutlined />),
       mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval'),           <CheckCircleOutlined />),
       mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval'),           <SafetyCertificateOutlined />),
-      mk('/pr-report',            wrapLabel('Purchase Requisition Report'),                         <FileExcelOutlined />),
     ]),
     mk('grp-transfer', wrapLabel('PR to PO Transfer'), '', [
       mk('/po/transfer', wrapLabel('PR to PO Transfer'), <RetweetOutlined />),
+    ]),
+  ]),
+   mk('grp-reports', 'Reports', <FileExclamationOutlined  />, [
+    mk('grp-reports-pr', wrapLabel('Periodic Reports'), '', [
+      mk('/pr-report',            wrapLabel('Purchase Requisition Report'),                         <FileExcelOutlined />),
     ]),
   ]),
 ]

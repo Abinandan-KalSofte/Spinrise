@@ -1,9 +1,10 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { Button, Input, InputNumber, Tooltip } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { erpTh, ERP_TD as TD } from '@/shared/styles/erpTable'
 import type { PoLine, ScreenMode } from '../../types'
 import { NON_NEGATIVE_INPUT_PROPS, clampNonNegativeNumber } from '../../utils/poTransferRules'
+import dayjs from 'dayjs'
 
 // ── PO Line Item grid (HTML #po-grid / .po-table) ────────────────────────────
 //
@@ -52,6 +53,7 @@ const Row = memo(function Row({
   onRemove:  () => void
   onReason:  (reason: string) => void
 }) {
+  const [hovered, setHovered] = useState(false)
   const isAdd    = mode === 'ADD'
   const isDelete = mode === 'DELETE'
   const hsnBlank = !line.hsnCode.trim()
@@ -71,10 +73,17 @@ const Row = memo(function Row({
     <tr
       onClick={onSelect}
       onDoubleClick={() => { onSelect(); onOpenGst() }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       title="Double-click to open GST & Tax details (or select the row and press F5)"
       style={{
-        background: selected ? '#EBF3FF' : isDelete ? '#fff7f7' : idx % 2 === 0 ? '#ffffff' : '#F0F5FF',
+        background: selected
+          ? '#DBEAFE'
+          : isDelete ? '#FFF5F5'
+          : hovered   ? '#F0F7FF'
+          : idx % 2 === 0 ? '#ffffff' : '#F8F9FF',
         cursor: 'pointer',
+        transition: 'background 0.1s',
       }}
     >
       <td style={{ ...TD_TXT, width: 78, textAlign: 'center', fontFamily: 'monospace', fontWeight: 600, color: '#185FA5' }}>
@@ -83,7 +92,7 @@ const Row = memo(function Row({
       <td style={{ ...TD_TXT, width: 190, fontWeight: 500,textAlign: 'left' }}>{line.itemName || line.itemCode}</td>
       <td style={{ ...TD_TXT, width: 44, textAlign: 'center', color: '#4a4a4a' }}>{line.uom}</td>
       <td style={{ ...TD_TXT, width: 100, fontFamily: 'monospace' }}>{line.prNo}</td>
-      <td style={{ ...TD_TXT, width: 80, fontFamily: 'monospace' }}>{line.prDate || '—'}</td>
+      <td style={{ ...TD_TXT, width: 80, fontFamily: 'monospace' }}>{dayjs(line.prDate, 'YYYY/MM/DD').format('DD-MMM-YYYY') || '—'}</td>
 
       {/* Rate — editable in ADD (4dp, BR-07) */}
       <td style={{ ...TD_TXT, width: 88, textAlign: 'right' }}
@@ -211,16 +220,31 @@ export function PoLineGrid({
     }}>
       {/* Grid bar */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px',
-        borderBottom: '1px solid #e2e2e2', background: '#fafaf8', flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px',
+        borderBottom: '1px solid #E2E8F0', background: '#F8FAFD', flexShrink: 0,
       }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#4a4a4a' }}>Line Items</span>
-        <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 20, background: '#E6F1FB', color: '#185FA5' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#2D3748', letterSpacing: '0.01em' }}>Line Items</span>
+        <span style={{
+          fontSize: 10.5, fontWeight: 700, padding: '1px 9px', borderRadius: 20,
+          background: '#EFF6FF', color: '#185FA5', border: '1px solid #BFDBFE',
+        }}>
           {lines.length}
         </span>
         <span style={{ flex: 1 }} />
-        {isAdd && <span style={{ fontSize: 11, color: '#888' }}>Edit Rate / Quantity inline · click Tax Code to enter GST &amp; tax</span>}
-        {isDelete && <span style={{ fontSize: 11, color: '#A32D2D', fontWeight: 600 }}>Enter Delete Reason — auto-filled from the header reason</span>}
+        {isAdd && (
+          <span style={{ fontSize: 11, color: '#718096', fontStyle: 'italic' }}>
+            Edit Rate / Quantity inline · click Tax Code to enter GST &amp; tax · double-click row for details
+          </span>
+        )}
+        {isDelete && (
+          <span style={{
+            fontSize: 11, color: '#B91C1C', fontWeight: 600,
+            background: '#FEF2F2', padding: '2px 10px', borderRadius: 4,
+            border: '1px solid #FECACA',
+          }}>
+            ⚠ Enter Delete Reason — auto-filled from the header reason
+          </span>
+        )}
       </div>
 
       {/* Scroll area (wide grid scrolls horizontally) */}
