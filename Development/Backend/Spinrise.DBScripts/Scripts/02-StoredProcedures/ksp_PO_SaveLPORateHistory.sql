@@ -37,7 +37,7 @@ BEGIN
     SELECT TOP 1
         @LPoRdNo = h.PORDNO,
         @LPoRdDt = CAST(h.PORDDT AS DATE),
-        @LPoGrp  = RTRIM(ISNULL(h.ORDTYPE, '')),
+        @LPoGrp  = RTRIM(ISNULL(h.POGRP, '')),
         @LSlCode = RTRIM(ISNULL(h.SLCODE,  '')),
         @LRate   = l.RATE
     FROM dbo.PO_ORDL l
