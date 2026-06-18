@@ -150,13 +150,19 @@ BEGIN
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
         RTRIM(ISNULL(h.createdby, ''))                              AS CreatedBy,
         ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
-        RTRIM(ISNULL(h.createdby, ''))                              AS UserId,
+        RTRIM(ISNULL(u.user_name, h.createdby))                     AS UserId,
         RTRIM(ISNULL(h.CARCODE, ''))                                AS Carrier
     FROM dbo.PO_ORDH h
     LEFT JOIN dbo.PO_TYPE t
         ON RTRIM(t.TYPE_CODE) = RTRIM(h.POGRP)
     LEFT JOIN dbo.FA_SLMAS sl
         ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    OUTER APPLY (
+        SELECT TOP 1 u.user_name
+        FROM dbo.PP_PASSWD u
+        WHERE RTRIM(u.user_id) = RTRIM(h.createdby)
+          AND RTRIM(u.divcode)  = RTRIM(h.DIVCODE)
+    ) u
     WHERE h.DIVCODE = @DivCode
       AND h.PORDNO  = @PoNo
       AND CAST(h.PORDDT AS DATE) = @PoDate;
