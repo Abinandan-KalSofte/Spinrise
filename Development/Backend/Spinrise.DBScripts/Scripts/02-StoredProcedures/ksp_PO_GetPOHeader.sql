@@ -116,9 +116,9 @@ BEGIN
         RTRIM(ISNULL(h.poprintflg, 'N'))                            AS PrintStatus,
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
-        RTRIM(ISNULL(h.createdby, ''))                              AS CreatedBy,
+        RTRIM(ISNULL(u.user_name, h.createdby))                     AS CreatedBy,
         ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
-        RTRIM(ISNULL(u.user_name, h.createdby))                     AS UserId,
+        RTRIM(ISNULL(h.createdby, ''))                              AS UserId,
         RTRIM(ISNULL(h.CARCODE, ''))                                AS Carrier
     FROM dbo.PO_ORDH h
     LEFT JOIN dbo.PO_TYPE t
