@@ -15,7 +15,8 @@ import {
   CloseCircleOutlined,   // PR Cancellation
   CheckCircleOutlined,   // PR First Level Approval
   SafetyCertificateOutlined, // PR Final Level Approval
-  RetweetOutlined, 
+  RetweetOutlined,
+  FileExcelOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { authApi } from '@/features/auth/api/authApi'
@@ -47,6 +48,7 @@ const PR_PATHS = [
   '/pr-cancellation',
   '/pr-first-approval',
   '/pr-final-approval',
+  '/pr-report',
 ]
 
 const NAV_ITEMS: MenuItem[] = [
@@ -60,6 +62,7 @@ const NAV_ITEMS: MenuItem[] = [
       mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'), <CloseCircleOutlined />),
       mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval'),           <CheckCircleOutlined />),
       mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval'),           <SafetyCertificateOutlined />),
+      mk('/pr-report',            wrapLabel('Purchase Requisition Report'),                         <FileExcelOutlined />),
     ]),
     mk('grp-transfer', wrapLabel('PR to PO Transfer'), '', [
       mk('/po/transfer', wrapLabel('PR to PO Transfer'), <RetweetOutlined />),

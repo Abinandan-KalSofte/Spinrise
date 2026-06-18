@@ -14,6 +14,7 @@ const PrCancellationPage      = lazy(() => import('./features/pr/pages/PrCancell
 const PrFirstApprovalPage     = lazy(() => import('./features/pr/pages/PrFirstApprovalPage'))
 const FinalLevelApprovalPage  = lazy(() => import('./features/pr/pages/FinalLevelApprovalPage'))
 const PrToPoTransferPage      = lazy(() => import('./features/po/pages/PrToPoTransferPage'))
+const PrReportPage            = lazy(() => import('./features/pr/pages/PrReportPage'))
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/pr-first-approval"              element={<PrFirstApprovalPage />} />
             <Route path="/pr-final-approval"              element={<FinalLevelApprovalPage />} />
             <Route path="/po/transfer"                    element={<PrToPoTransferPage />} />
+            <Route path="/pr-report"                      element={<PrReportPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
