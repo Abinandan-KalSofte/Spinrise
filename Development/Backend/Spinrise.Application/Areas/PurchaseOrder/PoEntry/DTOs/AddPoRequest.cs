@@ -47,6 +47,7 @@ public class AddPoHeaderRequest
     public decimal InsurPer     { get; init; }
     public decimal SurchargePer { get; init; }
     public decimal AddTaxPer    { get; init; }
+    public decimal RoundOff     { get; init; }
     public string  FileNo       { get; init; } = "";
     public decimal FcaFob       { get; init; }
     public string  FreightType  { get; init; } = "PAID";
@@ -100,6 +101,14 @@ public class AddPoLineRequest
     public string  Route         { get; init; } = "LOCAL";
     public string  RequesterId   { get; init; } = "";
     public string  RequesterName { get; init; } = "";
+    public decimal DiscPer       { get; init; }
+    public decimal PackingPer    { get; init; }
+    public decimal FreightPer    { get; init; }
+    public decimal InsurancePer  { get; init; }
+    public decimal CessPer       { get; init; }   // D-11 pass-through — column exists in DB
+    public decimal FcaFob        { get; init; }
+    public string  AddTaxCode    { get; init; } = "";
+    public decimal AddTaxPer     { get; init; }
 
     [MinLength(0)]
     public List<DeliverySlotRequest> Slots { get; init; } = [];

@@ -1,8 +1,13 @@
 import { useEffect } from 'react'
 import { Col, DatePicker, Form, Input, InputNumber, Row, Select } from 'antd'
+import type { Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
 import { TabPanel } from './_fieldKit'
 import { formatPoNo } from '../../../types'
 import type { ScreenMode, SupplierOption, OrderTypeOption, FormTypeOption, CurrencyOption } from '../../../types'
+import { useAuthStore } from '@/features/auth/store/useAuthStore'
+import { getFYBounds } from '@/shared/lib/dateUtils'
+import { prefixFilterOption, priorityFilterSort } from '@/shared/utils/selectUtils'
 
 // ── Order Details tab (HTML #htab-panel-order) ───────────────────────────────
 // Mandatory: Order Type (BR-11), Supplier (BR-12), Currency (BR-13) — validated
@@ -33,6 +38,13 @@ export function OrderDetailsTab({
 }: OrderDetailsTabProps) {
   const form = Form.useFormInstance()
 
+  const processingDate = useAuthStore((s) => s.processingDate)
+  const today    = dayjs()
+  const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
+  const fyStart  = dayjs(yfDate)
+  const fyEnd    = dayjs(ylDate)
+  const poDateVal = form.getFieldValue('poDate') as Dayjs | null
+
   const poNoText    = mode === 'ADD' ? '' : formatPoNo(poNo)
   const poValueText = fmt2(orderValue)
   useEffect(() => {
@@ -53,8 +65,24 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={2}>
-          <Form.Item name="poDate" label="PO Date" style={mb}>
-            <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} allowClear={false} />
+          <Form.Item name="poDate" label="PO Date"
+            validateTrigger={['onChange', 'onBlur']}
+            rules={[{
+              validator: (_, val: Dayjs | null) => {
+                if (!val) return Promise.reject('PO Date is required.')
+                if (val.isBefore(fyStart, 'day') || val.isAfter(fyEnd, 'day'))
+                  return Promise.reject(`Date must be within the financial year (${fyStart.format('DD-MMM-YYYY')} – ${fyEnd.format('DD-MMM-YYYY')}).`)
+                if (val.isAfter(today, 'day'))
+                  return Promise.reject('PO Date cannot be a future date.')
+                return Promise.resolve()
+              },
+            }]}
+            style={mb}>
+            <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} allowClear={false}
+              disabledDate={(d) =>
+                d.isBefore(fyStart, 'day') || d.isAfter(fyEnd, 'day') || d.isAfter(today, 'day')
+              }
+            />
           </Form.Item>
         </Col>
         <Col span={3}>
@@ -63,7 +91,8 @@ export function OrderDetailsTab({
             validateTrigger="onBlur" style={mb}>
             <Select
               showSearch optionFilterProp="label" placeholder="Select order type…" disabled={disabled}
-              options={orderTypes.map((t) => ({ value: t.poGrp, label: `${t.poGrp} — ${t.typName}` }))}
+              filterSort={priorityFilterSort}
+              options={orderTypes.map((t) => ({ value: t.poGrp, label: `${t.poGrp} – ${t.typName}` }))}
             />
           </Form.Item>
         </Col>
@@ -73,9 +102,10 @@ export function OrderDetailsTab({
             validateTrigger="onBlur" style={mb}>
             <Select
               showSearch optionFilterProp="label" placeholder="Select supplier — type to filter…" disabled={disabled}
+              filterOption={prefixFilterOption} filterSort={priorityFilterSort}
               onDropdownVisibleChange={(open) => { if (open) onSupplierOpen() }}
               onChange={(v) => onSupplierChange(suppliers.find((s) => s.slCode === v) ?? null)}
-              options={suppliers.map((s) => ({ value: s.slCode, label: `${s.slCode} — ${s.slName}` }))}
+              options={suppliers.map((s) => ({ value: s.slCode, label: `${s.slCode} – ${s.slName}${s.city ? ` – ${s.city}` : ''}` }))}
             />
           </Form.Item>
         </Col>
@@ -91,19 +121,14 @@ export function OrderDetailsTab({
         </Col>
         <Col span={4}>
           <Form.Item name="inspect" label="Inspect" style={mb}>
-            <Select disabled={disabled} options={[{ value: 'YES', label: 'YES' }, { value: 'NO', label: 'NO' }]} />
-          </Form.Item>
-        </Col>
-        <Col span={4}>
-          <Form.Item name="poValue" label="Order Value (₹)" style={mb}>
-            <Input readOnly style={{ fontFamily: 'monospace', color: '#185FA5', textAlign: 'right' }} />
+            <Select disabled={disabled} options={[{ value: 'YES', label: 'Yes' }, { value: 'NO', label: 'No' }]} />
           </Form.Item>
         </Col>
 
         <Col span={4}>
           <Form.Item name="formType" label="Form Type" style={mb}>
             <Select allowClear placeholder="03 — NONE" disabled={disabled} optionFilterProp="label"
-              options={formTypes.map((f) => ({ value: f.formCode, label: `${f.formCode} — ${f.formName}` }))} />
+              options={formTypes.map((f) => ({ value: f.formCode, label: `${f.formCode} – ${f.formName}` }))} />
           </Form.Item>
         </Col>
         <Col span={4}>
@@ -113,7 +138,9 @@ export function OrderDetailsTab({
         </Col>
         <Col span={4}>
           <Form.Item name="refDate" label="Ref. Date" style={mb}>
-            <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} />
+            <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled}
+              disabledDate={(d) => !!poDateVal && d.isAfter(poDateVal, 'day')}
+            />
           </Form.Item>
         </Col>
         <Col span={4}>
@@ -124,14 +151,19 @@ export function OrderDetailsTab({
             />
           </Form.Item>
         </Col>
+        <Col span={4}>
+          <Form.Item name="poValue" label="Order Value (₹)" style={mb}>
+            <Input readOnly style={{ fontFamily: 'monospace', color: '#185FA5', textAlign: 'right' }} />
+          </Form.Item>
+        </Col>
 
         <Col span={4}>
           <Form.Item name="currency" label="Currency" style={mb}>
             <Select
-              showSearch optionFilterProp="label"
+              showSearch optionFilterProp="label" allowClear
               placeholder="Select currency…" disabled={disabled}
               onChange={handleCurrencyChange}
-              options={currencies.map((c) => ({ value: c.currCode, label: `${c.currCode} — ${c.currName}` }))}
+              options={currencies.map((c) => ({ value: c.currCode, label: `${c.currCode} – ${c.currName}` }))}
               notFoundContent={currencies.length === 0 ? 'Loading currencies…' : 'Not found'}
             />
           </Form.Item>

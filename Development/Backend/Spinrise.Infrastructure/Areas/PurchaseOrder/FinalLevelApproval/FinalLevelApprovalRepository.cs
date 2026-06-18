@@ -24,7 +24,7 @@ public class FinalLevelApprovalRepository : IFinalLevelApprovalRepository
         return rows.Select(r => new FinalApprovalLineDto(
             DivCode:        r.DivCode        ?? string.Empty,
             PrNo:           r.PrNo,
-            PrDate:         r.PrDate         ?? string.Empty,
+            PrDate:         r.PrDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
             PrSno:          r.PrSno,
             DbName:         string.Empty,
             Department:     r.Department     ?? string.Empty,
@@ -104,10 +104,10 @@ public class FinalLevelApprovalRepository : IFinalLevelApprovalRepository
     // Property class — Dapper maps by name, so SP column order and additions never cause constructor errors.
     private sealed class FinalApprovalLineRow
     {
-        public string?  DivCode        { get; init; }
-        public decimal  PrNo           { get; init; }
-        public string?  PrDate         { get; init; }
-        public decimal  PrSno          { get; init; }
+        public string?   DivCode        { get; init; }
+        public decimal   PrNo           { get; init; }
+        public DateTime  PrDate         { get; init; }   // datetime from SP — let Dapper own the conversion
+        public decimal   PrSno          { get; init; }
         public string?  Department     { get; init; }
         public string?  ItemCode       { get; init; }
         public string?  ItemName       { get; init; }

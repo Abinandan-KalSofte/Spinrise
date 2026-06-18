@@ -7,6 +7,7 @@ public class SupplierOptionDto
     public string GstinNo      { get; set; } = "";
     public string GstStateCode { get; set; } = "";
     public string GstStateName { get; set; } = "";
+    public string City         { get; set; } = "";   // CR-003
 }
 
 public class OrderTypeOptionDto

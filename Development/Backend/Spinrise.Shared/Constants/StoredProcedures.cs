@@ -86,6 +86,15 @@ public static class StoredProcedures
         public const string GetPricingTerms    = "ksp_PO_GetPricingTerms";
         public const string GetPrintData       = "ksp_PO_GetPrint";
         public const string SetPrintFlag       = "ksp_PO_SetPrintFlag";
+        public const string UpdateBudget        = "ksp_PO_UpdateBudget";
+        public const string UpdateBudgetQty     = "ksp_PO_UpdateBudgetQty";
+        // Approval SPs (PO Approval FSD v1.1 — Stage 2 cleared 16-Jun-2026)
+        public const string GetApprovalStatus   = "ksp_PO_GetApprovalStatus";   // SP #17
+        public const string SetFirstApproval    = "ksp_PO_SetFirstApproval";
+        public const string SetSecondApproval   = "ksp_PO_SetSecondApproval";
+        public const string SetFinalApproval    = "ksp_PO_SetFinalApproval";
+        public const string SaveLpoRateHistory  = "ksp_PO_SaveLPORateHistory";  // SP #15 — always active; called per line after Add save
+        public const string UpdateQuotationStatus = "ksp_PO_UpdateQuotationStatus"; // SP #16 — DEFERRED Sprint 2A. PO_QUOTH not active at JAT pilot site. CEO execution plan 14-Jun-2026.
     }
 
     public static class Pr

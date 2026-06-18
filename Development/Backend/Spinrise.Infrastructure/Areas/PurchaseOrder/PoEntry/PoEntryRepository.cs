@@ -241,6 +241,7 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("HostName",        hostName);
         p.Add("IpAddress",       ipAddress);
         p.Add("LinesJson",       linesJson);
+        p.Add("RoundOff",        request.Header.RoundOff);
         p.Add("PoNo", dbType: DbType.Decimal, direction: ParameterDirection.Output);
 
         await _uow.Connection.ExecuteAsync(
@@ -249,6 +250,37 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
 
         var poNo = p.Get<decimal>("PoNo");
+
+        // SP #13: deduct order value from PO_BUDGET (no-op if BudgetControl='N' in PO_PARA)
+        await _uow.Connection.ExecuteAsync(
+            StoredProcedures.Po.UpdateBudget,
+            new { DivCode = divCode, PoNo = poNo, PoDate = request.PoDate },
+            commandType: CommandType.StoredProcedure);
+
+        // SP #14: deduct ordered qty from PO_BUDGETQTY_YEAR (no-op if BudgetQty='N' in PO_PARA)
+        await _uow.Connection.ExecuteAsync(
+            StoredProcedures.Po.UpdateBudgetQty,
+            new { DivCode = divCode, PoNo = poNo, PoDate = request.PoDate },
+            commandType: CommandType.StoredProcedure);
+
+        // SP #15: record LPO rate history — always active, called once per line
+        foreach (var line in request.Lines)
+            await _uow.Connection.ExecuteAsync(
+                StoredProcedures.Po.SaveLpoRateHistory,
+                new
+                {
+                    DivCode   = divCode,
+                    PoNo      = poNo,
+                    PoDate    = request.PoDate,
+                    OrderType = request.Header.OrderType,
+                    Supplier  = request.Header.Supplier,
+                    ItemCode  = line.ItemCode,
+                    Qty       = line.Qty,
+                    Rate      = line.Rate,
+                    UserId    = userId
+                },
+                commandType: CommandType.StoredProcedure);
+
         return new PoSaveResultDto
         {
             PoNo   = poNo,
@@ -318,11 +350,11 @@ public class PoEntryRepository : IPoEntryRepository
         )).ToList();
 
         return new PoPrintDto(
-            header.DivLogo, header.DivName, header.DivPrintName,
+            header.DivLogo, header.DivName, header.DivPrintName, header.DivUnitName,
             header.DivAddress1, header.DivAddress2, header.DivAddress3,
-            header.DivPinCode, header.DivPhone, header.DivEmail, header.DivGstin,
+            header.DivPinCode, header.DivPhone, header.DivEmail, header.DivGstin, header.DivPan, header.DivWeb,
             header.DivCode, header.PoNo, header.PoDate,
-            header.SlCode, header.SlName, header.SlAddress, header.SlGstin,
+            header.SlCode, header.SlName, header.SlAddress, header.SlGstin, header.SlPhone, header.SlEmail,
             header.OrderType, header.Carrier, header.Currency, header.CurrRate,
             header.CreditDays, header.PayMode, header.Remarks,
             header.CgstPer, header.SgstPer, header.IgstPer, header.TcsPer,

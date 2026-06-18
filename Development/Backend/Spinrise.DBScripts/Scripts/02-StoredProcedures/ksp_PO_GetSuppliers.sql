@@ -15,7 +15,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT TOP 100
+    SELECT
         RTRIM(s.slcode)                                         AS SlCode,
         RTRIM(ISNULL(s.slname, ''))                             AS SlName,
         RTRIM(ISNULL(s.gstinno, ''))                            AS GstinNo,
@@ -23,7 +23,8 @@ BEGIN
         RTRIM(ISNULL(s.gststatecode, '')) +
             CASE WHEN RTRIM(ISNULL(s.state, '')) <> ''
                  THEN ' - ' + RTRIM(s.state)
-                 ELSE '' END                                    AS GstStateName
+                 ELSE '' END                                    AS GstStateName,
+        RTRIM(ISNULL(s.city, ''))                              AS City
     FROM dbo.FA_SLMAS s
     WHERE UPPER(ISNULL(s.active, 'Y')) = 'Y'
       AND (@Search IS NULL

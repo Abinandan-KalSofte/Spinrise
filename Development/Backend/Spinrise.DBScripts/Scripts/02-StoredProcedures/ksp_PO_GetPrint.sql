@@ -5,7 +5,7 @@
 --                        (2) PO lines.
 -- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno,
 --   add1, add2, add3, pincode, email — all verified.
--- FA_SLMAS confirmed columns: add1, add2, gstinno (lowercase).
+-- FA_SLMAS confirmed columns: add1, add2, state, gstinno (lowercase). add3/city/pin unverified.
 -- PO_ORDH: GST % columns don't exist — amounts only.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPrint
@@ -21,9 +21,10 @@ BEGIN
     -- ─── Result set 1: Print header (div letterhead + PO header) ──────────────
     SELECT
         -- Division letterhead
-        NULL                                                        AS DivLogo,
+        div.DIV_LOGO                                                AS DivLogo,
         RTRIM(ISNULL(div.divname, ''))                              AS DivName,
         RTRIM(ISNULL(div.div_printname, div.divname))               AS DivPrintName,
+        RTRIM(ISNULL(div.div_unitname, ''))                         AS DivUnitName,
         RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,
         RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,
         RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,
@@ -31,6 +32,8 @@ BEGIN
         RTRIM(ISNULL(div.PHONE1, ''))                               AS DivPhone,
         RTRIM(ISNULL(div.email, ''))                                AS DivEmail,
         RTRIM(ISNULL(div.gstinno, ''))                              AS DivGstin,
+        RTRIM(ISNULL(div.PAN, ''))                                  AS DivPan,
+        RTRIM(ISNULL(div.WEBADDR, ''))                              AS DivWeb,
         -- PO header
         RTRIM(h.DIVCODE)                                            AS DivCode,
         h.PORDNO                                                    AS PoNo,
@@ -38,11 +41,14 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS SlCode,
         RTRIM(ISNULL(sl.slname, ''))                                AS SlName,
         RTRIM(ISNULL(sl.add1, '')) +
-            CASE WHEN RTRIM(ISNULL(sl.add2, '')) <> ''
-                 THEN ' ' + RTRIM(sl.add2) ELSE '' END              AS SlAddress,
+            CASE WHEN RTRIM(ISNULL(sl.add2,  '')) <> '' THEN ', ' + RTRIM(sl.add2)  ELSE '' END +
+            CASE WHEN RTRIM(ISNULL(sl.state, '')) <> '' THEN ', ' + RTRIM(sl.state) ELSE '' END
+                                                                     AS SlAddress,
         RTRIM(ISNULL(sl.gstinno, ''))                               AS SlGstin,
+        RTRIM(ISNULL(sl.phone1, ''))                                AS SlPhone,
+        RTRIM(ISNULL(sl.email, ''))                                 AS SlEmail,
         RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
-        RTRIM(ISNULL(h.CARCODE, ''))                                AS Carrier,
+        RTRIM(ISNULL(car.CARNAME, h.CARCODE))                       AS Carrier,
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         ISNULL(h.CRDDAYS, 0)                                        AS CreditDays,
@@ -59,7 +65,7 @@ BEGIN
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
-        RTRIM(ISNULL(h.createdby, ''))                              AS CreatedBy,
+        RTRIM(ISNULL(cby.user_name, ISNULL(h.createdby, '')))      AS CreatedBy,
         ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
         -- Additional fields for V2 print
         RTRIM(ISNULL(h.refno, ''))                                  AS RefNo,
@@ -78,6 +84,11 @@ BEGIN
         ON RTRIM(div.divcode) = RTRIM(h.DIVCODE)
     LEFT JOIN dbo.FA_SLMAS sl
         ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    LEFT JOIN dbo.PO_CAR car
+        ON RTRIM(car.CARCODE) = RTRIM(h.CARCODE)
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(h.createdby)
+                   AND RTRIM(divcode) = RTRIM(h.DIVCODE))                 cby
     WHERE h.DIVCODE = @DivCode
       AND h.PORDNO  = @PoNo
       AND CAST(h.PORDDT AS DATE) = @PoDate;

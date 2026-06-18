@@ -58,11 +58,27 @@ interface DraftTax {
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
+  // CR-013: editable rate/qty in modal
+  localRate:        number
+  localQty:         number
+  // CR-011: stored charge amounts (no snap-back on amount entry)
+  discAmt:          number
+  packingAmt:       number
+  freightAmt:       number
+  insuranceAmt:     number
+  cessAmt:          number
 }
 
 // ── Seed ─────────────────────────────────────────────────────────────────────
 const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
   const useHeader = !line?.taxSaved
+  const discPer      = useHeader ? hd.discPer      : (line?.discPer      ?? 0)
+  const packingPer   = useHeader ? hd.packingPer   : (line?.packingPer   ?? 0)
+  const freightPer   = useHeader ? hd.freightPer   : (line?.freightPer   ?? 0)
+  const insurancePer = useHeader ? hd.insurancePer : (line?.insurancePer ?? 0)
+  const cessPer      = useHeader ? hd.cessPer      : (line?.cessPer      ?? 0)
+  const seedTaxable  = round2((line?.rate ?? 0) * (line?.qty ?? 0))
+  const seedDiscAmt  = pctOf(seedTaxable, discPer)
   return {
     hsnCode:          line?.hsnCode    ?? '',
     taxCode:          line?.taxCode    ?? '',
@@ -74,11 +90,11 @@ const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
     igstPer:          line?.igstPer    ?? 0,
     addTaxCode:       line?.addTaxCode ?? '',
     tcsPer:           useHeader ? hd.tcsPer       : (line?.tcsPer       ?? 0),
-    discPer:          useHeader ? hd.discPer      : (line?.discPer      ?? 0),
-    packingPer:       useHeader ? hd.packingPer   : (line?.packingPer   ?? 0),
-    freightPer:       useHeader ? hd.freightPer   : (line?.freightPer   ?? 0),
-    insurancePer:     useHeader ? hd.insurancePer : (line?.insurancePer ?? 0),
-    cessPer:          useHeader ? hd.cessPer      : (line?.cessPer      ?? 0),
+    discPer,
+    packingPer,
+    freightPer,
+    insurancePer,
+    cessPer,
     fcaFob:           useHeader ? hd.fcaFob       : (line?.fcaFob       ?? 0),
     addTaxPer:        useHeader ? hd.addTaxPer    : (line?.addTaxPer    ?? 0),
     // Applicability: saved lines use their stored value; unsaved lines use Header.
@@ -89,6 +105,15 @@ const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
     freightType:      line?.taxSaved ? (line.freightType      ?? hd.freightType)      : hd.freightType,
     discApp:          line?.taxSaved ? (line.discApp          ?? hd.discApp)          : hd.discApp,
     packApp:          line?.taxSaved ? (line.packApp          ?? hd.packApp)          : hd.packApp,
+    // CR-013: editable rate/qty
+    localRate:        line?.rate ?? 0,
+    localQty:         line?.qty  ?? 0,
+    // CR-011: stored charge amounts seeded from computed values
+    discAmt:          seedDiscAmt,
+    packingAmt:       pctOf(seedTaxable - seedDiscAmt, packingPer),
+    freightAmt:       pctOf(seedTaxable, freightPer),
+    insuranceAmt:     pctOf(seedTaxable, insurancePer),
+    cessAmt:          pctOf(seedTaxable, cessPer),
   }
 }
 
@@ -115,23 +140,28 @@ export function GstTaxDetailsModal({
   const isDelete = mode === 'DELETE'
   const isView = mode === 'VIEW'
 
-  // ── Calculations (unchanged from recalcLine) ──────────────────────────────
-  const taxable      = round2((line.rate || 0) * (line.qty || 0))
-  const discountAmt  = pctOf(taxable, tax.discPer)
-  const packingBase  = taxable - discountAmt
-  const packingAmt   = pctOf(packingBase, tax.packingPer)
-  const freightAmt   = pctOf(taxable, tax.freightPer)
-  const insuranceAmt = pctOf(taxable, tax.insurancePer)
-  const cessAmt      = pctOf(taxable, tax.cessPer)
-  const addTaxAmt    = pctOf(taxable, tax.addTaxPer)
-  const cgstAmt      = isLocal ? pctOf(taxable, tax.cgstPer) : 0
-  const sgstAmt      = isLocal ? pctOf(taxable, tax.sgstPer) : 0
-  const igstAmt      = isLocal ? 0 : pctOf(taxable, tax.igstPer)
-  const tcsAmt       = pctOf(taxable, tax.tcsPer)
-  const gstTotal     = round2(cgstAmt + sgstAmt + igstAmt)
-  const totalTax     = round2(gstTotal + addTaxAmt + cessAmt + tcsAmt)
-  const netCharges   = round2(-discountAmt + packingAmt + freightAmt + insuranceAmt)
-  const netAmount    = round2(taxable + netCharges + totalTax)
+  // ── Calculations ──────────────────────────────────────────────────────────
+  // CR-013: taxable uses editable localRate/localQty from DraftTax
+  const taxable = round2((tax.localRate || 0) * (tax.localQty || 0))
+
+  // CR-012: standard Indian GST assessable base formula
+  // Charge amounts are stored in DraftTax (CR-011) — no snap-back on direct entry.
+  let gstBase = taxable
+  if (tax.discApp      === 'BEFORE') gstBase = round2(gstBase - tax.discAmt)
+  if (tax.freightPos   === 'BEFORE') gstBase = round2(gstBase + tax.freightAmt)
+  if (tax.packApp      === 'BEFORE') gstBase = round2(gstBase + tax.packingAmt)
+  if (tax.insuranceDuty === 'BEFORE') gstBase = round2(gstBase + tax.insuranceAmt)
+
+  const addTaxAmt = pctOf(taxable, tax.addTaxPer)
+  const cgstAmt   = isLocal ? pctOf(gstBase, tax.cgstPer) : 0
+  const sgstAmt   = isLocal ? pctOf(gstBase, tax.sgstPer) : 0
+  const igstAmt   = isLocal ? 0 : pctOf(gstBase, tax.igstPer)
+  const tcsAmt    = pctOf(taxable, tax.tcsPer)
+  const gstTotal  = round2(cgstAmt + sgstAmt + igstAmt)
+  const totalTax  = round2(gstTotal + addTaxAmt + tax.cessAmt + tcsAmt)
+  const netAmount = round2(
+    taxable - tax.discAmt + tax.packingAmt + tax.freightAmt + tax.insuranceAmt + totalTax,
+  )
 
   // ── State helpers ─────────────────────────────────────────────────────────
   const set = <K extends keyof DraftTax>(k: K, v: DraftTax[K]) =>
@@ -151,19 +181,34 @@ export function GstTaxDetailsModal({
     }))
   }
 
-  const onAddTaxCodeChange = (code: string) => {
-    const opt      = gstTaxCodes.find((t) => t.taxCode === code)
-    const combined = opt ? (opt.igstPer || round2(opt.cgstPer + opt.sgstPer)) : 0
-    setTax((p) => ({ ...p, addTaxCode: code, addTaxPer: opt ? combined : p.addTaxPer }))
+  // CR-011: % change → update per + re-derive stored amount (no snap-back)
+  const setDiscPer  = (v: number | null) => {
+    const per = v ?? 0; setTax((p) => ({ ...p, discPer: per, discAmt: pctOf(taxable, per) }))
+  }
+  const setPackPer  = (v: number | null) => {
+    const per = v ?? 0; setTax((p) => ({ ...p, packingPer: per, packingAmt: pctOf(taxable - p.discAmt, per) }))
+  }
+  const setFrePer   = (v: number | null) => {
+    const per = v ?? 0; setTax((p) => ({ ...p, freightPer: per, freightAmt: pctOf(taxable, per) }))
+  }
+  const setInsurPer = (v: number | null) => {
+    const per = v ?? 0; setTax((p) => ({ ...p, insurancePer: per, insuranceAmt: pctOf(taxable, per) }))
+  }
+  const setCessPer  = (v: number | null) => {
+    const per = v ?? 0; setTax((p) => ({ ...p, cessPer: per, cessAmt: pctOf(taxable, per) }))
   }
 
-  // Bidirectional % ↔ Amount
-  const onDiscAmt  = (v: number | null) => set('discPer',      backCalcPer(v ?? 0, taxable))
-  const onPackAmt  = (v: number | null) => set('packingPer',   backCalcPer(v ?? 0, packingBase))
-  const onFreAmt   = (v: number | null) => set('freightPer',   backCalcPer(v ?? 0, taxable))
-  const onInsurAmt = (v: number | null) => set('insurancePer', backCalcPer(v ?? 0, taxable))
-  const onCessAmt  = (v: number | null) => set('cessPer',      backCalcPer(v ?? 0, taxable))
-  const onAddAmt   = (v: number | null) => set('addTaxPer',    backCalcPer(v ?? 0, taxable))
+  // Amount change → store directly + back-compute per only (amount stays as typed)
+  const onDiscAmt  = (v: number | null) =>
+    setTax((p) => ({ ...p, discAmt: v ?? 0, discPer: backCalcPer(v ?? 0, taxable) }))
+  const onPackAmt  = (v: number | null) =>
+    setTax((p) => ({ ...p, packingAmt: v ?? 0, packingPer: backCalcPer(v ?? 0, taxable - p.discAmt) }))
+  const onFreAmt   = (v: number | null) =>
+    setTax((p) => ({ ...p, freightAmt: v ?? 0, freightPer: backCalcPer(v ?? 0, taxable) }))
+  const onInsurAmt = (v: number | null) =>
+    setTax((p) => ({ ...p, insuranceAmt: v ?? 0, insurancePer: backCalcPer(v ?? 0, taxable) }))
+  const onCessAmt  = (v: number | null) =>
+    setTax((p) => ({ ...p, cessAmt: v ?? 0, cessPer: backCalcPer(v ?? 0, taxable) }))
 
   // ── Apply ─────────────────────────────────────────────────────────────────
   const handleApply = () => {
@@ -201,6 +246,9 @@ export function GstTaxDetailsModal({
       freightType:      tax.freightType,
       discApp:          tax.discApp,
       packApp:          tax.packApp,
+      // CR-013: propagate edited rate/qty back to the line
+      rate: tax.localRate,
+      qty:  tax.localQty,
     }
     onApply(line.lineNo, { detail, deleteReason: isDelete ? deleteReason.trim() : undefined })
   }
@@ -226,14 +274,29 @@ export function GstTaxDetailsModal({
             <span style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a' }}>GST &amp; Tax Details</span>
             <RouteChip route={line.route} />
           </div>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, color: '#888', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <span>
               <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#185FA5' }}>{line.itemCode}</span>
               <span style={{ margin: '0 4px', color: '#ccc' }}>·</span>
               <span style={{ color: '#555' }}>{line.itemName}</span>
             </span>
             <span style={{ color: '#ccc' }}>|</span>
-            <span>Qty <b style={{ color: '#333', fontFamily: 'monospace' }}>{line.qty}</b> × Rate <b style={{ color: '#333', fontFamily: 'monospace' }}>{fmt2(line.rate)}</b></span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: '#888' }}>Qty</label>
+              <InputNumber
+                size="small" min={0} precision={3} controls={false} disabled={isDelete || isView}
+                value={tax.localQty}
+                style={{ width: 90, fontFamily: 'monospace', textAlign: 'right' }}
+                onChange={(v) => set('localQty', v ?? 0)}
+              />
+              <label style={{ fontSize: 11, color: '#888', marginLeft: 4 }}>Rate</label>
+              <InputNumber
+                size="small" min={0} precision={4} controls={false} disabled={isDelete || isView}
+                value={tax.localRate}
+                style={{ width: 110, fontFamily: 'monospace', textAlign: 'right' }}
+                onChange={(v) => set('localRate', v ?? 0)}
+              />
+            </span>
           </div>
         </div>
       }
@@ -268,14 +331,6 @@ export function GstTaxDetailsModal({
                 placeholder="Select code" value={tax.taxCode || undefined}
                 options={codeOptions} onChange={onGstCodeChange}
                 notFoundContent={gstTaxCodes.length ? undefined : 'No codes loaded'}
-                disabled={isDelete || isView}
-              />
-            </Field>
-            <Field label="Additional Tax Code">
-              <Select
-                size="small" style={full} showSearch optionFilterProp="label" allowClear
-                placeholder="Optional" value={tax.addTaxCode || undefined}
-                options={codeOptions} onChange={(v) => onAddTaxCodeChange(v ?? '')}
                 disabled={isDelete || isView}
               />
             </Field>
@@ -315,18 +370,16 @@ export function GstTaxDetailsModal({
               <span style={{ ...colHdr, textAlign: 'right' }}>%</span>
               <span style={{ ...colHdr, textAlign: 'right' }}>Amount</span>
               {/* Rows — ChargeRow renders 3 naked cells each */}
-              <ChargeRow label="Discount"      per={tax.discPer}      amt={discountAmt}  disabled={isDelete || isView}
-                onPer={(v) => set('discPer',      v ?? 0)} onAmt={onDiscAmt}  />
-              <ChargeRow label="Packing"        per={tax.packingPer}   amt={packingAmt}   disabled={isDelete || isView}
-                onPer={(v) => set('packingPer',   v ?? 0)} onAmt={onPackAmt}  />
-              <ChargeRow label="Freight"        per={tax.freightPer}   amt={freightAmt}   disabled={isDelete || isView}
-                onPer={(v) => set('freightPer',   v ?? 0)} onAmt={onFreAmt}   />
-              <ChargeRow label="Insurance"      per={tax.insurancePer} amt={insuranceAmt} disabled={isDelete || isView}
-                onPer={(v) => set('insurancePer', v ?? 0)} onAmt={onInsurAmt} />
-              <ChargeRow label="Cess"           per={tax.cessPer}      amt={cessAmt}      disabled={isDelete || isView}
-                onPer={(v) => set('cessPer',      v ?? 0)} onAmt={onCessAmt}  />
-              <ChargeRow label="Additional Tax" per={tax.addTaxPer}    amt={addTaxAmt}    disabled={isDelete || isView}
-                onPer={(v) => set('addTaxPer',    v ?? 0)} onAmt={onAddAmt}   />
+              <ChargeRow label="Discount"      per={tax.discPer}      amt={tax.discAmt}      disabled={isDelete || isView}
+                onPer={setDiscPer}  onAmt={onDiscAmt}  />
+              <ChargeRow label="Packing"        per={tax.packingPer}   amt={tax.packingAmt}   disabled={isDelete || isView}
+                onPer={setPackPer}  onAmt={onPackAmt}  />
+              <ChargeRow label="Freight"        per={tax.freightPer}   amt={tax.freightAmt}   disabled={isDelete || isView}
+                onPer={setFrePer}   onAmt={onFreAmt}   />
+              <ChargeRow label="Insurance"      per={tax.insurancePer} amt={tax.insuranceAmt} disabled={isDelete || isView}
+                onPer={setInsurPer} onAmt={onInsurAmt} />
+              <ChargeRow label="Cess"           per={tax.cessPer}      amt={tax.cessAmt}      disabled={isDelete || isView}
+                onPer={setCessPer} onAmt={onCessAmt}  />
             </div>
 
             {/* Right: Applicability — compact Radio controls */}
@@ -393,12 +446,12 @@ export function GstTaxDetailsModal({
             display: 'flex',
             flexDirection: 'column',
           }}>
-            <SR label="Taxable Value"                      value={taxable}      strong />
+            <SR label="Taxable Value"                      value={taxable}          strong />
             <div style={summaryDiv} />
-            <SR label="Discount"                           value={-discountAmt} muted />
-            <SR label="Packing"                            value={packingAmt}   muted />
-            <SR label="Freight"                            value={freightAmt}   muted />
-            <SR label="Insurance"                          value={insuranceAmt} muted />
+            <SR label="Discount"                           value={tax.discAmt}      muted />
+            <SR label="Packing"                            value={tax.packingAmt}   muted />
+            <SR label="Freight"                            value={tax.freightAmt}   muted />
+            <SR label="Insurance"                          value={tax.insuranceAmt} muted />
             <div style={summaryDiv} />
             {isLocal ? (
               <>
@@ -408,8 +461,7 @@ export function GstTaxDetailsModal({
             ) : (
               <SR label={`IGST ${fmt2(tax.igstPer)}%`}    value={igstAmt} />
             )}
-            <SR label={`Add. Tax ${fmt2(tax.addTaxPer)}%`} value={addTaxAmt} />
-            <SR label={`Cess ${fmt2(tax.cessPer)}%`}       value={cessAmt} />
+            <SR label={`Cess ${fmt2(tax.cessPer)}%`}       value={tax.cessAmt} />
             <SR label={`TCS ${fmt2(tax.tcsPer)}%`}         value={tcsAmt} />
             {/* Net Amount — last row of the card, always visible */}
             <div style={{ marginTop: 'auto' }}>
@@ -441,9 +493,9 @@ export function GstTaxDetailsModal({
             : null}
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button size="medium" onClick={onCancel}>Cancel</Button>
+          <Button size="middle" onClick={onCancel}>Cancel</Button>
           {
-            !isView && <Button size="medium" type="primary" onClick={handleApply}>
+            !isView && <Button size="middle" type="primary" onClick={handleApply}>
             {isDelete ? 'Apply & Close' : 'Save & Update'}
           </Button>
           }

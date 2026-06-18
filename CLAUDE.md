@@ -1,4 +1,6 @@
-# CLAUDE.md — Spinrise ERP V2
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -13,6 +15,7 @@ Development/
 ├── Backend/         # .NET solution (Spinrise.sln)
 └── spinrise-web/    # Vite/React frontend
 Docs/                # FSDs, module tracker, blueprints
+DB_Schema/           # Live schema snapshots (SpinRiseSaranya_Schema.md, JAT_Schema.md)
 ```
 
 ---
@@ -88,7 +91,7 @@ Ready. Awaiting instruction.
 
 **Blocker rule:** Any ambiguity in FSD, DB schema, or requirements → STOP and ask. Never assume business logic.
 
-**Module tracker:** `Docs/MODULE_TRACKER.md`
+**Module tracker:** `MODULE_TRACKER.md` (root level)
 
 ---
 
@@ -98,7 +101,6 @@ Ready. Awaiting instruction.
 
 - Do not read any file unless the user explicitly points to it by path or confirms it is the correct file.
 - If a filename looks relevant to an email or task, always ask: *"Is this the file you want me to read, or is it saved elsewhere?"* — do not read it on assumption.
-- A file placed in a folder before the email arrived is NOT the email attachment.
 
 ---
 
@@ -148,6 +150,41 @@ Awaiting your response before generating any output.
 - `Spinrise.API/Middleware/ExceptionHandlingMiddleware.cs`
 - `Spinrise.Shared/Models/ApiResponse.cs` / `ApiResponseOfT.cs`
 - `Spinrise.Infrastructure/Data/UnitOfWork.cs`
+- `Spinrise.Shared/Constants/StoredProcedures.cs` — all SP name constants (`StoredProcedures.Po.SaveEntry`, `StoredProcedures.Pr.GetParameters`, etc.)
+
+### UnitOfWork & Dynamic Database Routing
+
+`UnitOfWork` opens the connection **lazily** (on first use) — this prevents failed connections on `[AllowAnonymous]` endpoints where no DB token is present.
+
+`DbNameMiddleware` reads the JWT claim → extracts `DbName` → stores it in `HttpContext.Items`. `UnitOfWork` reads `HttpContext.Items["DbName"]` (falls back to `"JAT"`) and passes it to `DbConnectionFactory.CreateConnection(dbName)`. The factory swaps `Database=master` in the template connection string for the actual DB name. Connection string template lives in `appsettings.json` under `ConnectionStrings:ServerConnection`.
+
+This is how a single API codebase serves multiple client databases — the database name comes from the user's token, not from configuration.
+
+### StoredProcedures Constants
+
+All SP names are centralized in `Spinrise.Shared/Constants/StoredProcedures.cs` as nested static classes:
+
+```csharp
+StoredProcedures.Pr.GetParameters   // "ksp_PR_GetParameters"
+StoredProcedures.Po.SaveEntry       // "ksp_PO_SaveEntry"
+StoredProcedures.Auth.Login         // etc.
+```
+
+Never hardcode SP name strings in repositories — always reference these constants.
+
+### Exception → HTTP Status Mapping
+
+`ExceptionHandlingMiddleware` converts exceptions to `ApiResponse.Fail(message)`:
+
+| Exception | Status |
+|---|---|
+| `InvalidOperationException`, `ArgumentException` | 400 |
+| `UnauthorizedAccessException` | 403 |
+| `ConcurrencyConflictException`, `BusinessConflictException` | 409 |
+| SQL 2601/2627 (duplicate key), 547 (FK), 515 (NOT NULL) | 400 |
+| Unhandled | 500 (sanitized message) |
+
+Throw `InvalidOperationException` for business-rule violations (e.g., "PR already approved"). Throw `BusinessConflictException` for state conflicts (e.g., "GRN raised, cannot delete").
 
 ### Rules
 - All data access through parameterized stored procedures — no raw string SQL, no EF
@@ -172,18 +209,47 @@ Awaiting your response before generating any output.
 
 **Stack**: React 18, TypeScript (strict), Vite, Ant Design 5, Zustand, Axios, React Router v7, Vitest
 
+**TypeScript path alias**: `@/*` → `src/*` (configured in `tsconfig.app.json` and `vite.config.ts`). Use `@/shared/...`, `@/features/...` — never relative `../../` paths crossing feature boundaries.
+
 **Feature module structure**:
 ```
 src/features/<featureName>/
-├── api/           # Axios API calls
-├── components/    # UI components
-├── pages/         # Route-level components
+├── types.ts       # TypeScript interfaces + helper functions/constants
+├── api/           # Axios API calls (one file per screen or sub-feature)
 ├── store/         # Zustand stores
-├── hooks/         # Business logic hooks
-└── types.ts       # TypeScript types
+├── hooks/         # Orchestration hooks (form state, screen init, save/delete)
+├── pages/         # Route-level components (compose hooks + components)
+└── components/    # UI components split by screen section
 ```
 
+**Layer sequence when building a feature:**
+`types.ts` → `api/` → `store/` → `hooks/` → `pages/` → `components/`
+
+Each `api/` file centralizes a `BASE` constant (e.g., `const BASE = 'po'`) so the route prefix can be changed in one place. Hooks call the API layer and update the Zustand store; pages only compose hooks and components — no direct API calls in pages.
+
 **Shared layer**: `src/shared/` — Axios client, UI wrappers, reusable hooks, utilities.
+
+### Auth Store & Session Context
+
+Login stores session in Zustand + persisted to `localStorage` key `spinrise-auth-v2`. The store holds `user` (with `userId`, `divCode`, `dbName`, `compCode`) and `processingDate`.
+
+The Axios request interceptor (`src/shared/api/client.ts`) automatically attaches:
+- `Authorization: Bearer <accessToken>`
+- `X-Processing-Date: <processingDate>`
+
+Token refresh is handled transparently: on 401, the interceptor queues pending requests, refreshes the token, then replays them. On refresh failure, it clears auth state and shows a session-expired modal.
+
+### Financial Year Bounds
+
+`getFYBounds(date?)` in `src/shared/lib/dateUtils.ts` computes Indian April–March FY:
+- Start: `YYYY-04-01`
+- End: lesser of today and `YYYY+1-03-31`
+
+Used in every list/report query as `fDate`/`lDate` parameters. Pass `processingDate` from auth store when the user is working in a past FY.
+
+### Error Handling
+
+Frontend: `src/shared/lib/errorHandler.ts` — `getErrorMessage(error)` normalises any thrown value (Axios error, AppError, unknown) into a user-readable string. Always call this in `catch` blocks before showing toasts or modals.
 
 ### Rules
 - Strict TypeScript — no `any`
@@ -200,15 +266,15 @@ src/features/<featureName>/
 
 - SPs only — never create/alter tables, columns, or indexes
 - Add stored procedures → `Spinrise.DBScripts/Scripts/02-StoredProcedures/`
-- Every SP change must also update `merged.sql` in the same session
-- Deploy via `merged.sql` in SSMS against `SpinRiseSaranya`
+- Every SP change must also update `merged.sql` (SpinRiseSaranya) or `merged_jat.sql` (JAT) in the same session
+- Deploy via the appropriate `merged*.sql` in SSMS
 - Parameterized queries only — never string concatenation
 - All SPs: `SET NOCOUNT ON` at top; TRY/CATCH with ROLLBACK in transactional SPs
 - No `SELECT *` — always list columns explicitly
 
 ### MANDATORY: Read Schema Before Writing Any SP
 
-**Before writing any stored procedure, read `Docs/DB_Schema/SpinRiseSaranya_Schema.md`.**
+**Before writing any stored procedure, read `DB_Schema/SpinRiseSaranya_Schema.md` or `DB_Schema/JAT_Schema.md`** (root-level `DB_Schema/` folder — not under `Docs/`).
 
 This is non-negotiable. Every SP written without reading the schema will have wrong column names and fail in SSMS.
 
@@ -323,9 +389,10 @@ The user does NOT need to fill any template. Just paste or point to the source a
 
 ## Testing
 
-- Framework: xUnit + Moq + FluentAssertions (backend), Vitest (frontend)
+- Framework: xUnit + Moq + FluentAssertions + AutoFixture (backend), Vitest (frontend)
 - Pattern: Arrange / Act / Assert
-- Mock all dependencies in unit tests
+- Mock all dependencies in unit tests — tests are organised under `Spinrise.Tests/Areas/<Module>/`
+- Test naming convention: `{MethodName}_{Condition}_{ExpectedResult}`
 - Test both success and error paths
 - Target: 80%+ coverage on services and repositories
 
@@ -392,8 +459,9 @@ Before applying or committing any Claude-generated output:
 
 - **Diff first.** Read the full diff before applying. If an edit replaces more than expected, stop and ask.
 - **C# / TypeScript:** Verify the method signature matches the interface. Verify no new `using` import introduces an unintended dependency.
-- **SQL:** Execute on test DB (`SpinRiseSaranya` / JAT on 172.16.16.52\sql2016) and verify result set columns match what the C# DTO expects. Never touch `merged.sql` before a successful test run.
+- **SQL:** Execute on test DB (`SpinRiseSaranya` / JAT on 172.16.16.52\sql2016) and verify result set columns match what the C# DTO expects. Never touch `merged.sql` / `merged_jat.sql` before a successful test run.
 - **JSON payloads:** Check the exact property names passed to Dapper match the SP parameter names (case-insensitive, but spelling must match exactly).
+- **GST routing:** When building line-level save logic, ensure `igstPer`/`igstAmt` are zeroed for LOCAL route and `cgstPer`/`sgstPer`/their amounts are zeroed for IGST route before sending to the SP. The SP trusts the payload — it does not apply route-based guards.
 
 ### Code quality
 
@@ -411,7 +479,7 @@ Before applying or committing any Claude-generated output:
 |---|---|---|
 | Frontend | `http://172.16.16.40:3000` | IIS on Windows Server |
 | Backend API | `http://172.16.16.40:5001` | IIS on Windows Server |
-| SQL Server | `172.16.16.52\sql2016` | Database: `SpinRiseSaranya` |
+| SQL Server | `172.16.16.52\sql2016` | Database: `SpinRiseSaranya` / `JAT` |
 
 ### Deployment Checklist (run before every deploy)
 
@@ -420,7 +488,7 @@ DEPLOYMENT CHECKLIST — [Module] — [Date]
 ──────────────────────────────────────
 [ ] APIs validated against FSD
 [ ] Stored Procedures verified on test DB
-[ ] merged.sql contains all SP changes from this session/sprint
+[ ] merged.sql / merged_jat.sql contains all SP changes from this session/sprint
 [ ] UI tested against UI/UX Blueprint
 [ ] Edge cases checked
 [ ] Unit tests pass (dotnet test / npm run test)
@@ -453,7 +521,7 @@ DEPLOYMENT CHECKLIST — [Module] — [Date]
 ### Database
 
 ```
-Open merged.sql in SSMS → Execute against SpinRiseSaranya
+Open merged.sql or merged_jat.sql in SSMS → Execute against target DB
 Never run individual SP files in production
 ```
 
@@ -505,16 +573,23 @@ cd Development/Backend
 dotnet run --project Spinrise.API          # dev server → http://localhost:5000
 dotnet build Spinrise.sln                  # build all projects
 dotnet test Spinrise.Tests/Spinrise.Tests.csproj
+dotnet test --filter "ClassName~PrServiceTests"          # single test class
+dotnet test --filter "FullyQualifiedName~AddAsync_Valid"  # single test method
 dotnet publish Spinrise.API/Spinrise.API.csproj -c Release -o <path>
 ```
 
 ### Frontend
 ```
 cd Development/spinrise-web
-npm run dev        # dev server → http://localhost:5173
-npm run build      # production build → dist/
-npm run test       # Vitest unit tests
-npm run lint       # ESLint
+npm run dev          # dev server → http://localhost:5173
+npm run build        # tsc -b && vite build (type-checks then bundles)
+npm run lint         # ESLint (flat config, typescript-eslint + react-hooks)
+npm run test         # Vitest run (all unit tests, jsdom environment)
+npm run test:watch   # Vitest watch mode
+npm run test:coverage          # coverage report (text + HTML)
+npx vitest run src/features/po # single feature test suite
+npm run test:e2e               # Playwright end-to-end
+npm run test:e2e:amendment     # single Playwright spec
 ```
 
 ### MSBuild Cache Warning
@@ -537,12 +612,19 @@ Filter with: `Where-Object { $_ -match "error CS|Build succeeded" }`
 
 ## Dual-Database Architecture
 
-| | M01 — Purchase Requisition | M02 — RMI Purchase Order |
-|---|---|---|
-| **Database** |  `JAT` |
-| **UnitOfWork** | `IUnitOfWork` | `IJATUnitOfWork` |
-| **Merged deploy file** | `merged.sql` | `merged_jat.sql` |
-| **SP prefix** | `ksp_PR_*` | `ksp_RMI_PO_*` |
+M01 spans two databases — PR and PO sub-modules are on different DBs:
+
+| | M01 PR — Purchase Requisition | M01 PO — PR to PO Transfer + PO Approval | M02 — RMI Purchase Order |
+|---|---|---|---|
+| **Database** | `SpinRiseSaranya` | `JAT` | `JAT` |
+| **UnitOfWork** | `IUnitOfWork` | `IJATUnitOfWork` | `IJATUnitOfWork` |
+| **Merged deploy file** | `merged.sql` | `merged_jat.sql` | `merged_jat.sql` |
+| **SP prefix** | `ksp_PR_*` | `ksp_PO_*` | `ksp_RMI_PO_*` |
+| **Branch** | `feature/m01-pr` | `feature/m01-po` | `feature/m02-*` |
+
+**Critical:** Never commit PO Entry/Approval changes to `feature/m01-pr` — that branch protects live PR code at JAT + SCMTS. PO changes go to `feature/m01-po`.
+
+All `ksp_PO_*` stored procedures deploy via `merged_jat.sql` (not `merged.sql`).
 
 ---
 

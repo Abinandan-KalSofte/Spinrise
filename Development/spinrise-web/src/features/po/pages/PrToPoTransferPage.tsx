@@ -239,8 +239,11 @@ export default function PrToPoTransferPage() {
           ConfigProvider token darkens disabled text so saved values stay
           clearly readable (UX-5) while remaining non-editable. */}
       <Skeleton active loading={!f.lookupsLoaded && !f.lookupsError} paragraph={{ rows: 3 }} style={{ padding: 16 }}>
-        <ConfigProvider theme={{ token: { colorTextDisabled: 'rgba(0,0,0,0.82)' } }}>
-          <Form form={f.headerForm} layout="vertical" component={false}>
+        <ConfigProvider theme={{
+          token: { colorTextDisabled: 'rgba(0,0,0,0.82)' },
+          components: { Form: { labelColor: '#475569', labelFontSize: 11 } },
+        }}>
+          <Form form={f.headerForm} layout="vertical" size="small" component={false}>
             <PoHeaderTabs
               mode={f.mode}
               poNo={f.currentPo?.poNo ?? null}
@@ -334,7 +337,14 @@ export default function PrToPoTransferPage() {
         open={prPickerOpen}
         divCode={f.divCode}
         alreadyAdded={new Set(f.draftLines.map((l) => `${l.prNo}-${l.prSno}`))}
-        onLoad={(lines) => { f.addPrLines(lines); setPrPickerOpen(false) }}
+        onLoad={(lines) => {
+          f.addPrLines(lines)
+          setPrPickerOpen(false)
+          setTimeout(() => {
+            const inst = f.headerForm.getFieldInstance('orderType') as { focus?: () => void } | null
+            inst?.focus?.()
+          }, 100)
+        }}
         onCancel={() => setPrPickerOpen(false)}
       />
 

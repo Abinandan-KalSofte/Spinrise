@@ -4647,9 +4647,9 @@ BEGIN
         RTRIM(ISNULL(h.FILENO, ''))                                 AS FileNo,
         ISNULL(h.FCACharg, 0)                                       AS FcaFob,
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
-        'BEFORE'                                                    AS DiscApp,
-        'BEFORE'                                                    AS PackApp,
-        'BEFORE'                                                    AS CessApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
+        'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
@@ -4852,9 +4852,9 @@ BEGIN
         RTRIM(ISNULL(h.FILENO, ''))                                 AS FileNo,
         ISNULL(h.FCACharg, 0)                                       AS FcaFob,
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
-        'BEFORE'                                                    AS DiscApp,
-        'BEFORE'                                                    AS PackApp,
-        'BEFORE'                                                    AS CessApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
+        'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
@@ -4997,7 +4997,7 @@ GO
 --                        (2) PO lines.
 -- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno,
 --   add1, add2, add3, pincode, email — all verified.
--- FA_SLMAS confirmed columns: add1, add2, gstinno (lowercase).
+-- FA_SLMAS confirmed columns: add1, add2, state, gstinno (lowercase). add3/city/pin unverified.
 -- PO_ORDH: GST % columns don't exist — amounts only.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPrint
@@ -5013,9 +5013,10 @@ BEGIN
     -- ─── Result set 1: Print header (div letterhead + PO header) ──────────────
     SELECT
         -- Division letterhead
-        NULL                                                        AS DivLogo,
+        div.DIV_LOGO                                                AS DivLogo,
         RTRIM(ISNULL(div.divname, ''))                              AS DivName,
         RTRIM(ISNULL(div.div_printname, div.divname))               AS DivPrintName,
+        RTRIM(ISNULL(div.div_unitname, ''))                         AS DivUnitName,
         RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,
         RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,
         RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,
@@ -5023,6 +5024,8 @@ BEGIN
         RTRIM(ISNULL(div.PHONE1, ''))                               AS DivPhone,
         RTRIM(ISNULL(div.email, ''))                                AS DivEmail,
         RTRIM(ISNULL(div.gstinno, ''))                              AS DivGstin,
+        RTRIM(ISNULL(div.PAN, ''))                                  AS DivPan,
+        RTRIM(ISNULL(div.WEBADDR, ''))                              AS DivWeb,
         -- PO header
         RTRIM(h.DIVCODE)                                            AS DivCode,
         h.PORDNO                                                    AS PoNo,
@@ -5030,11 +5033,14 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS SlCode,
         RTRIM(ISNULL(sl.slname, ''))                                AS SlName,
         RTRIM(ISNULL(sl.add1, '')) +
-            CASE WHEN RTRIM(ISNULL(sl.add2, '')) <> ''
-                 THEN ' ' + RTRIM(sl.add2) ELSE '' END              AS SlAddress,
+            CASE WHEN RTRIM(ISNULL(sl.add2,  '')) <> '' THEN ', ' + RTRIM(sl.add2)  ELSE '' END +
+            CASE WHEN RTRIM(ISNULL(sl.state, '')) <> '' THEN ', ' + RTRIM(sl.state) ELSE '' END
+                                                                     AS SlAddress,
         RTRIM(ISNULL(sl.gstinno, ''))                               AS SlGstin,
+        RTRIM(ISNULL(sl.phone1, ''))                                AS SlPhone,
+        RTRIM(ISNULL(sl.email, ''))                                 AS SlEmail,
         RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
-        RTRIM(ISNULL(h.CARCODE, ''))                                AS Carrier,
+        RTRIM(ISNULL(car.CARNAME, h.CARCODE))                       AS Carrier,
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         ISNULL(h.CRDDAYS, 0)                                        AS CreditDays,
@@ -5070,6 +5076,8 @@ BEGIN
         ON RTRIM(div.divcode) = RTRIM(h.DIVCODE)
     LEFT JOIN dbo.FA_SLMAS sl
         ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    LEFT JOIN dbo.PO_CAR car
+        ON RTRIM(car.CARCODE) = RTRIM(h.CARCODE)
     WHERE h.DIVCODE = @DivCode
       AND h.PORDNO  = @PoNo
       AND CAST(h.PORDDT AS DATE) = @PoDate;
@@ -5166,9 +5174,9 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @FileNo           VARCHAR(20)    = NULL,
     @FcaFob           NUMERIC(13,2)  = 0,
     @FreightType      VARCHAR(10)    = 'PAID',
-    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- accepted, not yet stored
-    @PackApp          VARCHAR(10)    = 'BEFORE',
-    @CessApp          VARCHAR(10)    = 'BEFORE',
+    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- disflg: 'BEFORE'→'B', 'AFTER'→'A' (wired 16-Jun-2026)
+    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG: 'BEFORE'→'B', 'AFTER'→'A' (wired 16-Jun-2026)
+    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026). Not wired in SPINRISE.
     -- Payment
     @PayMode          VARCHAR(10)    = 'DIRECT',
     @DirectInstr      VARCHAR(200)   = NULL,
@@ -5428,7 +5436,7 @@ BEGIN
             CurrCode,  FCurRate, CARCODE, INSPECT,
             Form_type, refno,   refDate, REMARKS,
             DISPER, Cessper, FREIGHT, PCKPER, INSPER, SURPER, ADDTAXPER,
-            FILENO, FCACharg, FRTFLG,
+            FILENO, FCACharg, FRTFLG, disflg, PACK_FLG,
             PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS,
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
@@ -5461,6 +5469,8 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@FileNo,'')),       ''),
             ISNULL(@FcaFob, 0),
             CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE '' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(@DiscApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- disflg
+            CASE WHEN UPPER(RTRIM(ISNULL(@PackApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- PACK_FLG
             CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
             NULLIF(RTRIM(ISNULL(@DirectInstr,'')),  ''),
             NULLIF(RTRIM(ISNULL(@BankCode,'')),     ''),

@@ -51,6 +51,20 @@ public class PoLineDto
     public string  RequesterName { get; set; } = "";
     public string  Route         { get; set; } = "LOCAL";
     public string  DeleteReason  { get; set; } = "";
+    public decimal DiscPer       { get; set; }
+    public decimal DiscAmt       { get; set; }
+    public decimal PackingPer    { get; set; }
+    public decimal PackingAmt    { get; set; }
+    public decimal FreightPer    { get; set; }
+    public decimal FreightAmt    { get; set; }
+    public decimal InsurancePer  { get; set; }
+    public decimal InsuranceAmt  { get; set; }
+    public decimal CessPer       { get; set; }
+    public decimal CessAmt       { get; set; }
+    public string  AddTaxCode    { get; set; } = "";
+    public decimal AddTaxPer     { get; set; }
+    public decimal AddTaxAmt     { get; set; }
+    public decimal FcaFob        { get; set; }
 }
 
 public class PoHeaderDto

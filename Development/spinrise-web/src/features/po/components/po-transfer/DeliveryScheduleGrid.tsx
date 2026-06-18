@@ -10,8 +10,8 @@ import { type DeliveryScheduleLine, type ScreenMode } from '../../types'
 // QUANTITY, not value (UX-01); each row keeps its own item UOM (UX-02).
 // Editable in ADD; read-only in VIEW/DELETE.
 //
-// Columns (11):
-//   # | Item Id | Item Name | PR No. | UOM | PO Qty | Slot | Scheduled Qty | Balance Qty | Delivery Date | Remarks
+// Columns (10):
+//   # | Item Id | Item Name | PR No. | UOM | PO Qty | [Action] | Scheduled Qty | Balance Qty | Delivery Date | Remarks
 //   PO Qty      = d.poQty (total PO line quantity, rowspan)
 //   Scheduled Qty = slot.qty (quantity for this specific delivery slot, editable)
 //   Balance Qty = PO Qty − Σ Scheduled Qty across all slots (rowspan, colour-coded)
@@ -74,7 +74,7 @@ export function DeliveryScheduleGrid({
               <th style={{ ...TH, width: 90 }}>PR No.</th>
               <th style={{ ...TH, width: 46,  textAlign: 'center' }}>UOM</th>
               <th style={{ ...TH, width: 100, textAlign: 'right'  }}>PO Qty</th>
-              <th style={{ ...TH, width: 44,  textAlign: 'center' }}>Slot</th>
+              <th style={{ ...TH, width: 30,  textAlign: 'center' }} />
               <th style={{ ...TH, width: 120, textAlign: 'right'  }}>Scheduled Qty</th>
               <th style={{ ...TH, width: 100, textAlign: 'right'  }}>Balance Qty</th>
               <th style={{ ...TH, width: 150 }}>Delivery Date</th>
@@ -84,7 +84,7 @@ export function DeliveryScheduleGrid({
           <tbody>
             {deliveryLines.length === 0 ? (
               <tr>
-                <td colSpan={11} style={{ textAlign: 'center', padding: 20, color: '#888', fontSize: 12 }}>
+                <td colSpan={10} style={{ textAlign: 'center', padding: 20, color: '#888', fontSize: 12 }}>
                   No items to schedule. Add PR lines first.
                 </td>
               </tr>
@@ -108,13 +108,12 @@ export function DeliveryScheduleGrid({
                       </td>
                     </>}
 
-                    {/* Column 7: Slot number + remove button */}
-                    <td style={{ ...TD, textAlign: 'center', fontSize: 11, color: '#888' }}>
-                      {slot.slotNo}
+                    {/* Action column: remove-slot button (slot number removed per CR-015) */}
+                    <td style={{ ...TD, textAlign: 'center', width: 30 }}>
                       {!ro && n > 1 && (
                         <CloseOutlined
                           onClick={() => onRemoveSlot(d.lineNo, slot.slotNo)}
-                          style={{ marginLeft: 4, color: '#A32D2D', cursor: 'pointer', fontSize: 10 }}
+                          style={{ color: '#A32D2D', cursor: 'pointer', fontSize: 10 }}
                         />
                       )}
                     </td>
@@ -158,7 +157,7 @@ export function DeliveryScheduleGrid({
                 )).concat(
                   !ro ? [(
                     <tr key={`${d.lineNo}-add`}>
-                      <td colSpan={11} style={{ ...TD, padding: '3px 8px 5px 12px' }}>
+                      <td colSpan={10} style={{ ...TD, padding: '3px 8px 5px 12px' }}>
                         <Button size="small" type="dashed" icon={<PlusOutlined />}
                           onClick={() => onAddSlot(d.lineNo)} style={{ fontSize: 11, height: 22 }}>
                           Add delivery row
@@ -181,7 +180,7 @@ export function DeliveryScheduleGrid({
                 <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>
                   {fmt3(poTotal)}
                 </td>
-                {/* Col 7: Slot — empty */}
+                {/* Col 7: Action — empty in footer */}
                 <td style={TD} />
                 {/* Col 8: Σ Scheduled Qty */}
                 <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>
