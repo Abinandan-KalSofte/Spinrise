@@ -182,7 +182,7 @@ export function PoHeaderTabs(props: PoHeaderTabsProps) {
           <TaxDiscountTab disabled={disabled} lineItemValue={lineItemValue} />
         </div>
         <div style={{ display: activeKey === 'payment' ? 'block' : 'none' }}>
-          <PaymentTab disabled={disabled} banks={banks} payTerms={payTerms} />
+          <PaymentTab disabled={disabled} banks={banks} payTerms={payTerms} orderValue={orderValue} />
         </div>
         <div style={{ display: activeKey === 'instructions' ? 'block' : 'none' }}>
           <InstructionsTab

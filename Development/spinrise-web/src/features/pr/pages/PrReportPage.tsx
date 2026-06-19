@@ -10,6 +10,7 @@ import { Spin, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { PRDocBand, TbBtn, TbSep } from '../components/pr-form/PRToolbar'
 import PrReportFilterBar from '../components/pr-report/PrReportFilterBar'
+import { ReportPreviewModal } from '../components/pr-report/ReportPreviewModal'
 import { usePrReport } from '../hooks/usePrReport'
 import { usePageTitle } from '@/shared/hooks/usePageTitle'
 
@@ -68,6 +69,7 @@ function KpiCard({ icon, label, value, accent }: KpiCardProps) {
           {value}
         </div>
       </div>
+
     </div>
   )
 }
@@ -79,7 +81,8 @@ export default function PrReportPage() {
 
   const {
     filter, departments, items, loadingLookups, generating,
-    setFilter, setReportType, handleGenerate, handleExit,
+    previewOpen, previewBlobUrl, previewFilename,
+    setFilter, setReportType, handleGenerate, closePreview, handleExit,
   } = usePrReport()
 
   // ── KPI computed values ──────────────────────────────────────────────────────
@@ -149,7 +152,7 @@ export default function PrReportPage() {
         <div style={{ flex: 1 }} />
         {generating && (
           <span style={{ fontSize: 11, color: '#185FA5', fontWeight: 500, fontStyle: 'italic' }}>
-            Building PDF — please wait…
+            Building PDF — opening preview…
           </span>
         )}
       </div>
@@ -293,7 +296,7 @@ export default function PrReportPage() {
                     </div>
                     <div style={{ fontSize: 12, color: '#718096', lineHeight: 1.8 }}>
                       Building your {filter.reportType} PR report from the database.
-                      <br />The file will download automatically when ready.
+                      <br />The preview will open automatically when ready.
                     </div>
                   </div>
                 </div>
@@ -364,6 +367,14 @@ export default function PrReportPage() {
 
         </div>
       </div>
+
+      <ReportPreviewModal
+        open={previewOpen}
+        blobUrl={previewBlobUrl}
+        filename={previewFilename}
+        loading={generating}
+        onClose={closePreview}
+      />
 
     </div>
   )
