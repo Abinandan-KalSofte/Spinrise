@@ -53,8 +53,8 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @AdvPer           NUMERIC(10,2)  = 0,
     @AdvAmt           NUMERIC(13,2)  = 0,
     @ModeOfPayment    VARCHAR(20)    = NULL,
-    @PayRef           VARCHAR(50)    = NULL,   -- no column in PO_ORDH; accepted, not stored
-    @PayRefDate       DATE           = NULL,   -- no column in PO_ORDH; accepted, not stored
+    @PayRef           VARCHAR(50)    = NULL,   -- confirmed by SasiR: maps to CHQNO (non-bank payment ref; COALESCE with @ChequeNo)
+    @PayRefDate       DATE           = NULL,   -- confirmed by SasiR: maps to CHQDT (non-bank payment ref date; COALESCE with @ChequeDate)
     @ChequeNo         VARCHAR(50)    = NULL,
     @ChequeDate       DATE           = NULL,
     -- Instructions
@@ -65,7 +65,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @SpecialInstr     VARCHAR(500)   = NULL,
     @Despatch         VARCHAR(200)   = NULL,
     @Purpose          VARCHAR(500)   = NULL,
-    @OtherLevies      VARCHAR(200)   = NULL,   -- no confirmed column; accepted, not stored
+    @OtherLevies      VARCHAR(200)   = NULL,   -- confirmed by SasiR: maps to Note2 in PO_ORDH
     @PricingTerms     VARCHAR(100)   = NULL,
     @PackForwarding   VARCHAR(200)   = NULL,
     @Insurance        VARCHAR(200)   = NULL,
@@ -346,7 +346,7 @@ BEGIN
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
             Duedate, DEL_INS1, Billadd, SPL_INS, DEL_INS2,
-            Note, PriceTerm, RemarksPF, RemarksIns, RemarksFrt,
+            Note, Note2, PriceTerm, RemarksPF, RemarksIns, RemarksFrt,
             ORDVAL, roff,
             CGSTAMT, SGSTAMT, IGSTAMT,
             cust_gstinno, cust_gststcode,
@@ -389,15 +389,16 @@ BEGIN
             ISNULL(@AdvPer, 0),
             ISNULL(@AdvAmt, 0),
             NULLIF(RTRIM(ISNULL(@ModeOfPayment,'')), ''),
-            NULLIF(RTRIM(ISNULL(@ChequeNo,'')),     ''),
-            @ChequeDate,
+            COALESCE(NULLIF(RTRIM(ISNULL(@ChequeNo, '')), ''), NULLIF(RTRIM(ISNULL(@PayRef, '')), '')),   -- CHQNO: bank cheque no. (primary) else payment ref
+            COALESCE(@ChequeDate, @PayRefDate),                                                            -- CHQDT: bank cheque date (primary) else payment ref date
             ISNULL(@CreditDays, 0),
             @DeliveryDate,
             NULLIF(RTRIM(ISNULL(@DeliveryLocation,'')), ''),
             NULLIF(RTRIM(ISNULL(@BillingAddress,'')),   ''),
             NULLIF(RTRIM(ISNULL(@SpecialInstr,'')),     ''),
             NULLIF(RTRIM(ISNULL(@Despatch,'')),         ''),
-            NULLIF(RTRIM(ISNULL(@Purpose,'')),          ''),
+            NULLIF(RTRIM(ISNULL(@Purpose,'')),          ''),   -- Note
+            NULLIF(RTRIM(ISNULL(@OtherLevies,'')),      ''),   -- Note2 (confirmed by SasiR)
             NULLIF(RTRIM(ISNULL(@PricingTerms,'')),     ''),
             NULLIF(RTRIM(ISNULL(@PackForwarding,'')),   ''),
             NULLIF(RTRIM(ISNULL(@Insurance,'')),        ''),

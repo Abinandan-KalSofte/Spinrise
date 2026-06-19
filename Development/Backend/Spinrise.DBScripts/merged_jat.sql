@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- merged_jat.sql — M01 PO (PR → PO Transfer + PO Approval)
 -- Database: JAT (172.16.16.52\sql2016)
 -- Contains ALL ksp_PO_* stored procedures.
@@ -1299,8 +1299,8 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @AdvPer           NUMERIC(10,2)  = 0,
     @AdvAmt           NUMERIC(13,2)  = 0,
     @ModeOfPayment    VARCHAR(20)    = NULL,
-    @PayRef           VARCHAR(50)    = NULL,   -- no column in PO_ORDH; accepted, not stored
-    @PayRefDate       DATE           = NULL,   -- no column in PO_ORDH; accepted, not stored
+    @PayRef           VARCHAR(50)    = NULL,   -- confirmed by SasiR: maps to CHQNO (non-bank payment ref; COALESCE with @ChequeNo)
+    @PayRefDate       DATE           = NULL,   -- confirmed by SasiR: maps to CHQDT (non-bank payment ref date; COALESCE with @ChequeDate)
     @ChequeNo         VARCHAR(50)    = NULL,
     @ChequeDate       DATE           = NULL,
     -- Instructions
@@ -1311,7 +1311,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @SpecialInstr     VARCHAR(500)   = NULL,
     @Despatch         VARCHAR(200)   = NULL,
     @Purpose          VARCHAR(500)   = NULL,
-    @OtherLevies      VARCHAR(200)   = NULL,   -- no confirmed column; accepted, not stored
+    @OtherLevies      VARCHAR(200)   = NULL,   -- confirmed by SasiR: maps to Note2 in PO_ORDH
     @PricingTerms     VARCHAR(100)   = NULL,
     @PackForwarding   VARCHAR(200)   = NULL,
     @Insurance        VARCHAR(200)   = NULL,
@@ -1535,7 +1535,7 @@ BEGIN
             SET @PoNo = @StartDocNo;
 
         -- ── 7a. Division approval parameters (FSD §5.8 / §5.9) ────────────────
-        -- If PoFirstLevelApp='N', auto-approve first level on save.
+        -- BR-09: If PoFirstLevelApp='N', auto-approve first level on save.
         -- Conflg: If PoConf='N' (no confirmation step required), auto-confirm.
         DECLARE @PoFirstLevelApp CHAR(1) = 'Y';
         DECLARE @PoConf          CHAR(1) = 'N';
@@ -1592,7 +1592,7 @@ BEGIN
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
             Duedate, DEL_INS1, Billadd, SPL_INS, DEL_INS2,
-            Note, PriceTerm, RemarksPF, RemarksIns, RemarksFrt,
+            Note, Note2, PriceTerm, RemarksPF, RemarksIns, RemarksFrt,
             ORDVAL, roff,
             CGSTAMT, SGSTAMT, IGSTAMT,
             cust_gstinno, cust_gststcode,
@@ -1635,15 +1635,16 @@ BEGIN
             ISNULL(@AdvPer, 0),
             ISNULL(@AdvAmt, 0),
             NULLIF(RTRIM(ISNULL(@ModeOfPayment,'')), ''),
-            NULLIF(RTRIM(ISNULL(@ChequeNo,'')),     ''),
-            @ChequeDate,
+            COALESCE(NULLIF(RTRIM(ISNULL(@ChequeNo, '')), ''), NULLIF(RTRIM(ISNULL(@PayRef, '')), '')),   -- CHQNO: bank cheque no. (primary) else payment ref
+            COALESCE(@ChequeDate, @PayRefDate),                                                            -- CHQDT: bank cheque date (primary) else payment ref date
             ISNULL(@CreditDays, 0),
             @DeliveryDate,
             NULLIF(RTRIM(ISNULL(@DeliveryLocation,'')), ''),
             NULLIF(RTRIM(ISNULL(@BillingAddress,'')),   ''),
             NULLIF(RTRIM(ISNULL(@SpecialInstr,'')),     ''),
             NULLIF(RTRIM(ISNULL(@Despatch,'')),         ''),
-            NULLIF(RTRIM(ISNULL(@Purpose,'')),          ''),
+            NULLIF(RTRIM(ISNULL(@Purpose,'')),          ''),   -- Note
+            NULLIF(RTRIM(ISNULL(@OtherLevies,'')),      ''),   -- Note2 (confirmed by SasiR)
             NULLIF(RTRIM(ISNULL(@PricingTerms,'')),     ''),
             NULLIF(RTRIM(ISNULL(@PackForwarding,'')),   ''),
             NULLIF(RTRIM(ISNULL(@Insurance,'')),        ''),
@@ -1655,7 +1656,7 @@ BEGIN
             ISNULL(@IgstAmt, 0),
             @SupGstin,
             @SupGstState,
-            @FirstLevelApp,           -- 'Y' if PoFirstLevelApp='N', else 'N'
+            @FirstLevelApp,           -- 'Y' if PoFirstLevelApp='N' (BR-09), else 'N'
             @Conflg,                  -- 'Y' if PoConf='N' (auto-confirm), else 'N'
             'N',                      -- poprintflg
             @UserId,
@@ -1839,11 +1840,23 @@ BEGIN
         WHERE s.qty > 0
           AND TRY_CAST(s.shDate AS DATE) IS NOT NULL;
 
-        -- ── 11. UPDATE PO_PRL — increment QTYORD, mark as ordered ────────────────
+        -- ── 11. UPDATE PO_PRL — increment QTYORD, conditionally mark as ordered ──
+        -- BR-05B: PRSTATUS='O' and FClosed='Y' set only when fully ordered
+        -- (QTYORD + ordered qty >= QTYREQD). Partial orders keep the current
+        -- PRSTATUS so the line remains visible in the PR picker with its balance qty.
         UPDATE prl
         SET
             QTYORD   = ISNULL(prl.QTYORD, 0) + l.Qty,
-            PRSTATUS = 'O'
+            PRSTATUS = CASE
+                           WHEN (ISNULL(prl.QTYORD, 0) + l.Qty) >= ISNULL(prl.QTYREQD, 0)
+                           THEN 'O'
+                           ELSE prl.PRSTATUS
+                       END,
+            FClosed  = CASE
+                           WHEN (ISNULL(prl.QTYORD, 0) + l.Qty) >= ISNULL(prl.QTYREQD, 0)
+                           THEN 'Y'
+                           ELSE prl.FClosed
+                       END
         FROM dbo.PO_PRL prl
         INNER JOIN #Lines l
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo
@@ -1867,6 +1880,8 @@ BEGIN
     END CATCH
 END;
 GO
+
+
 
 -- ============================================================
 -- ksp_PO_DeletePO
