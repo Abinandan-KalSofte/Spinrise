@@ -271,17 +271,19 @@ BEGIN
         )
             RAISERROR('One or more PR lines are no longer eligible for ordering.', 16, 1);
 
-        -- ── 6. Allocate PO number (MAX+1 inside transaction) ───────────────────
-        -- UPDLOCK + HOLDLOCK prevents two concurrent transactions reading the same MAX
-        -- before either commits. The surrounding BEGIN TRAN makes this safe.
-        -- CHANGED BY CLAUDE: replaced SEQUENCE (seq_PO_AllocatePONo) with MAX+1
+        -- ── 6. Allocate PO number (FY-scoped MAX+1) ──────────────────────────
+        -- Unique key is (DIVCODE, PORDNO, PORDDT) — numbers restart from STDOCNO
+        -- at the start of each financial year. UPDLOCK+HOLDLOCK inside BEGIN TRAN
+        -- prevents concurrent transactions from reading the same MAX before either commits.
         DECLARE @StartDocNo NUMERIC(10,0) = 1;
         SELECT @StartDocNo = ISNULL(STDOCNO, 1)
         FROM dbo.PO_DOC_PARA
         WHERE TC = 'PURCHASE ORDER';
 
         SELECT @PoNo = ISNULL(MAX(PORDNO), 0) + 1
-        FROM dbo.PO_ORDH WITH (UPDLOCK, HOLDLOCK);
+        FROM dbo.PO_ORDH WITH (UPDLOCK, HOLDLOCK)
+        WHERE CAST(PORDDT AS DATE) >= @FDate
+          AND CAST(PORDDT AS DATE) <= @LDate;
 
         IF @PoNo < @StartDocNo
             SET @PoNo = @StartDocNo;
