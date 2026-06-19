@@ -2,7 +2,10 @@
 -- ksp_PO_GetPRLines
 -- Returns eligible PR lines for the PO PR Picker (BR-02).
 -- Filter: DirectApp='Y', Fclosed<>'Y', balance qty > 0,
---         prstatus NOT IN ('O','E','C','Z','X'), PR not cancelled.
+--         prstatus NOT IN ('E','C','Z','X'), PR not cancelled.
+-- NOTE: 'O' deliberately excluded from NOT IN — balance > 0 filter handles fully-ordered
+--       lines (balance = 0). Keeping 'O' breaks partial-qty transfer (PR disappears even
+--       with remaining balance). 'E','C','Z','X' still excluded (enquired/cancelled/closed).
 -- Balance = QTYREQD - QTYORD - Enq_Qty
 -- GST columns (CgstPer/SgstPer/IgstPer/GstTaxCode) sourced from IN_ITEM.
 -- SuggestedRate: last ordered rate from PO_ORDL for this item + divCode (0 if none).
@@ -75,7 +78,7 @@ BEGIN
       AND ISNULL(l.FClosed,   'N') <> 'Y'
       AND ISNULL(l.AmdFlg,    '') <> 'Y'
       AND (ISNULL(l.qtyreqd, 0) - ISNULL(l.qtyord, 0) - ISNULL(l.Enq_Qty, 0)) > 0
-      AND RTRIM(ISNULL(l.prstatus, '')) NOT IN ('O','E','C','Z','X')
+      AND RTRIM(ISNULL(l.prstatus, '')) NOT IN ('E','C','Z','X')
       AND ISNULL(h.cancelflag, '') = ''
       AND (@OrderType IS NULL OR RTRIM(ISNULL(h.PO_GRP, '')) = @OrderType)
       AND (@Search IS NULL
