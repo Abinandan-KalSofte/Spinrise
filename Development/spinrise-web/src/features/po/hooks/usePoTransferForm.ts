@@ -532,7 +532,7 @@ export function usePoTransferForm() {
       uom:           pr.uom,
       prNo:          pr.prNo,
       prDate:        pr.prDate,
-      rate:          0,                 // BR-07: user must enter > 0 before save
+      rate:          pr.suggestedRate || 0,  // last ordered rate; 0 if no history (BR-07)
       qty:           pr.balanceQty,     // defaults to full balance (≤ balance, BR-05)
       balanceQty:    pr.balanceQty,
       value:         0,

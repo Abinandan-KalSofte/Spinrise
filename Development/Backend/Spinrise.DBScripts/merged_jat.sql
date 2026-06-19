@@ -527,7 +527,19 @@ BEGIN
         ISNULL(i.IGST_PER, 0)                                          AS IgstPer,
         RTRIM(ISNULL(i.GSTTAXCODE, ''))                                AS GstTaxCode,
         RTRIM(ISNULL(h.REQNAME, ''))                                    AS RequesterId,
-        RTRIM(ISNULL(e.ename, ''))                                      AS RequesterName
+        RTRIM(ISNULL(e.ename, ''))                                      AS RequesterName,
+        ISNULL((
+            SELECT TOP 1 pol.Rate
+            FROM   dbo.PO_ORDL pol
+            INNER JOIN dbo.PO_ORDH poh
+                ON  poh.DIVCODE = pol.DIVCODE
+                AND poh.PORDNO  = pol.PORDNO
+                AND poh.PORDDT  = pol.PORDDT
+            WHERE  pol.DIVCODE  = @DivCode
+              AND  pol.ITEMCODE = l.itemcode
+              AND  pol.Rate     > 0
+            ORDER BY poh.PORDDT DESC
+        ), 0)                                                           AS SuggestedRate
     FROM dbo.PO_PRL l
     INNER JOIN dbo.PO_PRH h
         ON h.divcode = l.divcode AND h.prno = l.prno
@@ -1942,9 +1954,13 @@ BEGIN
           AND  pol.PORDNO  = @PoNo
           AND  CAST(pol.PORDDT AS DATE) = @PoDate;
 
-        -- POT-LC-01 / CD-NEW-01: Re-open foreclosed PR lines so they reappear in the PR picker
+        -- POT-LC-01 / CD-NEW-01: Restore PR line visibility after PO delete.
+        -- Reset PRSTATUS 'O' -> '' so line passes the NOT IN ('O',...) filter in GetPRLines.
+        -- Reset FClosed 'Y' -> 'N' for fully-ordered lines (set by SaveEntry on full order).
+        -- No FClosed='Y' guard -- reset all affected lines unconditionally.
         UPDATE prl
-        SET    prl.FClosed = 'N'
+        SET    prl.FClosed  = 'N',
+               prl.PRSTATUS = CASE WHEN prl.PRSTATUS = 'O' THEN '' ELSE prl.PRSTATUS END
         FROM   dbo.PO_PRL prl
         INNER JOIN dbo.PO_ORDL pol
             ON  pol.DIVCODE = prl.divcode
@@ -1953,8 +1969,7 @@ BEGIN
             AND pol.PRSNO   = prl.prsno
         WHERE  pol.DIVCODE = @DivCode
           AND  pol.PORDNO  = @PoNo
-          AND  CAST(pol.PORDDT AS DATE) = @PoDate
-          AND  prl.FClosed = 'Y';
+          AND  CAST(pol.PORDDT AS DATE) = @PoDate;
 
         -- Cascade delete: child tables first
         DELETE FROM dbo.PO_ORDL_DETL

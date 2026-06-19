@@ -5,6 +5,9 @@
 --         prstatus NOT IN ('O','E','C','Z','X'), PR not cancelled.
 -- Balance = QTYREQD - QTYORD - Enq_Qty
 -- GST columns (CgstPer/SgstPer/IgstPer/GstTaxCode) sourced from IN_ITEM.
+-- SuggestedRate: last ordered rate from PO_ORDL for this item + divCode (0 if none).
+--   Interim until ksp_PO_GetQuotationRate (SP #22, PO_QUOTL) is confirmed by Sasi.
+-- Returns 19 columns.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPRLines
 (
@@ -38,7 +41,19 @@ BEGIN
         ISNULL(i.IGST_PER, 0)                                          AS IgstPer,
         RTRIM(ISNULL(i.GSTTAXCODE, ''))                                AS GstTaxCode,
         RTRIM(ISNULL(h.REQNAME, ''))                                    AS RequesterId,
-        RTRIM(ISNULL(e.ename, ''))                                      AS RequesterName
+        RTRIM(ISNULL(e.ename, ''))                                      AS RequesterName,
+        ISNULL((
+            SELECT TOP 1 pol.Rate
+            FROM   dbo.PO_ORDL pol
+            INNER JOIN dbo.PO_ORDH poh
+                ON  poh.DIVCODE = pol.DIVCODE
+                AND poh.PORDNO  = pol.PORDNO
+                AND poh.PORDDT  = pol.PORDDT
+            WHERE  pol.DIVCODE  = @DivCode
+              AND  pol.ITEMCODE = l.itemcode
+              AND  pol.Rate     > 0
+            ORDER BY poh.PORDDT DESC
+        ), 0)                                                           AS SuggestedRate
     FROM dbo.PO_PRL l
     INNER JOIN dbo.PO_PRH h
         ON h.divcode = l.divcode AND h.prno = l.prno

@@ -20,4 +20,5 @@ public class EligiblePrLineDto
     public string  GstTaxCode     { get; set; } = "";
     public string  RequesterId    { get; set; } = "";
     public string  RequesterName  { get; set; } = "";
+    public decimal SuggestedRate  { get; set; }
 }

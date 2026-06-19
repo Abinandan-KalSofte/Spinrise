@@ -108,6 +108,7 @@ export interface EligiblePrLine {
   gstTaxCode:    string
   requesterId:   string
   requesterName: string
+  suggestedRate: number      // last ordered rate from PO_ORDL; 0 if no history
 }
 
 // ── PO line (PO_ORDL subset — 22 SPINRISE columns, MD §10) ───────────────────

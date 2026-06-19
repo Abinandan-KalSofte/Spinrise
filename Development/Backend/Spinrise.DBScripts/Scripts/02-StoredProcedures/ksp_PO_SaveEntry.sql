@@ -593,11 +593,23 @@ BEGIN
         WHERE s.qty > 0
           AND TRY_CAST(s.shDate AS DATE) IS NOT NULL;
 
-        -- ── 11. UPDATE PO_PRL — increment QTYORD, mark as ordered ────────────────
+        -- ── 11. UPDATE PO_PRL — increment QTYORD, conditionally mark as ordered ──
+        -- BR-05B: PRSTATUS='O' and FClosed='Y' set only when fully ordered
+        -- (QTYORD + ordered qty >= QTYREQD). Partial orders keep the current
+        -- PRSTATUS so the line remains visible in the PR picker with its balance qty.
         UPDATE prl
         SET
             QTYORD   = ISNULL(prl.QTYORD, 0) + l.Qty,
-            PRSTATUS = 'O'
+            PRSTATUS = CASE
+                           WHEN (ISNULL(prl.QTYORD, 0) + l.Qty) >= ISNULL(prl.QTYREQD, 0)
+                           THEN 'O'
+                           ELSE prl.PRSTATUS
+                       END,
+            FClosed  = CASE
+                           WHEN (ISNULL(prl.QTYORD, 0) + l.Qty) >= ISNULL(prl.QTYREQD, 0)
+                           THEN 'Y'
+                           ELSE prl.FClosed
+                       END
         FROM dbo.PO_PRL prl
         INNER JOIN #Lines l
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo
