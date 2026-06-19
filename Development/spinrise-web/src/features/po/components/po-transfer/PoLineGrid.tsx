@@ -156,9 +156,10 @@ const Row = memo(function Row({
       <td style={{ ...TD_TXT, width: 80, fontFamily: "monospace" }}>
         {line.prDate
           ? dayjs(line.prDate, [
-              "DD-MMM-YYYY",
-              "YYYY/MM/DD",
               "YYYY-MM-DD",
+              "DD-MMM-YYYY",
+              "DD MMM YYYY",
+              "YYYY/MM/DD",
             ]).format("DD-MMM-YYYY")
           : "—"}
       </td>

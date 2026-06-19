@@ -53,7 +53,11 @@ BEGIN
                NULL AS AmdDate, NULL AS AmdRefNo, NULL AS AmdRefDate,
                NULL AS ApprovalStatus, NULL AS PrintStatus, NULL AS FirstLevelApp,
                NULL AS Conflg, NULL AS CreatedBy, NULL AS CreatedDt,
-               NULL AS UserId, NULL AS Carrier
+               NULL AS UserId, NULL AS Carrier,
+               NULL AS FreightPosition, NULL AS InsurancePosition, NULL AS CessPosition,
+               NULL AS ExciseIncludePacking,
+               NULL AS PackingAmt, NULL AS InsuranceAmt,
+               NULL AS DiscountAmt, NULL AS CessAmt, NULL AS AddTaxAmt
         WHERE 1 = 0;
         SELECT 0 AS [LineNo] WHERE 1 = 0;
         SELECT 0 AS [LineNo] WHERE 1 = 0;
@@ -100,6 +104,17 @@ BEGIN
         CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
         CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
         'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
+        -- Applicability position flags (FRT_FLG/Ins_Flg/Cess_Flg: 'A'=AFTER, else BEFORE)
+        CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
+        'N'                                                                                   AS ExciseIncludePacking,  -- EXC_FLG retired (pre-GST)
+        -- Charge amounts: Pack_Amt and Ins_Amt stored in DB; others derived from stored %
+        ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
+        ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
+        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.DISPER,0)    / 100.0, 2)                        AS DiscountAmt,
+        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.Cessper,0)   / 100.0, 2)                        AS CessAmt,
+        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.ADDTAXPER,0) / 100.0, 2)                        AS AddTaxAmt,
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
@@ -183,7 +198,7 @@ BEGIN
         ISNULL(l.ORDVAL, 0)                                         AS Value,
         RTRIM(ISNULL(l.Tax_code, ''))                               AS TaxCode,
         ISNULL(l.taxper, 0)                                         AS TaxPer,
-        ISNULL(l.Taxamt, 0)                                         AS TaxAmt,
+        ISNULL(l.cgstamt,0) + ISNULL(l.sgstamt,0) + ISNULL(l.igstamt,0) AS TaxAmt,
         RTRIM(ISNULL(l.hsncode, ''))                                AS HsnCode,
         ISNULL(l.cgstper, 0)                                        AS CgstPer,
         ISNULL(l.cgstamt, 0)                                        AS CgstAmt,
@@ -213,7 +228,18 @@ BEGIN
         RTRIM(ISNULL(l.ADDTAX_CODE, ''))                            AS AddTaxCode,
         ISNULL(l.ADDTAXPER, 0)                                      AS AddTaxPer,
         ISNULL(l.ADDTAXAMT, 0)                                      AS AddTaxAmt,
-        ISNULL(l.FCACharg,  0)                                      AS FcaFob
+        ISNULL(l.FCACharg,  0)                                      AS FcaFob,
+        -- POT-TC-04: Landing Cost (net per line = taxable + GST + TCS + charges - discount)
+        ISNULL(l.ORDVAL,0)
+          - ISNULL(l.disamt,0)
+          + ISNULL(l.Packamt,0)
+          + ISNULL(l.Frgt1Amt,0)
+          + ISNULL(l.Ins_amt,0)
+          + ISNULL(l.cgstamt,0)
+          + ISNULL(l.sgstamt,0)
+          + ISNULL(l.igstamt,0)
+          + ISNULL(l.Tcs_amt,0)
+          + ISNULL(l.ADDTAXAMT,0)                                    AS NetAmount
     FROM dbo.PO_ORDL l
     INNER JOIN dbo.IN_ITEM i
         ON i.itemcode = l.ITEMCODE

@@ -19,7 +19,16 @@ export function ApprovalTab({ currentPo }: ApprovalTabProps) {
     <TabPanel>
       <Row gutter={[12, 8]}>
         <Col span={6}>
-          <div style={lbl}>Approval Status</div>
+          <div style={lbl}>L1 Approval</div>
+          <Tag style={currentPo?.firstLevelApp === 'Y'
+            ? { background: '#D1FAE5', color: '#065F46', border: 'none', fontWeight: 700 }
+            : { background: '#FEF3C7', color: '#92400E', border: 'none', fontWeight: 700 }
+          }>
+            {currentPo?.firstLevelApp === 'Y' ? 'Approved' : 'Pending'}
+          </Tag>
+        </Col>
+        <Col span={6}>
+          <div style={lbl}>Final Approval</div>
           <Tag style={{ background: badge.bg, color: badge.color, border: 'none', fontWeight: 700 }}>{status}</Tag>
         </Col>
         <Col span={6}>
@@ -27,6 +36,8 @@ export function ApprovalTab({ currentPo }: ApprovalTabProps) {
           <Tag style={{ background: '#F5F5F3', color: '#4a4a4a', border: '1px solid #e2e2e2' }}>{printStatus==='N' ?  'Not Printed' : 'Printed'  }</Tag>
         </Col>
         <Col span={6}><ReadOnlyField label="Created By" value={currentPo?.createdBy || '—'} /></Col>
+      </Row>
+      <Row gutter={[12, 8]} style={{ marginTop: 8 }}>
         <Col span={6}>
           <ReadOnlyField label="Created On"
             value={currentPo?.createdDt ? dayjs(currentPo.createdDt, 'DD/MM/YYYY').format('DD-MMM-YYYY') : '—'} mono />

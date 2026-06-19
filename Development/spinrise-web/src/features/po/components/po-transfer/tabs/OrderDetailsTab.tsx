@@ -177,7 +177,6 @@ export function OrderDetailsTab({
         <Col span={4}>
           <Form.Item name="roundOff" label="Round Off" style={mb}>
             <InputNumber
-              {...NON_NEGATIVE_INPUT_PROPS}
               precision={2} controls={false} disabled={disabled}
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }}
             />

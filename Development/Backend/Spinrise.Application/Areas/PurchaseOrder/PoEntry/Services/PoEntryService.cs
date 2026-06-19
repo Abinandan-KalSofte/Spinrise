@@ -81,6 +81,15 @@ public class PoEntryService : IPoEntryService
                     throw new InvalidOperationException(
                         $"Delivery slot date is required when quantity is specified (item: {line.ItemCode}, slot {slot.SlotNo}).");
 
+        // POT-PM-04: Advance Amount cannot exceed PO Order Value (base Rate×Qty — matches SP @OrdVal)
+        if (request.Header.AdvAmt > 0)
+        {
+            var orderValue = Math.Round(request.Lines.Sum(l => l.Rate * l.Qty), 2);
+            if (orderValue > 0 && request.Header.AdvAmt > orderValue)
+                throw new InvalidOperationException(
+                    $"Advance Amount ({request.Header.AdvAmt:N2}) cannot exceed PO Order Value ({orderValue:N2}).");
+        }
+
         var result = await _repo.SaveAsync(divCode, request, userId, hostName, ipAddress, fDate, lDate);
         _logger.LogInformation("PO Add | Div: {DivCode} | PO: {PoNo} | User: {UserId}", divCode, result.PoNo, userId);
         return result;

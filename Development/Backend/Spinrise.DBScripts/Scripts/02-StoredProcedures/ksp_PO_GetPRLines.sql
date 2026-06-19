@@ -23,7 +23,7 @@ BEGIN
     SELECT
         CAST(l.prno AS VARCHAR(20)) + '|' + CAST(l.prsno AS VARCHAR(10)) + '|' + RTRIM(l.itemcode) AS Id,
         l.prno                                                          AS PrNo,
-        CONVERT(varchar(11), CAST(ISNULL(h.prdate, l.prdate) AS DATE), 106) AS PrDate,
+        CONVERT(varchar(10), CAST(ISNULL(h.prdate, l.prdate) AS DATE), 120) AS PrDate,
         l.prsno                                                         AS PrSno,
         RTRIM(l.itemcode)                                               AS ItemCode,
         RTRIM(ISNULL(i.itemname, ''))                                   AS ItemName,

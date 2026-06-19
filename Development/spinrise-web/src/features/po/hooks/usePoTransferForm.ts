@@ -1385,7 +1385,7 @@ export function usePoTransferForm() {
     for (const l of lines) {
       // Taxable (Order Value, "Before GST", UI-03) = Rate × Qty.
       const taxable = mode === 'VIEW'
-        ? (l.taxableValue || l.value || calcLineValue(l.rate, l.qty))
+        ? (l.value || calcLineValue(l.rate, l.qty))
         : calcLineValue(l.rate, l.qty)
       const gst    = (l.cgstAmt || 0) + (l.sgstAmt || 0) + (l.igstAmt || 0)
       const tcs    = l.tcsAmt || 0

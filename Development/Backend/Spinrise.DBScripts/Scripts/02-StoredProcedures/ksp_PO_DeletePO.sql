@@ -7,7 +7,8 @@
 --   2. BR-04: All line delete reasons must be non-empty.
 --   3. Write audit row to LogDet_PO.
 --   4. Reverse QTYORD on PO_PRL (restore PR balance).
---   5. Cascade delete: PO_ORDL_DETL → PO_ORDL → PO_ORDH.
+--   5. Clear FCLOSED='N' on PO_PRL for lines that were foreclosed (POT-LC-01 / CD-NEW-01).
+--   6. Cascade delete: PO_ORDL_DETL → PO_ORDL → PO_ORDH.
 -- All steps in one atomic transaction (THROW re-raises on error).
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_DeletePO
@@ -86,6 +87,20 @@ BEGIN
         WHERE  pol.DIVCODE = @DivCode
           AND  pol.PORDNO  = @PoNo
           AND  CAST(pol.PORDDT AS DATE) = @PoDate;
+
+        -- POT-LC-01 / CD-NEW-01: Re-open foreclosed PR lines so they reappear in the PR picker
+        UPDATE prl
+        SET    prl.FClosed = 'N'
+        FROM   dbo.PO_PRL prl
+        INNER JOIN dbo.PO_ORDL pol
+            ON  pol.DIVCODE = prl.divcode
+            AND pol.PRNO    = prl.prno
+            AND CAST(pol.PRDATE AS DATE) = CAST(prl.prdate AS DATE)
+            AND pol.PRSNO   = prl.prsno
+        WHERE  pol.DIVCODE = @DivCode
+          AND  pol.PORDNO  = @PoNo
+          AND  CAST(pol.PORDDT AS DATE) = @PoDate
+          AND  prl.FClosed = 'Y';
 
         -- Cascade delete: child tables first
         DELETE FROM dbo.PO_ORDL_DETL

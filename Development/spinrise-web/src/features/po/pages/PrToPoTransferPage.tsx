@@ -10,6 +10,7 @@ import { getFYBounds } from '@/shared/lib/dateUtils'
 import { getErrorMessage } from '@/shared/lib/errorHandler'
 import { notificationService } from '@/shared/lib/notification'
 import { usePoTransferForm } from '../hooks/usePoTransferForm'
+import { usePoTransferStore } from '../store/usePoTransferStore'
 import * as poApi from '../api/poTransferApi'
 import { PoDocBand } from '../components/po-transfer/PoDocBand'
 import { PoToolbar } from '../components/po-transfer/PoToolbar'
@@ -78,8 +79,10 @@ export default function PrToPoTransferPage() {
   useEffect(() => {
     if (didInitRef.current) return
     didInitRef.current = true
+    usePoTransferStore.getState().resetToView()
     void f.loadLastRecord()
     void f.loadNavList()
+    return () => usePoTransferStore.getState().resetToView()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { yfDate, ylDate } = getFYBounds(f.processingDate ? new Date(f.processingDate) : undefined)
