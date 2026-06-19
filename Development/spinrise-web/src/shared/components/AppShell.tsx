@@ -17,7 +17,7 @@ import {
   CheckCircleOutlined,   // PR First Level Approval
   SafetyCertificateOutlined, // PR Final Level Approval
   RetweetOutlined,
-  FileExcelOutlined,
+  FilePdfOutlined,
   FileExclamationOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
@@ -71,7 +71,7 @@ const NAV_ITEMS: MenuItem[] = [
   ]),
    mk('grp-reports', 'Reports', <FileExclamationOutlined  />, [
     mk('grp-reports-pr', wrapLabel('Periodic Reports'), '', [
-      mk('/pr-report',            wrapLabel('Purchase Requisition Report'),                         <FileExcelOutlined />),
+      mk('/pr-report',            wrapLabel('Purchase Requisition Report'),                         <FilePdfOutlined />),
     ]),
   ]),
 ]

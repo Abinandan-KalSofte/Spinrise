@@ -18,7 +18,7 @@ import { AmendmentTab } from './tabs/AmendmentTab'
 import { ApprovalTab } from './tabs/ApprovalTab'
 import type {
   ScreenMode, PoHeader, SupplierOption, OrderTypeOption, CarrierOption,
-  FormTypeOption, BankOption, AddressOption, CurrencyOption,
+  FormTypeOption, BankOption, AddressOption, CurrencyOption, PayTermOption,
 } from '../../types'
 import type { HeaderTabKey } from '../../hooks/usePoTransferForm'
 
@@ -50,6 +50,7 @@ interface PoHeaderTabsProps {
   carriers:          CarrierOption[]
   formTypes:         FormTypeOption[]
   banks:             BankOption[]
+  payTerms:          PayTermOption[]
   currencies:        CurrencyOption[]
   deliveryLocations: AddressOption[]
   billingAddresses:  AddressOption[]
@@ -64,7 +65,7 @@ interface PoHeaderTabsProps {
 export function PoHeaderTabs(props: PoHeaderTabsProps) {
   const {
     mode, poNo, orderValue, lineItemValue, currentPo,
-    orderTypes, suppliers, carriers, formTypes, banks,
+    orderTypes, suppliers, carriers, formTypes, banks, payTerms,
     currencies, deliveryLocations, billingAddresses, pricingTermsOpts,
     lastPoDate,
     activeTab, onTabChange, onSupplierChange, onSupplierOpen,
@@ -181,7 +182,7 @@ export function PoHeaderTabs(props: PoHeaderTabsProps) {
           <TaxDiscountTab disabled={disabled} lineItemValue={lineItemValue} />
         </div>
         <div style={{ display: activeKey === 'payment' ? 'block' : 'none' }}>
-          <PaymentTab disabled={disabled} banks={banks} />
+          <PaymentTab disabled={disabled} banks={banks} payTerms={payTerms} />
         </div>
         <div style={{ display: activeKey === 'instructions' ? 'block' : 'none' }}>
           <InstructionsTab

@@ -16,6 +16,7 @@ public interface IPoEntryService
     Task<IEnumerable<AddressOptionDto>>     GetAddressesAsync(string divCode, string kind, string? search);
     Task<IEnumerable<CurrencyOptionDto>>    GetCurrenciesAsync(string? search);
     Task<IEnumerable<AddressOptionDto>>     GetPricingTermsAsync(string? search);
+    Task<IEnumerable<PayTermOptionDto>>     GetPayTermsAsync();
     Task<GstRoutingResultDto>             GetGstRoutingAsync(string divCode, string slCode);
     Task<IEnumerable<EligiblePrLineDto>>  GetEligiblePrLinesAsync(string divCode, string? orderType, string? search, int page, int pageSize);
     Task<IEnumerable<PoSummaryDto>>       GetListAsync(string divCode, DateOnly fDate, DateOnly lDate, string? search, string? supplier, int page, int pageSize);

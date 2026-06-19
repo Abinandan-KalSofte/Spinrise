@@ -73,6 +73,7 @@ BEGIN
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
         RTRIM(ISNULL(h.BANK_CODE, ''))                              AS BankCode,
         RTRIM(ISNULL(h.PAYTERMS, ''))                               AS PaymentTerms,
+        RTRIM(ISNULL(h.paytermcode, ''))                            AS PaymentTermCode,
         ISNULL(h.ADV_PER, 0)                                        AS AdvPer,
         ISNULL(h.ADV_AMT, 0)                                        AS AdvAmt,
         RTRIM(ISNULL(h.advpaymenttype, ''))                         AS ModeOfPayment,

@@ -9,33 +9,34 @@ export const getDepartments = (divCode: string) =>
   apiHelpers.get<DeptOption[]>(`${BASE}/departments?divCode=${encodeURIComponent(divCode)}`)
 
 export const getReportItems = (divCode: string) =>
-  apiHelpers.get<PrItemOption[]>(`${BASE}/items?divCode=${encodeURIComponent(divCode)}`)
+  apiHelpers.get<PrItemOption[]>(`${BASE}/items?divCode=${encodeURIComponent(divCode)}&pageSize=9999`)
 
-// ── Report generation (Excel download) ────────────────────────────────────────
+// ── Report generation (PDF download) ──────────────────────────────────────────
 
-const EXCEL_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+const PDF_MIME = 'application/pdf'
 
 const FILENAMES = {
-  Datewise:       (from: string, to: string) => `PRDatewise_${from}_${to}.xlsx`,
-  Departmentwise: (from: string, to: string) => `PRDeptWise_${from}_${to}.xlsx`,
-  Itemwise:       (from: string, to: string) => `PRItemWise_${from}_${to}.xlsx`,
+  Datewise:       (from: string, to: string) => `PRDatewise_${from}_${to}.pdf`,
+  Departmentwise: (from: string, to: string) => `PRDeptWise_${from}_${to}.pdf`,
+  Itemwise:       (from: string, to: string) => `PRItemWise_${from}_${to}.pdf`,
 } as const
 
 export const downloadReport = async (params: DownloadReportParams): Promise<void> => {
-  const { divCode, reportType, fromDate, toDate, deptCodes, itemCodes } = params
+  const { divCode, reportType, fromDate, toDate, depCode, allItems, itemCodes } = params
 
-  const qp = new URLSearchParams({ divCode, reportType, fromDate, toDate })
-  deptCodes.forEach((c) => qp.append('deptCodes', c))
-  itemCodes.forEach((c) => qp.append('itemCodes', c))
+  const qp = new URLSearchParams({ divCode, reportType, fromDate, toDate, allItems: String(allItems) })
+  if (depCode) qp.set('depCode', depCode)
+  // Only send specific codes when not all-items — avoids oversized URLs and wasted bindings
+  if (!allItems) itemCodes.forEach((c) => qp.append('itemCodes', c))
 
-  const response = await api.get(`${BASE}/download?${qp}`, { responseType: 'blob' })
+  const response = await api.get(`${BASE}/report/download?${qp}`, { responseType: 'blob' })
 
-  const from    = fromDate.replace(/-/g, '')
-  const to      = toDate.replace(/-/g, '')
+  const from     = fromDate.replace(/-/g, '')
+  const to       = toDate.replace(/-/g, '')
   const filename = FILENAMES[reportType](from, to)
 
   const blobUrl = URL.createObjectURL(
-    new Blob([response.data as BlobPart], { type: EXCEL_MIME })
+    new Blob([response.data as BlobPart], { type: PDF_MIME })
   )
 
   const anchor = document.createElement('a')

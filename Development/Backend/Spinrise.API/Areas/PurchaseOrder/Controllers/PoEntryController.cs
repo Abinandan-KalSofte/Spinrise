@@ -124,6 +124,13 @@ public class PoEntryController : BaseApiController
         return OkResponse(result);
     }
 
+    [HttpGet("pay-terms")]
+    public async Task<IActionResult> GetPayTerms()
+    {
+        var result = await _service.GetPayTermsAsync();
+        return OkResponse(result);
+    }
+
     // ── PR Picker ──────────────────────────────────────────────────────────────
 
     [HttpGet("eligible-pr-lines")]

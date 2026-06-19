@@ -84,6 +84,7 @@ public static class StoredProcedures
         public const string GetAddresses       = "ksp_PO_GetAddresses";
         public const string GetCurrencies      = "ksp_PO_GetCurrencies";
         public const string GetPricingTerms    = "ksp_PO_GetPricingTerms";
+        public const string GetPayTerms        = "ksp_PO_GetPayTerms";
         public const string GetPrintData       = "ksp_PO_GetPrint";
         public const string SetPrintFlag       = "ksp_PO_SetPrintFlag";
         public const string UpdateBudget        = "ksp_PO_UpdateBudget";
@@ -95,6 +96,13 @@ public static class StoredProcedures
         public const string SetFinalApproval    = "ksp_PO_SetFinalApproval";
         public const string SaveLpoRateHistory  = "ksp_PO_SaveLPORateHistory";  // SP #15 — always active; called per line after Add save
         public const string UpdateQuotationStatus = "ksp_PO_UpdateQuotationStatus"; // SP #16 — DEFERRED Sprint 2A. PO_QUOTH not active at JAT pilot site. CEO execution plan 14-Jun-2026.
+    }
+
+    public static class PrReport
+    {
+        public const string DateWiseReport = "ksp_PR_DateWise_Report";
+        public const string DeptWiseReport = "ksp_PR_DeptWise_Report";
+        public const string ItemWiseReport = "KSP_PR_ITEMWISE";
     }
 
     public static class Pr

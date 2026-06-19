@@ -4,7 +4,7 @@ import { formatPoNo } from '../types'
 import type {
   PoParameters, PoPreAddChecks,
   SupplierOption, OrderTypeOption, CarrierOption, BankOption,
-  FormTypeOption, AddressOption, CurrencyOption,
+  FormTypeOption, AddressOption, CurrencyOption, PayTermOption,
   EligiblePrLine,
   PoHeader, PoSummary,
   AddPoRequest, DeletePoRequest,
@@ -71,6 +71,9 @@ export const getDeliveryLocations = (divCode: string, search?: string) =>
 
 export const getBillingAddresses = (divCode: string, search?: string) =>
   getAddresses(divCode, 'BILLING', search)
+
+export const getPayTerms = () =>
+  apiHelpers.get<PayTermOption[]>(`${BASE}/pay-terms`)
 
 export const getPricingTerms = (search?: string) => {
   const p = new URLSearchParams()

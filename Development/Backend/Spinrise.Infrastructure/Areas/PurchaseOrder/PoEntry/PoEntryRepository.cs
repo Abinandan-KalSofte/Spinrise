@@ -125,6 +125,13 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
     }
 
+    public async Task<IEnumerable<PayTermOptionDto>> GetPayTermsAsync()
+    {
+        return await _uow.Connection.QueryAsync<PayTermOptionDto>(
+            StoredProcedures.Po.GetPayTerms,
+            commandType: CommandType.StoredProcedure);
+    }
+
     public async Task<IEnumerable<EligiblePrLineDto>> GetEligiblePrLinesAsync(
         string divCode, string? orderType, string? search, int page, int pageSize)
     {
@@ -242,12 +249,13 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("PackApp",              request.Header.PackApp);
         p.Add("FreightPosition",      request.Header.FreightPosition);
         p.Add("InsurancePosition",    request.Header.InsurancePosition);
-        p.Add("ExciseIncludePacking", request.Header.ExciseIncludePacking);
+        p.Add("ExciseIncPacking", request.Header.ExciseIncludePacking);  // CHANGED BY CLAUDE: was "ExciseIncludePacking" — SP parameter is @ExciseIncPacking (no "lude"); mismatch caused EXC_FLG to always default to 'N'
         p.Add("CessApp",              request.Header.CessApp);
         p.Add("PayMode",         request.Header.PayMode);
         p.Add("DirectInstr",     request.Header.DirectInstr);
         p.Add("BankCode",        request.Header.BankCode);
         p.Add("PaymentTerms",    request.Header.PaymentTerms);
+        p.Add("PayTermCode",     request.Header.PaymentTermCode);
         p.Add("AdvPer",          request.Header.AdvPer);
         p.Add("AdvAmt",          request.Header.AdvAmt);
         p.Add("ModeOfPayment",   request.Header.ModeOfPayment);

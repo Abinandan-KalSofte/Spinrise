@@ -45,9 +45,9 @@ export function usePrReport() {
     }
     if (
       filter.reportType === 'Departmentwise' &&
-      filter.selectedDeptCodes.length === 0
+      !filter.selectedDeptCode
     ) {
-      notifyWarning('Please select at least one Department for Departmentwise report.')
+      notifyWarning('Please select a Department for the Departmentwise report.')
       return false
     }
     if (
@@ -68,20 +68,17 @@ export function usePrReport() {
 
     setGenerating(true)
     try {
-      // When allItems is checked, pass every available item code to the backend
-      const itemCodes =
-        filter.reportType === 'Itemwise'
-          ? filter.allItems
-            ? items.map((i) => i.itemCode)
-            : filter.selectedItemCodes
-          : []
+      const isItemwise  = filter.reportType === 'Itemwise'
+      const allItems    = isItemwise ? filter.allItems : true
+      const itemCodes   = isItemwise && !filter.allItems ? filter.selectedItemCodes : []
 
       await downloadReport({
         divCode,
         reportType: filter.reportType,
         fromDate:   filter.fromDate,
         toDate:     filter.toDate,
-        deptCodes:  filter.selectedDeptCodes,
+        depCode:    filter.selectedDeptCode,
+        allItems,
         itemCodes,
       })
 

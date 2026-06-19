@@ -73,7 +73,7 @@ export default function PrReportFilterBar({
   filter, departments, items, loadingLookups,
   onFilterChange, onReportTypeChange,
 }: Props) {
-  const { reportType, fromDate, toDate, selectedDeptCodes, selectedItemCodes, allItems } = filter
+  const { reportType, fromDate, toDate, selectedDeptCode, selectedItemCodes, allItems } = filter
   const isDeptwise = reportType === 'Departmentwise'
   const isItemwise = reportType === 'Itemwise'
 
@@ -147,26 +147,20 @@ export default function PrReportFilterBar({
             </div>
           ) : (
             <Select
-              mode="multiple"
               size="small"
-              placeholder="Select Departments…"
-              value={selectedDeptCodes}
-              onChange={(v) => onFilterChange({ selectedDeptCodes: v })}
+              placeholder="Select Department…"
+              value={selectedDeptCode || undefined}
+              onChange={(v) => onFilterChange({ selectedDeptCode: v as string ?? '' })}
+              allowClear
+              onClear={() => onFilterChange({ selectedDeptCode: '' })}
               style={{ width: '100%' }}
               options={departments.map((d) => ({ label: `${d.depCode} - ${d.depName}`, value: d.depCode }))}
-              maxTagCount="responsive"
               showSearch
-              clearIcon={true}
               filterOption={filterOption}
               notFoundContent={
                 <span style={{ fontSize: 11, color: '#A0AEC0' }}>No departments found</span>
               }
             />
-          )}
-          {selectedDeptCodes.length > 0 && (
-            <div style={{ marginTop: 6, fontSize: 11, color: '#718096' }}>
-              {selectedDeptCodes.length} department{selectedDeptCodes.length !== 1 ? 's' : ''} selected
-            </div>
           )}
         </FilterCard>
       )}

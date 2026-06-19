@@ -63,3 +63,9 @@ public class CurrencyOptionDto
     public string  CurrName { get; set; } = "";
     public decimal CurrRate { get; set; }
 }
+
+public class PayTermOptionDto
+{
+    public string PayTermCode { get; set; } = "";
+    public string PayTermDesc { get; set; } = "";
+}

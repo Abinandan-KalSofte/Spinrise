@@ -81,6 +81,11 @@ export interface CurrencyOption {
   currRate: number
 }
 
+export interface PayTermOption {
+  payTermCode: string
+  payTermDesc: string
+}
+
 // ── PR eligible line (PR Picker — FpSpdInd / delmodok_Click) ──────────────────
 // Server list is pre-filtered by BR-02 (DirectApp='Y', Fclosed<>'Y').
 
@@ -241,10 +246,11 @@ export interface PoHeader {
   exciseIncludePacking: 'Y' | 'N'
 
   // Payment
-  payMode:      'DIRECT' | 'BANK'   // BR-15 when BANK
-  directInstr:  string
-  bankCode:     string
-  paymentTerms: string
+  payMode:          'DIRECT' | 'BANK'   // BR-15 when BANK
+  directInstr:      string
+  bankCode:         string
+  paymentTerms:     string
+  paymentTermCode:  string              // Ig_PayTerm.PayTerm_Code — code stored in paytermcode column
   advPer:       number
   advAmt:       number
   modeOfPayment:string

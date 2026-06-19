@@ -63,6 +63,7 @@ public class AddPoHeaderRequest
     public string   DirectInstr   { get; init; } = "";
     public string   BankCode      { get; init; } = "";
     public string   PaymentTerms  { get; init; } = "";
+    public string   PaymentTermCode { get; init; } = "";
     public decimal  AdvPer        { get; init; }
     public decimal  AdvAmt        { get; init; }
     public string   ModeOfPayment { get; init; } = "";

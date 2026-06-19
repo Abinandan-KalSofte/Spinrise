@@ -51,6 +51,9 @@ public class PoEntryService : IPoEntryService
     public Task<IEnumerable<AddressOptionDto>> GetPricingTermsAsync(string? search) =>
         _repo.GetPricingTermsAsync(search);
 
+    public Task<IEnumerable<PayTermOptionDto>> GetPayTermsAsync() =>
+        _repo.GetPayTermsAsync();
+
     public Task<GstRoutingResultDto> GetGstRoutingAsync(string divCode, string slCode) =>
         _repo.GetGstRoutingAsync(divCode, slCode);
 

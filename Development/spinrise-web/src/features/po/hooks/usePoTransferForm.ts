@@ -38,7 +38,7 @@ import * as poApi from '../api/poTransferApi'
 import type {
   PoHeader, PoLine, PoParameters, PoPreAddChecks,
   SupplierOption, OrderTypeOption, CarrierOption, BankOption, FormTypeOption,
-  AddressOption, CurrencyOption,
+  AddressOption, CurrencyOption, PayTermOption,
   EligiblePrLine, DeliveryScheduleLine, AddPoRequest, SavePoLineRequest,
   GstRoute, LineTaxDetail, GstTaxCodeOption,
 } from '../types'
@@ -81,7 +81,7 @@ export const FIELD_TAB_MAP: Record<string, HeaderTabKey> = {
   // Payment
   payMode: 'payment', directInstr: 'payment', advAmt: 'payment', advPer: 'payment',
   modeOfPayment: 'payment', payRef: 'payment', payRefDate: 'payment',
-  bankCode: 'payment', paymentTerms: 'payment', chequeNo: 'payment', chequeDate: 'payment',
+  bankCode: 'payment', paymentTerms: 'payment', paymentTermCode: 'payment', chequeNo: 'payment', chequeDate: 'payment',
   // Instructions
   carrier: 'instructions', creditDays: 'instructions', deliveryDate: 'instructions',
   deliveryLocation: 'instructions', billingAddress: 'instructions', specialInstr: 'instructions',
@@ -216,9 +216,10 @@ export interface PoHeaderFormValues {
   modeOfPayment: string
   payRef:        string
   payRefDate:    Dayjs | null
-  bankCode:      string         // BR-15 (when BANK)
-  paymentTerms:  string
-  chequeNo:      string         // BR-15 (when BANK)
+  bankCode:         string       // BR-15 (when BANK)
+  paymentTerms:     string
+  paymentTermCode:  string       // Ig_PayTerm lookup code — stored in paytermcode column
+  chequeNo:         string       // BR-15 (when BANK)
   chequeDate:    Dayjs | null   // BR-15 (when BANK)
   // Instructions
   carrier:          string      // BR-14
@@ -303,6 +304,7 @@ export function usePoTransferForm() {
   const [deliveryLocations,  setDeliveryLocations]  = useState<AddressOption[]>([])
   const [billingAddresses,   setBillingAddresses]   = useState<AddressOption[]>([])
   const [pricingTermsOpts,   setPricingTermsOpts]   = useState<AddressOption[]>([])
+  const [payTerms,           setPayTerms]           = useState<PayTermOption[]>([])
   const [lookupsLoaded,  setLookupsLoaded]  = useState(false)
   const [lookupsLoading, setLookupsLoading] = useState(false)
   const [lookupsError,   setLookupsError]   = useState<string | null>(null)
@@ -393,7 +395,7 @@ export function usePoTransferForm() {
     setLookupsLoading(true)
     setLookupsError(null)
     try {
-      const [params, types, cars, forms, bankList, taxCodes, currList, delLocs, billAddrs, pricTerms] =
+      const [params, types, cars, forms, bankList, taxCodes, currList, delLocs, billAddrs, pricTerms, payTermList] =
         await Promise.all([
           poApi.getParameters(divCode),
           poApi.getOrderTypes(),
@@ -405,6 +407,7 @@ export function usePoTransferForm() {
           poApi.getDeliveryLocations(divCode).catch(() => [] as AddressOption[]),
           poApi.getBillingAddresses(divCode).catch(() => [] as AddressOption[]),
           poApi.getPricingTerms().catch(() => [] as AddressOption[]),
+          poApi.getPayTerms().catch(() => [] as PayTermOption[]),
         ])
       setParameters(params)
       setOrderTypes(types)
@@ -416,6 +419,7 @@ export function usePoTransferForm() {
       setDeliveryLocations(delLocs)
       setBillingAddresses(billAddrs)
       setPricingTermsOpts(pricTerms)
+      setPayTerms(payTermList)
       setLookupsLoaded(true)
     } catch {
       setLookupsError('Failed to load reference data. Click Retry to reload.')
@@ -833,8 +837,9 @@ export function usePoTransferForm() {
       exciseIncPacking: po.exciseIncludePacking ?? 'N',
       payMode:       po.payMode,
       directInstr:   po.directInstr,
-      bankCode:      po.bankCode,
-      paymentTerms:  po.paymentTerms,
+      bankCode:         po.bankCode,
+      paymentTerms:     po.paymentTerms,
+      paymentTermCode:  po.paymentTermCode ?? '',
       advAmt:        po.advAmt ?? 0,
       modeOfPayment: po.modeOfPayment,
       payRef:        po.payRef,
@@ -1259,8 +1264,9 @@ export function usePoTransferForm() {
         insurancePosition:    v.insuranceDuty,
         cessPosition:         v.cessTaxPos,
         exciseIncludePacking: v.exciseIncPacking,
-        payMode:       v.payMode, directInstr: v.directInstr, bankCode: v.bankCode,
-        paymentTerms:  v.paymentTerms, advPer: 0, advAmt: v.advAmt ?? 0,
+        payMode: v.payMode, directInstr: v.directInstr, bankCode: v.bankCode,
+        paymentTerms: v.paymentTerms, paymentTermCode: v.paymentTermCode ?? '',
+        advPer: 0, advAmt: v.advAmt ?? 0,
         modeOfPayment: v.modeOfPayment, payRef: v.payRef, payRefDate: fmtDate(v.payRefDate),
         chequeNo:      v.chequeNo, chequeDate: fmtDate(v.chequeDate),
         carrier:       v.carrier, creditDays: v.creditDays, deliveryDate: fmtDate(v.deliveryDate),
@@ -1462,7 +1468,7 @@ export function usePoTransferForm() {
     // lookups
     parameters, preChecks,
     orderTypes, carriers, formTypes, suppliers, banks, gstTaxCodes,
-    currencies, deliveryLocations, billingAddresses, pricingTermsOpts,
+    currencies, deliveryLocations, billingAddresses, pricingTermsOpts, payTerms,
     gstHeaderDefaults,
     lookupsLoaded, lookupsLoading, lookupsError,
     loadLookups, loadSuppliers, runPreChecks,

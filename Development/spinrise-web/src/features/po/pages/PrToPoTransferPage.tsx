@@ -293,6 +293,7 @@ export default function PrToPoTransferPage() {
               carriers={f.carriers}
               formTypes={f.formTypes}
               banks={f.banks}
+              payTerms={f.payTerms}
               currencies={f.currencies}
               deliveryLocations={f.deliveryLocations}
               billingAddresses={f.billingAddresses}

@@ -1,6 +1,6 @@
 import { Col, DatePicker, Form, Input, InputNumber, Radio, Row, Select } from 'antd'
 import { TabPanel } from './_fieldKit'
-import type { BankOption } from '../../../types'
+import type { BankOption, PayTermOption } from '../../../types'
 import { NON_NEGATIVE_INPUT_PROPS } from '../../../utils/poTransferRules'
 
 // ── Payment tab (HTML #htab-panel-payment) ───────────────────────────────────
@@ -8,14 +8,15 @@ import { NON_NEGATIVE_INPUT_PROPS } from '../../../utils/poTransferRules'
 // Cheque No.; HO → Pricing Terms) is enforced in the hook at Save, not here.
 
 interface PaymentTabProps {
-  disabled: boolean
-  banks:    BankOption[]
+  disabled:  boolean
+  banks:     BankOption[]
+  payTerms:  PayTermOption[]
 }
 
 const mb = { marginBottom: 8 }
 const full = { width: '100%' }
 
-export function PaymentTab({ disabled, banks }: PaymentTabProps) {
+export function PaymentTab({ disabled, banks, payTerms }: PaymentTabProps) {
   const payMode = (Form.useWatch('payMode') as string | undefined) ?? 'DIRECT'
   const isBank = payMode === 'BANK'
 
@@ -28,6 +29,24 @@ export function PaymentTab({ disabled, banks }: PaymentTabProps) {
               <Radio value="DIRECT">Direct</Radio>
               <Radio value="BANK">Through Bank</Radio>
             </Radio.Group>
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Row gutter={[12, 0]}>
+        <Col span={6}>
+          <Form.Item name="paymentTermCode" label="Payment Term" style={mb}>
+            <Select
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              placeholder="Select payment term"
+              disabled={disabled}
+              options={payTerms.map((t) => ({
+                value: t.payTermCode,
+                label: `${t.payTermCode} – ${t.payTermDesc}`,
+              }))}
+            />
           </Form.Item>
         </Col>
       </Row>

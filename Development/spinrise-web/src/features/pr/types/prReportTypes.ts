@@ -13,12 +13,12 @@ export interface PrItemOption {
 }
 
 export interface PrReportFilter {
-  reportType:         ReportType
-  fromDate:           string    // YYYY-MM-DD
-  toDate:             string    // YYYY-MM-DD
-  selectedDeptCodes:  string[]
-  selectedItemCodes:  string[]
-  allItems:           boolean
+  reportType:        ReportType
+  fromDate:          string    // YYYY-MM-DD
+  toDate:            string    // YYYY-MM-DD
+  selectedDeptCode:  string
+  selectedItemCodes: string[]
+  allItems:          boolean
 }
 
 export interface DownloadReportParams {
@@ -26,6 +26,7 @@ export interface DownloadReportParams {
   reportType: ReportType
   fromDate:   string
   toDate:     string
-  deptCodes:  string[]
-  itemCodes:  string[]
+  depCode:    string
+  allItems:   boolean
+  itemCodes:  string[]  // empty when allItems=true
 }

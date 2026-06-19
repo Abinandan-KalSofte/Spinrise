@@ -2,7 +2,7 @@ import {
   BarChartOutlined,
   CalendarOutlined,
   CloseOutlined,
-  FileExcelOutlined,
+  FilePdfOutlined,
   FunnelPlotOutlined,
   LoadingOutlined,
 } from '@ant-design/icons'
@@ -20,8 +20,8 @@ const BORDER = '#E2E8F0'
 
 // ── Report-type hint text ─────────────────────────────────────────────────────
 const HINT: Record<string, string> = {
-  Datewise:       'Select a date range and click Generate Report to download the Datewise PR list as an Excel file.',
-  Departmentwise: 'Select a date range and at least one Department, then click Generate Report.',
+  Datewise:       'Select a date range and click Generate Report to download the Datewise PR list as a PDF.',
+  Departmentwise: 'Select a date range and a Department, then click Generate Report.',
   Itemwise:       'Select a date range. Use All Items or choose specific items, then click Generate Report.',
 }
 
@@ -90,8 +90,8 @@ export default function PrReportPage() {
 
   const filterLabel =
     filter.reportType === 'Departmentwise'
-      ? filter.selectedDeptCodes.length > 0
-        ? `${filter.selectedDeptCodes.length} dept${filter.selectedDeptCodes.length !== 1 ? 's' : ''}`
+      ? filter.selectedDeptCode
+        ? filter.selectedDeptCode
         : 'No dept'
       : filter.reportType === 'Itemwise'
         ? filter.allItems
@@ -132,7 +132,7 @@ export default function PrReportPage() {
           icon={
             generating
               ? <Spin indicator={<LoadingOutlined style={{ fontSize: 11, color: '#fff' }} />} size="small" />
-              : <FileExcelOutlined style={{ fontSize: 12 }} />
+              : <FilePdfOutlined style={{ fontSize: 12 }} />
           }
           label={generating ? 'Generating…' : 'Generate Report'}
           kbd="Alt+R"
@@ -149,7 +149,7 @@ export default function PrReportPage() {
         <div style={{ flex: 1 }} />
         {generating && (
           <span style={{ fontSize: 11, color: '#185FA5', fontWeight: 500, fontStyle: 'italic' }}>
-            Building Excel file — please wait…
+            Building PDF — please wait…
           </span>
         )}
       </div>
@@ -219,10 +219,10 @@ export default function PrReportPage() {
               accent="#B7791F"
             />
             <KpiCard
-              icon={<FileExcelOutlined />}
+              icon={<FilePdfOutlined />}
               label="Output"
-              value="Excel · A4 Landscape"
-              accent="#276749"
+              value="PDF · A4 Landscape"
+              accent="#C53030"
             />
           </div>
 
@@ -278,9 +278,9 @@ export default function PrReportPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
                   <div style={{
                     width: 72, height: 72, borderRadius: 16,
-                    background: 'linear-gradient(135deg, #1D6F42 0%, #21A362 100%)',
+                    background: 'linear-gradient(135deg, #C53030 0%, #E53E3E 100%)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 4px 20px rgba(33,163,98,0.3)',
+                    boxShadow: '0 4px 20px rgba(197,48,48,0.3)',
                   }}>
                     <Spin
                       indicator={<LoadingOutlined style={{ fontSize: 32, color: '#fff' }} />}
@@ -303,14 +303,14 @@ export default function PrReportPage() {
                 /* ── Ready state ── */
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxWidth: 440, textAlign: 'center' }}>
 
-                  {/* Excel icon */}
+                  {/* PDF icon */}
                   <div style={{
                     width: 72, height: 72, borderRadius: 16,
-                    background: 'linear-gradient(135deg, #1D6F42 0%, #21A362 100%)',
+                    background: 'linear-gradient(135deg, #C53030 0%, #E53E3E 100%)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 4px 20px rgba(33,163,98,0.2)',
+                    boxShadow: '0 4px 20px rgba(197,48,48,0.2)',
                   }}>
-                    <FileExcelOutlined style={{ fontSize: 34, color: '#fff' }} />
+                    <FilePdfOutlined style={{ fontSize: 34, color: '#fff' }} />
                   </div>
 
                   <div>
@@ -329,13 +329,13 @@ export default function PrReportPage() {
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '8px 16px',
-                    background: '#F0FFF4',
-                    border: '1px solid #C6F6D5',
+                    background: '#FFF5F5',
+                    border: '1px solid #FED7D7',
                     borderRadius: 8,
                   }}>
-                    <FileExcelOutlined style={{ color: '#276749', fontSize: 13 }} />
-                    <span style={{ fontSize: 11, color: '#276749', fontWeight: 600 }}>
-                      EPPlus Excel (.xlsx) · A4 · Landscape
+                    <FilePdfOutlined style={{ color: '#C53030', fontSize: 13 }} />
+                    <span style={{ fontSize: 11, color: '#C53030', fontWeight: 600 }}>
+                      QuestPDF (.pdf) · A4 · Landscape
                     </span>
                   </div>
 

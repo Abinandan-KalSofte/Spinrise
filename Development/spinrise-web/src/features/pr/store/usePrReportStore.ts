@@ -8,10 +8,10 @@ function buildInitFilter(): PrReportFilter {
   const now  = new Date()
   const from = new Date(now.getFullYear(), now.getMonth(), 1)
   return {
-    reportType:        'Datewise',
-    fromDate:          from.toISOString().split('T')[0],
-    toDate:            now.toISOString().split('T')[0],
-    selectedDeptCodes: [],
+    reportType:       'Datewise',
+    fromDate:         from.toISOString().split('T')[0],
+    toDate:           now.toISOString().split('T')[0],
+    selectedDeptCode: '',
     selectedItemCodes: [],
     allItems:          true,
   }
@@ -52,7 +52,7 @@ export const usePrReportStore = create<PrReportState>((set) => ({
       filter: {
         ...s.filter,
         reportType,
-        selectedDeptCodes: [],
+        selectedDeptCode:  '',
         selectedItemCodes: [],
         allItems:          true,
       },

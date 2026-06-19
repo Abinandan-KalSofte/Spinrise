@@ -107,10 +107,11 @@ public class PoHeaderDto
     public string  PackApp      { get; set; } = "BEFORE";
     public string  CessApp      { get; set; } = "BEFORE";
     // Payment
-    public string  PayMode       { get; set; } = "DIRECT";
-    public string  DirectInstr   { get; set; } = "";
-    public string  BankCode      { get; set; } = "";
-    public string  PaymentTerms  { get; set; } = "";
+    public string  PayMode          { get; set; } = "DIRECT";
+    public string  DirectInstr      { get; set; } = "";
+    public string  BankCode         { get; set; } = "";
+    public string  PaymentTerms     { get; set; } = "";
+    public string  PaymentTermCode  { get; set; } = "";
     public decimal AdvPer        { get; set; }
     public decimal AdvAmt        { get; set; }
     public string  ModeOfPayment { get; set; } = "";

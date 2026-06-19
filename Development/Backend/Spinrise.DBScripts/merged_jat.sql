@@ -468,6 +468,26 @@ GO
 
 
 
+-- ============================================================
+-- ksp_PO_GetPayTerms
+-- Returns all payment term codes and descriptions from Ig_PayTerm.
+-- Used to populate the Payment Term dropdown on the PO Entry screen.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPayTerms
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        RTRIM(PayTerm_Code)               AS PayTermCode,
+        RTRIM(ISNULL(PayTerm_Desc, ''))   AS PayTermDesc
+    FROM dbo.Ig_PayTerm
+    ORDER BY PayTerm_Code;
+END;
+GO
+
+
+
 -- ksp_PO_GetPRLines
 -- Returns eligible PR lines for the PO PR Picker (BR-02).
 -- Filter: DirectApp='Y', Fclosed<>'Y', balance qty > 0,
@@ -650,6 +670,7 @@ BEGIN
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
         RTRIM(ISNULL(h.BANK_CODE, ''))                              AS BankCode,
         RTRIM(ISNULL(h.PAYTERMS, ''))                               AS PaymentTerms,
+        RTRIM(ISNULL(h.paytermcode, ''))                            AS PaymentTermCode,
         ISNULL(h.ADV_PER, 0)                                        AS AdvPer,
         ISNULL(h.ADV_AMT, 0)                                        AS AdvAmt,
         RTRIM(ISNULL(h.advpaymenttype, ''))                         AS ModeOfPayment,
@@ -875,6 +896,7 @@ BEGIN
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
         RTRIM(ISNULL(h.BANK_CODE, ''))                              AS BankCode,
         RTRIM(ISNULL(h.PAYTERMS, ''))                               AS PaymentTerms,
+        RTRIM(ISNULL(h.paytermcode, ''))                            AS PaymentTermCode,
         ISNULL(h.ADV_PER, 0)                                        AS AdvPer,
         ISNULL(h.ADV_AMT, 0)                                        AS AdvAmt,
         RTRIM(ISNULL(h.advpaymenttype, ''))                         AS ModeOfPayment,
@@ -1155,20 +1177,7 @@ GO
 
 
 
--- ============================================================
--- PREREQUISITE: PO Number Sequence (CEO confirmed 07-Jun-2026)
--- Run ONCE on JAT DB before deploying ksp_PO_SaveEntry.
--- If the sequence already exists, this is a no-op.
--- ============================================================
-IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE name = 'seq_PO_AllocatePONo' AND schema_id = SCHEMA_ID('dbo'))
-BEGIN
-    -- Seed the sequence from the current MAX PORDNO so no gaps or conflicts occur.
-    DECLARE @SeqStart BIGINT = 1;
-    SELECT @SeqStart = ISNULL(MAX(PORDNO), 0) + 1 FROM dbo.PO_ORDH;
-    DECLARE @sql NVARCHAR(500) = N'CREATE SEQUENCE dbo.seq_PO_AllocatePONo AS BIGINT START WITH ' + CAST(@SeqStart AS NVARCHAR(20)) + N' INCREMENT BY 1 NO CACHE;';
-    EXEC sp_executesql @sql;
-END
-GO
+-- (SEQUENCE prerequisite removed — PO number allocated via MAX+1 inside transaction)
 
 
 -- ============================================================
@@ -1222,6 +1231,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @DirectInstr      VARCHAR(200)   = NULL,
     @BankCode         VARCHAR(10)    = NULL,
     @PaymentTerms     VARCHAR(100)   = NULL,
+    @PayTermCode      VARCHAR(25)    = NULL,   -- CHANGED BY CLAUDE: paytermcode lookup code (Ig_PayTerm.PayTerm_Code)
     @AdvPer           NUMERIC(10,2)  = 0,
     @AdvAmt           NUMERIC(13,2)  = 0,
     @ModeOfPayment    VARCHAR(20)    = NULL,
@@ -1443,17 +1453,17 @@ BEGIN
         )
             RAISERROR('One or more PR lines are no longer eligible for ordering.', 16, 1);
 
-        -- ── 6. Allocate PO number (atomic SEQUENCE — CEO confirmed 07-Jun-2026) ──
-        -- SEQUENCE guarantees uniqueness under concurrent users (no race condition).
-        -- Prerequisite: dbo.seq_PO_AllocatePONo must exist in JAT DB.
-        --   CREATE SEQUENCE dbo.seq_PO_AllocatePONo START WITH 1 INCREMENT BY 1;
-        SET @PoNo = NEXT VALUE FOR dbo.seq_PO_AllocatePONo;
-
-        -- Floor to PO_DOC_PARA.STDOCNO if the sequence has not yet reached the starting number.
+        -- ── 6. Allocate PO number (MAX+1 inside transaction) ───────────────────
+        -- UPDLOCK + HOLDLOCK prevents two concurrent transactions reading the same MAX
+        -- before either commits. The surrounding BEGIN TRAN makes this safe.
+        -- CHANGED BY CLAUDE: replaced SEQUENCE (seq_PO_AllocatePONo) with MAX+1
         DECLARE @StartDocNo NUMERIC(10,0) = 1;
         SELECT @StartDocNo = ISNULL(STDOCNO, 1)
         FROM dbo.PO_DOC_PARA
         WHERE TC = 'PURCHASE ORDER';
+
+        SELECT @PoNo = ISNULL(MAX(PORDNO), 0) + 1
+        FROM dbo.PO_ORDH WITH (UPDLOCK, HOLDLOCK);
 
         IF @PoNo < @StartDocNo
             SET @PoNo = @StartDocNo;
@@ -1488,6 +1498,11 @@ BEGIN
         IF @FreightPer > 0 AND @FreightAmt = 0
             SET @FreightAmt = ROUND(@OrdVal * @FreightPer / 100.0, 2);
 
+        -- CHANGED BY CLAUDE: Ins_Amt and Pack_Amt were never computed; ksp_PO_GetPrint reads
+        -- h.Ins_Amt and h.Pack_Amt from PO_ORDH — these must be stored or print always shows 0.
+        DECLARE @InsAmt  NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@InsurPer,  0) / 100.0, 2);
+        DECLARE @PackAmt NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@PackPer,   0) / 100.0, 2);
+
         -- Supplier GSTIN + state code (authoritative from master, not client-sent)
         DECLARE @SupGstin    VARCHAR(50)   = NULL;
         DECLARE @SupGstState NUMERIC(10,0) = 0;
@@ -1505,9 +1520,9 @@ BEGIN
             DIVCODE,   PORDNO,  PORDDT,  POGRP,    SLCODE,
             CurrCode,  FCurRate, CARCODE, INSPECT,
             Form_type, refno,   refDate, REMARKS,
-            DISPER, Cessper, FREIGHT, PCKPER, INSPER, SURPER, ADDTAXPER,
+            DISPER, Cessper, FREIGHT, PCKPER, Pack_Amt, INSPER, Ins_Amt, SURPER, ADDTAXPER,
             FILENO, FCACharg, FRTFLG, disflg, PACK_FLG, FRT_FLG, EXC_FLG, Ins_Flg,
-            PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS,
+            PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS, paytermcode,
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
             Duedate, DEL_INS1, Billadd, SPL_INS, DEL_INS2,
@@ -1533,21 +1548,24 @@ BEGIN
             ISNULL(@CessPer,      0),
             ISNULL(@FreightAmt,   0),
             ISNULL(@PackPer,      0),
+            ISNULL(@PackAmt,      0),   -- CHANGED BY CLAUDE: Pack_Amt — header packing amount derived from OrdVal × PackPer
             ISNULL(@InsurPer,     0),
+            ISNULL(@InsAmt,       0),   -- CHANGED BY CLAUDE: Ins_Amt  — header insurance amount derived from OrdVal × InsurPer
             ISNULL(@SurchargePer, 0),
             ISNULL(@AddTaxPer,    0),
             NULLIF(RTRIM(ISNULL(@FileNo,'')),       ''),
             ISNULL(@FcaFob, 0),
-            CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE '' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE 'N' END,  -- CHANGED BY CLAUDE: '' → 'N'; legacy flag expects 'Y'/'N', not 'Y'/''
             CASE WHEN UPPER(RTRIM(ISNULL(@DiscApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- disflg
             CASE WHEN UPPER(RTRIM(ISNULL(@PackApp,'')))          = 'AFTER' THEN 'A' ELSE 'B' END,  -- PACK_FLG
             CASE WHEN UPPER(RTRIM(ISNULL(@FreightPosition,'')))  = 'AFTER' THEN 'A' ELSE 'B' END,  -- FRT_FLG
             ISNULL(UPPER(RTRIM(@ExciseIncPacking)), 'N'),                                           -- EXC_FLG
             CASE WHEN UPPER(RTRIM(ISNULL(@InsurancePosition,''))) = 'AFTER' THEN 'A' ELSE 'B' END, -- Ins_Flg
             CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
-            NULLIF(RTRIM(ISNULL(@DirectInstr,'')),  ''),
-            NULLIF(RTRIM(ISNULL(@BankCode,'')),     ''),
-            NULLIF(RTRIM(ISNULL(@PaymentTerms,'')), ''),
+            NULLIF(RTRIM(ISNULL(@DirectInstr,'')),   ''),
+            NULLIF(RTRIM(ISNULL(@BankCode,'')),      ''),
+            NULLIF(RTRIM(ISNULL(@PaymentTerms,'')),  ''),
+            NULLIF(RTRIM(ISNULL(@PayTermCode,'')),   ''),   -- CHANGED BY CLAUDE: paytermcode — Ig_PayTerm lookup code; previously never stored, ksp_PO_GetPrint reads this column
             ISNULL(@AdvPer, 0),
             ISNULL(@AdvAmt, 0),
             NULLIF(RTRIM(ISNULL(@ModeOfPayment,'')), ''),

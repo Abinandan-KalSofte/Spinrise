@@ -1,0 +1,55 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{1B3A8E1D-9C7E-4F11-8E8D-1A0B7F7F9F01}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpinRise.QuestPDF", "src\SpinRise.QuestPDF\SpinRise.QuestPDF.csproj", "{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E01}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpinRise.QuestPDF.Common", "src\SpinRise.QuestPDF.Common\SpinRise.QuestPDF.Common.csproj", "{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E02}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpinRise.QuestPDF.DepartmentWise", "src\SpinRise.QuestPDF.DepartmentWise\SpinRise.QuestPDF.DepartmentWise.csproj", "{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E03}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpinRise.QuestPDF.ItemWise", "src\SpinRise.QuestPDF.ItemWise\SpinRise.QuestPDF.ItemWise.csproj", "{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E04}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpinRise.QuestPDF.DateWise", "src\SpinRise.QuestPDF.DateWise\SpinRise.QuestPDF.DateWise.csproj", "{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E05}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E02}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E02}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E02}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E02}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E03}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E03}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E03}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E03}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E04}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E04}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E04}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E04}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E05}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E05}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E05}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E05}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E01} = {1B3A8E1D-9C7E-4F11-8E8D-1A0B7F7F9F01}
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E02} = {1B3A8E1D-9C7E-4F11-8E8D-1A0B7F7F9F01}
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E03} = {1B3A8E1D-9C7E-4F11-8E8D-1A0B7F7F9F01}
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E04} = {1B3A8E1D-9C7E-4F11-8E8D-1A0B7F7F9F01}
+		{C9F0B501-0C6B-4D6E-9D5E-1F9F0E0E0E05} = {1B3A8E1D-9C7E-4F11-8E8D-1A0B7F7F9F01}
+	EndGlobalSection
+EndGlobal
