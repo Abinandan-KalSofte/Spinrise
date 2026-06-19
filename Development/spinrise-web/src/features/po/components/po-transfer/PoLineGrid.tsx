@@ -1,10 +1,13 @@
-import { memo, useState } from 'react'
-import { Button, Input, InputNumber, Tooltip } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
-import { erpTh, ERP_TD as TD } from '@/shared/styles/erpTable'
-import type { PoLine, ScreenMode } from '../../types'
-import { NON_NEGATIVE_INPUT_PROPS, clampNonNegativeNumber } from '../../utils/poTransferRules'
-import dayjs from 'dayjs'
+import { memo, useState } from "react";
+import { Button, Input, InputNumber, Tooltip } from "antd";
+import { DeleteOutlined } from "@ant-design/icons";
+import { erpTh, ERP_TD as TD } from "@/shared/styles/erpTable";
+import type { PoLine, ScreenMode } from "../../types";
+import {
+  NON_NEGATIVE_INPUT_PROPS,
+  clampNonNegativeNumber,
+} from "../../utils/poTransferRules";
+import dayjs from "dayjs";
 
 // ── PO Line Item grid (HTML #po-grid / .po-table) ────────────────────────────
 //
@@ -14,121 +17,222 @@ import dayjs from 'dayjs'
 // the GST modal and the hook owns recompute/validation. Route is server-driven
 // (line.route, Q4) — the grid only renders the resulting CGST/SGST vs IGST split.
 
-const TH = erpTh({ zIndex: 10 })
-const TD_TXT = { ...TD, fontSize: 11, color: '#1e293b', textAlign: 'right' } as React.CSSProperties
+const TH = erpTh({ zIndex: 10 });
+const TD_TXT = {
+  ...TD,
+  fontSize: 11,
+  color: "#1e293b",
+  textAlign: "right",
+} as React.CSSProperties;
 
-const fmt2 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmt3 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
-const fmt4 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+const fmt2 = (n: number) =>
+  n.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+const fmt3 = (n: number) =>
+  n.toLocaleString("en-IN", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+const fmt4 = (n: number) =>
+  n.toLocaleString("en-IN", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  });
 
-const round2 = (n: number) => Math.round(n * 100) / 100
-const pctOf  = (base: number, pct: number) => round2((base * (pct || 0)) / 100)
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const pctOf = (base: number, pct: number) => round2((base * (pct || 0)) / 100);
 
 interface PoLineGridProps {
-  mode:                 ScreenMode
-  lines:                PoLine[]
-  selectedLineNo:       number | null
-  onSelectLine:         (lineNo: number) => void
-  onUpdateRateQty:      (lineNo: number, patch: { rate?: number; qty?: number }) => void
-  onOpenGst:            (lineNo: number) => void
-  onRemoveLine:         (lineNo: number) => void
-  onDeleteReasonChange: (lineNo: number, reason: string) => void
-  emptyText?:           string
+  mode: ScreenMode;
+  lines: PoLine[];
+  selectedLineNo: number | null;
+  onSelectLine: (lineNo: number) => void;
+  onUpdateRateQty: (
+    lineNo: number,
+    patch: { rate?: number; qty?: number },
+  ) => void;
+  onOpenGst: (lineNo: number) => void;
+  onRemoveLine: (lineNo: number) => void;
+  onDeleteReasonChange: (lineNo: number, reason: string) => void;
+  emptyText?: string;
 }
 
 const numTd = (w: number): React.CSSProperties => ({
-  ...TD_TXT, width: w, textAlign: 'right', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums',
-})
+  ...TD_TXT,
+  width: w,
+  textAlign: "right",
+  fontFamily: "monospace",
+  fontVariantNumeric: "tabular-nums",
+});
 
 const Row = memo(function Row({
-  line, idx, mode, selected, onSelect, onRateQty, onOpenGst, onRemove, onReason,
+  line,
+  idx,
+  mode,
+  selected,
+  onSelect,
+  onRateQty,
+  onOpenGst,
+  onRemove,
+  onReason,
 }: {
-  line:      PoLine
-  idx:       number
-  mode:      ScreenMode
-  selected:  boolean
-  onSelect:  () => void
-  onRateQty: (patch: { rate?: number; qty?: number }) => void
-  onOpenGst: () => void
-  onRemove:  () => void
-  onReason:  (reason: string) => void
+  line: PoLine;
+  idx: number;
+  mode: ScreenMode;
+  selected: boolean;
+  onSelect: () => void;
+  onRateQty: (patch: { rate?: number; qty?: number }) => void;
+  onOpenGst: () => void;
+  onRemove: () => void;
+  onReason: (reason: string) => void;
 }) {
-  const [hovered, setHovered] = useState(false)
-  const isAdd    = mode === 'ADD'
-  const isDelete = mode === 'DELETE'
-  const hsnBlank = !line.hsnCode.trim()
+  const [hovered, setHovered] = useState(false);
+  const isAdd = mode === "ADD";
+  const isDelete = mode === "DELETE";
+  const hsnBlank = !line.hsnCode.trim();
 
   // CR-008: charge amount columns computed from existing line fields
-  const taxable    = line.value || round2((line.rate || 0) * (line.qty || 0))
-  const discAmt    = pctOf(taxable, line.discPer)
-  const packAmt    = pctOf(taxable - discAmt, line.packingPer)
-  const freightAmt = pctOf(taxable, line.freightPer)
-  const insurAmt   = pctOf(taxable, line.insurancePer)
-  const otherAmt   = pctOf(taxable, line.cessPer)
-  const gstAmt     = round2((line.cgstAmt || 0) + (line.sgstAmt || 0) + (line.igstAmt || 0))
-  const tcsCharge  = line.tcsAmt || 0
-  const landingCost= line.netAmount || 0
+  const taxable = line.value || round2((line.rate || 0) * (line.qty || 0));
+  const discAmt = pctOf(taxable, line.discPer);
+  const packAmt = pctOf(taxable - discAmt, line.packingPer);
+  const freightAmt = pctOf(taxable, line.freightPer);
+  const insurAmt = pctOf(taxable, line.insurancePer);
+  const otherAmt = pctOf(taxable, line.cessPer);
+  const gstAmt = round2(
+    (line.cgstAmt || 0) + (line.sgstAmt || 0) + (line.igstAmt || 0),
+  );
+  const tcsCharge = line.tcsAmt || 0;
+  const landingCost = line.netAmount || 0;
 
   return (
     <tr
       onClick={onSelect}
-      onDoubleClick={() => { onSelect(); onOpenGst() }}
+      onDoubleClick={() => {
+        onSelect();
+        onOpenGst();
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title="Double-click to open GST & Tax details (or select the row and press F5)"
       style={{
         background: selected
-          ? '#DBEAFE'
-          : isDelete ? '#FFF5F5'
-          : hovered   ? '#F0F7FF'
-          : idx % 2 === 0 ? '#ffffff' : '#F8F9FF',
-        cursor: 'pointer',
-        transition: 'background 0.1s',
+          ? "#DBEAFE"
+          : isDelete
+            ? "#FFF5F5"
+            : hovered
+              ? "#F0F7FF"
+              : idx % 2 === 0
+                ? "#ffffff"
+                : "#F8F9FF",
+        cursor: "pointer",
+        transition: "background 0.1s",
       }}
     >
-      <td style={{ ...TD_TXT, width: 78, textAlign: 'center', fontFamily: 'monospace', fontWeight: 600, color: '#185FA5' }}>
-        {line.itemCode || '—'}
+      <td
+        style={{
+          ...TD_TXT,
+          width: 78,
+          textAlign: "center",
+          fontFamily: "monospace",
+          fontWeight: 600,
+          color: "#185FA5",
+        }}
+      >
+        {line.itemCode || "—"}
       </td>
-      <td style={{ ...TD_TXT, width: 190, fontWeight: 500,textAlign: 'left' }}>{line.itemName || line.itemCode}</td>
-      <td style={{ ...TD_TXT, width: 44, textAlign: 'center', color: '#4a4a4a' }}>{line.uom}</td>
-      <td style={{ ...TD_TXT, width: 100, fontFamily: 'monospace' }}>{line.prNo}</td>
-      <td style={{ ...TD_TXT, width: 80, fontFamily: 'monospace' }}>{dayjs(line.prDate, 'YYYY/MM/DD').format('DD-MMM-YYYY') || '—'}</td>
+      <td style={{ ...TD_TXT, width: 190, fontWeight: 500, textAlign: "left" }}>
+        {line.itemName || line.itemCode}
+      </td>
+      <td
+        style={{ ...TD_TXT, width: 44, textAlign: "center", color: "#4a4a4a" }}
+      >
+        {line.uom}
+      </td>
+      <td style={{ ...TD_TXT, width: 100, fontFamily: "monospace" }}>
+        {line.prNo}
+      </td>
+      <td style={{ ...TD_TXT, width: 80, fontFamily: "monospace" }}>
+        {line.prDate
+          ? dayjs(line.prDate, [
+              "DD-MMM-YYYY",
+              "YYYY/MM/DD",
+              "YYYY-MM-DD",
+            ]).format("DD-MMM-YYYY")
+          : "—"}
+      </td>
 
       {/* Rate — editable in ADD (4dp, BR-07) */}
-      <td style={{ ...TD_TXT, width: 88, textAlign: 'right' }}
+      <td
+        style={{ ...TD_TXT, width: 88, textAlign: "right" }}
         onClick={(e) => isAdd && e.stopPropagation()}
-        onDoubleClick={(e) => isAdd && e.stopPropagation()}>
+        onDoubleClick={(e) => isAdd && e.stopPropagation()}
+      >
         {isAdd ? (
           <InputNumber
             {...NON_NEGATIVE_INPUT_PROPS}
-            size="small" precision={4} controls={false} value={line.rate}
-            style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
-            status={line.rate <= 0 ? 'error' : undefined}
+            size="small"
+            precision={4}
+            controls={false}
+            value={line.rate}
+            style={{
+              width: "100%",
+              fontFamily: "monospace",
+              textAlign: "right",
+            }}
+            status={line.rate <= 0 ? "error" : undefined}
             onChange={(v) => onRateQty({ rate: clampNonNegativeNumber(v) })}
           />
         ) : (
-          <span style={{ fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>{fmt4(line.rate)}</span>
+          <span
+            style={{
+              fontFamily: "monospace",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {fmt4(line.rate)}
+          </span>
         )}
       </td>
 
       {/* Quantity — editable in ADD (3dp, BR-05/06). Hook clamps to balanceQty
           immediately on change and shows a warning, so the value can never
           exceed balanceQty here — only show error when qty is 0. */}
-      <td style={{ ...TD_TXT, width: 82, textAlign: 'right' }}
+      <td
+        style={{ ...TD_TXT, width: 82, textAlign: "right" }}
         onClick={(e) => isAdd && e.stopPropagation()}
-        onDoubleClick={(e) => isAdd && e.stopPropagation()}>
+        onDoubleClick={(e) => isAdd && e.stopPropagation()}
+      >
         {isAdd ? (
-          <Tooltip title={`Balance: ${fmt3(line.balanceQty)}`} mouseEnterDelay={0.8}>
+          <Tooltip
+            title={`Balance: ${fmt3(line.balanceQty)}`}
+            mouseEnterDelay={0.8}
+          >
             <InputNumber
               {...NON_NEGATIVE_INPUT_PROPS}
-              size="small" precision={3} controls={false} value={line.qty}
-              style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
-              status={line.qty <= 0 ? 'error' : undefined}
+              size="small"
+              precision={3}
+              controls={false}
+              value={line.qty}
+              style={{
+                width: "100%",
+                fontFamily: "monospace",
+                textAlign: "right",
+              }}
+              status={line.qty <= 0 ? "error" : undefined}
               onChange={(v) => onRateQty({ qty: clampNonNegativeNumber(v) })}
             />
           </Tooltip>
         ) : (
-          <span style={{ fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>{fmt3(line.qty)}</span>
+          <span
+            style={{
+              fontFamily: "monospace",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {fmt3(line.qty)}
+          </span>
         )}
       </td>
 
@@ -143,25 +247,43 @@ const Row = memo(function Row({
       <td style={numTd(80)}>{fmt2(otherAmt)}</td>
       <td style={numTd(80)}>{fmt2(gstAmt)}</td>
       <td style={numTd(80)}>{fmt2(tcsCharge)}</td>
-      <td style={{ ...numTd(90), fontWeight: 600, color: '#185FA5' }}>{fmt2(landingCost)}</td>
+      <td style={{ ...numTd(90), fontWeight: 600, color: "#185FA5" }}>
+        {fmt2(landingCost)}
+      </td>
 
       {/* Tax Code — opens GST & Tax modal (HTML "Click GST to enter tax details") */}
-      <td style={{ ...TD_TXT, width: 80, textAlign: 'center' }} onClick={(e) => { e.stopPropagation(); onOpenGst() }}>
-        <span style={{
-          fontFamily: 'monospace', fontWeight: 600, color: '#185FA5',
-          cursor: 'pointer', textDecoration: 'underline dotted', textUnderlineOffset: 2,
-        }}>
-          {line.taxCode || '— set —'}
+      <td
+        style={{ ...TD_TXT, width: 80, textAlign: "center" }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenGst();
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "monospace",
+            fontWeight: 600,
+            color: "#185FA5",
+            cursor: "pointer",
+            textDecoration: "underline dotted",
+            textUnderlineOffset: 2,
+          }}
+        >
+          {line.taxCode || "— set —"}
         </span>
       </td>
       <td style={numTd(60)}>{fmt2(line.taxPer)}%</td>
       <td style={numTd(80)}>{fmt2(line.taxAmt)}</td>
 
       {/* HSN — BR-10 warn when blank */}
-      <td style={{ ...TD_TXT, width: 80, textAlign: 'center' }}>
-        {hsnBlank
-          ? <Tooltip title="HSN Code missing — required before save"><span style={{ color: '#BA7517', fontWeight: 700 }}>⚠</span></Tooltip>
-          : <span style={{ fontFamily: 'monospace' }}>{line.hsnCode}</span>}
+      <td style={{ ...TD_TXT, width: 80, textAlign: "center" }}>
+        {hsnBlank ? (
+          <Tooltip title="HSN Code missing — required before save">
+            <span style={{ color: "#BA7517", fontWeight: 700 }}>⚠</span>
+          </Tooltip>
+        ) : (
+          <span style={{ fontFamily: "monospace" }}>{line.hsnCode}</span>
+        )}
       </td>
 
       <td style={numTd(60)}>{fmt2(line.cgstPer)}%</td>
@@ -173,15 +295,23 @@ const Row = memo(function Row({
       <td style={numTd(60)}>{fmt2(line.tcsPer)}%</td>
       <td style={numTd(80)}>{fmt2(line.tcsAmt)}</td>
 
-      <td style={{ ...TD_TXT, width: 90, fontFamily: 'monospace' }}>{line.requesterId || '—'}</td>
-      <td style={{ ...TD_TXT, width: 120 }}>{line.requesterName || '—'}</td>
+      <td style={{ ...TD_TXT, width: 90, fontFamily: "monospace" }}>
+        {line.requesterId || "—"}
+      </td>
+      <td style={{ ...TD_TXT, width: 120 }}>{line.requesterName || "—"}</td>
 
       {/* Delete Reason — DELETE mode only (BR-04) */}
       {isDelete && (
-        <td style={{ ...TD, minWidth: 160 }} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+        <td
+          style={{ ...TD, minWidth: 160 }}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
           <Input
-            size="small" value={line.deleteReason} placeholder="Delete reason…"
-            status={!line.deleteReason.trim() ? 'error' : undefined}
+            size="small"
+            value={line.deleteReason}
+            placeholder="Delete reason…"
+            status={!line.deleteReason.trim() ? "error" : undefined}
             onChange={(e) => onReason(e.target.value)}
           />
         </td>
@@ -193,117 +323,216 @@ const Row = memo(function Row({
           is a functional requirement (store-backed removeDraftLine), consistent
           with the app's PRLineItemsTable. Hidden in VIEW/DELETE. (Decision 1) */}
       {isAdd && (
-        <td style={{ ...TD, width: 40, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+        <td
+          style={{ ...TD, width: 40, textAlign: "center" }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <Tooltip title="Remove line" mouseEnterDelay={0.5}>
-            <Button tabIndex={-1} type="text" size="small" danger
-              icon={<DeleteOutlined style={{ fontSize: 12 }} />} onClick={onRemove} />
+            <Button
+              tabIndex={-1}
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined style={{ fontSize: 12 }} />}
+              onClick={onRemove}
+            />
           </Tooltip>
         </td>
       )}
     </tr>
-  )
-})
+  );
+});
 
 export function PoLineGrid({
-  mode, lines, selectedLineNo, onSelectLine, onUpdateRateQty,
-  onOpenGst, onRemoveLine, onDeleteReasonChange, emptyText,
+  mode,
+  lines,
+  selectedLineNo,
+  onSelectLine,
+  onUpdateRateQty,
+  onOpenGst,
+  onRemoveLine,
+  onDeleteReasonChange,
+  emptyText,
 }: PoLineGridProps) {
-  const isAdd    = mode === 'ADD'
-  const isDelete = mode === 'DELETE'
-  const baseCols = 30   // CR-008: 22 original + 8 charge columns
-  const colSpan  = baseCols + (isDelete ? 1 : 0) + (isAdd ? 1 : 0)
+  const isAdd = mode === "ADD";
+  const isDelete = mode === "DELETE";
+  const baseCols = 30; // CR-008: 22 original + 8 charge columns
+  const colSpan = baseCols + (isDelete ? 1 : 0) + (isAdd ? 1 : 0);
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0,
-      background: '#fff', overflow: 'hidden',
-    }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        background: "#fff",
+        overflow: "hidden",
+      }}
+    >
       {/* Grid bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px',
-        borderBottom: '1px solid #E2E8F0', background: '#F8FAFD', flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#2D3748', letterSpacing: '0.01em' }}>Line Items</span>
-        <span style={{
-          fontSize: 10.5, fontWeight: 700, padding: '1px 9px', borderRadius: 20,
-          background: '#EFF6FF', color: '#185FA5', border: '1px solid #BFDBFE',
-        }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "7px 16px",
+          borderBottom: "1px solid #E2E8F0",
+          background: "#F8FAFD",
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: "#2D3748",
+            letterSpacing: "0.01em",
+          }}
+        >
+          Line Items
+        </span>
+        <span
+          style={{
+            fontSize: 10.5,
+            fontWeight: 700,
+            padding: "1px 9px",
+            borderRadius: 20,
+            background: "#EFF6FF",
+            color: "#185FA5",
+            border: "1px solid #BFDBFE",
+          }}
+        >
           {lines.length}
         </span>
         <span style={{ flex: 1 }} />
         {isAdd && (
-          <span style={{ fontSize: 11, color: '#718096', fontStyle: 'italic' }}>
-            Edit Rate / Quantity inline · click Tax Code to enter GST &amp; tax · double-click row for details
+          <span style={{ fontSize: 11, color: "#718096", fontStyle: "italic" }}>
+            Edit Rate / Quantity inline · click Tax Code to enter GST &amp; tax
+            · double-click row for details
           </span>
         )}
         {isDelete && (
-          <span style={{
-            fontSize: 11, color: '#B91C1C', fontWeight: 600,
-            background: '#FEF2F2', padding: '2px 10px', borderRadius: 4,
-            border: '1px solid #FECACA',
-          }}>
+          <span
+            style={{
+              fontSize: 11,
+              color: "#B91C1C",
+              fontWeight: 600,
+              background: "#FEF2F2",
+              padding: "2px 10px",
+              borderRadius: 4,
+              border: "1px solid #FECACA",
+            }}
+          >
             ⚠ Enter Delete Reason — auto-filled from the header reason
           </span>
         )}
       </div>
 
       {/* Scroll area (wide grid scrolls horizontally) */}
-      <div style={{ flex: 1, minHeight: 180, overflow: 'auto' }}>
-        <table style={{ borderCollapse: 'collapse', width: 'max-content', minWidth: '100%' }}>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ flex: 1, minHeight: 180, overflow: "auto" }}>
+        <table
+          style={{
+            borderCollapse: "collapse",
+            width: "max-content",
+            minWidth: "100%",
+          }}
+        >
+          <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
             <tr>
-              <th style={{ ...TH, width: 78, textAlign: 'center' }}>Item Id</th>
-              <th style={{ ...TH, width: 190, textAlign: 'left' }}>Item Name</th>
-              <th style={{ ...TH, width: 44, textAlign: 'center' }}>UOM</th>
+              <th style={{ ...TH, width: 78, textAlign: "center" }}>Item Id</th>
+              <th style={{ ...TH, width: 190, textAlign: "left" }}>
+                Item Name
+              </th>
+              <th style={{ ...TH, width: 44, textAlign: "center" }}>UOM</th>
               <th style={{ ...TH, width: 100 }}>PR No</th>
               <th style={{ ...TH, width: 80 }}>PR Date</th>
-              <th style={{ ...TH, width: 88, textAlign: 'right' }}>Rate</th>
-              <th style={{ ...TH, width: 82, textAlign: 'right' }}>Quantity</th>
-              <th style={{ ...TH, width: 96, textAlign: 'right' }}>Value</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Discount</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Packing</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Freight</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Insurance</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Other</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>GST</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>TCS</th>
-              <th style={{ ...TH, width: 90, textAlign: 'right' }}>Landing Cost</th>
-              <th style={{ ...TH, width: 80, textAlign: 'center' }}>Tax Code</th>
-              <th style={{ ...TH, width: 60, textAlign: 'right' }}>Tax %</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>Tax Amount</th>
-              <th style={{ ...TH, width: 80, textAlign: 'center' }}>HSN Code</th>
-              <th style={{ ...TH, width: 60, textAlign: 'right' }}>CGST %</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>CGST Amount</th>
-              <th style={{ ...TH, width: 60, textAlign: 'right' }}>SGST %</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>SGST Amount</th>
-              <th style={{ ...TH, width: 60, textAlign: 'right' }}>IGST %</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>IGST Amount</th>
-              <th style={{ ...TH, width: 60, textAlign: 'right' }}>TCS %</th>
-              <th style={{ ...TH, width: 80, textAlign: 'right' }}>TCS Amount</th>
-              <th style={{ ...TH, width: 90 , textAlign: 'right' }}>Requester ID</th>
-              <th style={{ ...TH, width: 120 , textAlign: 'right' }}>Requester Name</th>
-              {isDelete && <th style={{ ...TH, minWidth: 160 }}>Delete Reason</th>}
+              <th style={{ ...TH, width: 88, textAlign: "right" }}>Rate</th>
+              <th style={{ ...TH, width: 82, textAlign: "right" }}>Quantity</th>
+              <th style={{ ...TH, width: 96, textAlign: "right" }}>Value</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>Discount</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>Packing</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>Freight</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>
+                Insurance
+              </th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>Other</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>GST</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>TCS</th>
+              <th style={{ ...TH, width: 90, textAlign: "right" }}>
+                Landing Cost
+              </th>
+              <th style={{ ...TH, width: 80, textAlign: "center" }}>
+                Tax Code
+              </th>
+              <th style={{ ...TH, width: 60, textAlign: "right" }}>Tax %</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>
+                Tax Amount
+              </th>
+              <th style={{ ...TH, width: 80, textAlign: "center" }}>
+                HSN Code
+              </th>
+              <th style={{ ...TH, width: 60, textAlign: "right" }}>CGST %</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>
+                CGST Amount
+              </th>
+              <th style={{ ...TH, width: 60, textAlign: "right" }}>SGST %</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>
+                SGST Amount
+              </th>
+              <th style={{ ...TH, width: 60, textAlign: "right" }}>IGST %</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>
+                IGST Amount
+              </th>
+              <th style={{ ...TH, width: 60, textAlign: "right" }}>TCS %</th>
+              <th style={{ ...TH, width: 80, textAlign: "right" }}>
+                TCS Amount
+              </th>
+              <th style={{ ...TH, width: 90, textAlign: "right" }}>
+                Requester ID
+              </th>
+              <th style={{ ...TH, width: 120, textAlign: "right" }}>
+                Requester Name
+              </th>
+              {isDelete && (
+                <th style={{ ...TH, minWidth: 160 }}>Delete Reason</th>
+              )}
               {isAdd && <th style={{ ...TH, width: 40 }} />}
             </tr>
           </thead>
           <tbody>
             {lines.length === 0 ? (
               <tr>
-                <td colSpan={colSpan} style={{ textAlign: 'center', padding: 24, color: '#888', fontSize: 12 }}>
-                  {emptyText ?? (isAdd ? 'No line items. Click Browse PR Lines to add items.' : 'No line items.')}
+                <td
+                  colSpan={colSpan}
+                  style={{
+                    textAlign: "center",
+                    padding: 24,
+                    color: "#888",
+                    fontSize: 12,
+                  }}
+                >
+                  {emptyText ??
+                    (isAdd
+                      ? "No line items. Click Browse PR Lines to add items."
+                      : "No line items.")}
                 </td>
               </tr>
             ) : (
               lines.map((line, idx) => (
                 <Row
                   key={line.lineNo}
-                  line={line} idx={idx} mode={mode}
+                  line={line}
+                  idx={idx}
+                  mode={mode}
                   selected={selectedLineNo === line.lineNo}
                   onSelect={() => onSelectLine(line.lineNo)}
                   onRateQty={(patch) => onUpdateRateQty(line.lineNo, patch)}
                   onOpenGst={() => onOpenGst(line.lineNo)}
                   onRemove={() => onRemoveLine(line.lineNo)}
-                  onReason={(reason) => onDeleteReasonChange(line.lineNo, reason)}
+                  onReason={(reason) =>
+                    onDeleteReasonChange(line.lineNo, reason)
+                  }
                 />
               ))
             )}
@@ -311,5 +540,5 @@ export function PoLineGrid({
         </table>
       </div>
     </div>
-  )
+  );
 }

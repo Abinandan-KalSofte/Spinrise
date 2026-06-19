@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Col, Form, Input, InputNumber, Radio, Row } from 'antd'
 import { TabPanel, Section } from './_fieldKit'
 import { NON_NEGATIVE_INPUT_PROPS, clampNonNegativeNumber } from '../../../utils/poTransferRules'
+import { notificationService } from '@/shared/lib/notification'
 
 // ── Tax / Discount tab (HTML #htab-panel-tax) ────────────────────────────────
 // CR-026: Deductions & Charges now use a compact paired layout — each charge
@@ -35,14 +36,29 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
 
   const base = lineItemValue || 0
 
-  const onPerChange = (amtField: string, value: number | string | null) => {
+  const onPerChange = (perField: string, amtField: string, value: number | string | null) => {
+    if (base <= 0) {
+      notificationService.warning('No Line Items', 'Please add PO line items before entering charges.')
+      // Reset both fields so no stale value remains
+      form.setFieldsValue({ [perField]: 0, [amtField]: 0 })
+      return
+    }
     const per = clampNonNegativeNumber(value)
-    form.setFieldValue(amtField, round2(per * base / 100))
+    const amt = round2(per * base / 100)
+    if (!Number.isFinite(amt)) return
+    form.setFieldValue(amtField, amt)
   }
 
-  const onAmtChange = (perField: string, value: number | string | null) => {
+  const onAmtChange = (perField: string, amtField: string, value: number | string | null) => {
+    if (base <= 0) {
+      notificationService.warning('No Line Items', 'Please add PO line items before entering charges.')
+      // Reset both fields so no stale value remains
+      form.setFieldsValue({ [perField]: 0, [amtField]: 0 })
+      return
+    }
     const amt = clampNonNegativeNumber(value)
-    const per = base > 0 ? round2(amt / base * 100) : 0
+    const per = round2(amt / base * 100)
+    if (!Number.isFinite(per)) return
     form.setFieldValue(perField, per)
   }
 
@@ -108,7 +124,7 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
             {...pct}
             addonAfter="%"
             disabled={disabled}
-            onChange={(v) => onPerChange(amtName, v)}
+            onChange={(v) => onPerChange(perName, amtName, v)}
           />
         </Form.Item>
 
@@ -120,7 +136,7 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
             {...pct}
             addonAfter="₹"
             disabled={disabled}
-            onChange={(v) => onAmtChange(perName, v)}
+            onChange={(v) => onAmtChange(perName, amtName, v)}
           />
         </Form.Item>
       </div>

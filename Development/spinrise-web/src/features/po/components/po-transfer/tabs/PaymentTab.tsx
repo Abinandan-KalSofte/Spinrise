@@ -8,17 +8,29 @@ import { NON_NEGATIVE_INPUT_PROPS } from '../../../utils/poTransferRules'
 // Cheque No.; HO → Pricing Terms) is enforced in the hook at Save, not here.
 
 interface PaymentTabProps {
-  disabled:  boolean
-  banks:     BankOption[]
-  payTerms:  PayTermOption[]
+  disabled:   boolean
+  banks:      BankOption[]
+  payTerms:   PayTermOption[]
+  // POT-PM-04: Order Value is required to validate Advance Amount <= Order Value
+  orderValue: number
 }
 
 const mb = { marginBottom: 8 }
 const full = { width: '100%' }
 
-export function PaymentTab({ disabled, banks, payTerms }: PaymentTabProps) {
+export function PaymentTab({ disabled, banks, payTerms, orderValue }: PaymentTabProps) {
   const payMode = (Form.useWatch('payMode') as string | undefined) ?? 'DIRECT'
   const isBank = payMode === 'BANK'
+
+  // POT-PM-04: Advance Amount must not exceed the current Order Value
+  const advAmtRule = {
+    validator: (_: unknown, value: number | null | undefined) => {
+      if (value === null || value === undefined || value === 0) return Promise.resolve()
+      if (Number(value) > orderValue)
+        return Promise.reject(new Error('Advance Amount cannot exceed Order Value.'))
+      return Promise.resolve()
+    },
+  }
 
   return (
     <TabPanel>
@@ -54,7 +66,7 @@ export function PaymentTab({ disabled, banks, payTerms }: PaymentTabProps) {
       {!isBank ? (
         <Row gutter={[12, 0]}>
           <Col span={5}><Form.Item name="directInstr" label="Direct Instruction" style={mb}><Input disabled={disabled} placeholder="Enter payment instruction…" /></Form.Item></Col>
-          <Col span={4}><Form.Item name="advAmt" label="Advance Amount" style={mb}><InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
+          <Col span={4}><Form.Item name="advAmt" label="Advance Amount" style={mb} rules={[advAmtRule]} validateTrigger="onChange"><InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
           <Col span={4}><Form.Item name="modeOfPayment" label="Mode of Payment" style={mb}>
             <Select disabled={disabled} options={['NEFT', 'RTGS', 'Cheque', 'Cash'].map((v) => ({ value: v, label: v }))} />
           </Form.Item></Col>
@@ -68,7 +80,7 @@ export function PaymentTab({ disabled, banks, payTerms }: PaymentTabProps) {
               options={banks.map((b) => ({ value: b.bankCode, label: `${b.bankCode} – ${b.bankName}` }))} />
           </Form.Item></Col>
           <Col span={4}><Form.Item name="paymentTerms" label="Payment Terms" style={mb}><Input disabled={disabled} placeholder="e.g. 30 days net" /></Form.Item></Col>
-          <Col span={3}><Form.Item name="advAmt" label="Advance Amount" style={mb}><InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
+          <Col span={3}><Form.Item name="advAmt" label="Advance Amount" style={mb} rules={[advAmtRule]} validateTrigger="onChange"><InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
           <Col span={3}><Form.Item name="modeOfPayment" label="Mode of Payment" style={mb}>
             <Select disabled={disabled} options={['NEFT', 'RTGS', 'LC'].map((v) => ({ value: v, label: v }))} />
           </Form.Item></Col>

@@ -18,7 +18,8 @@ import { NON_NEGATIVE_INPUT_PROPS } from '../../../utils/poTransferRules'
 // guessed — server allocates on save (CD-03 / UX-04).
 // Round Off is now editable — recalculates Order Value / Grand Total live.
 
-const fmt2 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmt2   = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 interface OrderDetailsTabProps {
   mode:             ScreenMode
@@ -40,6 +41,14 @@ export function OrderDetailsTab({
   onSupplierChange, onSupplierOpen,
 }: OrderDetailsTabProps) {
   const form = Form.useFormInstance()
+
+  // POT-OD-14: watch currency + currRate to derive the live FC Order Value
+  const currencyWatch = (Form.useWatch('currency') as string | undefined) ?? ''
+  const currRateWatch = (Form.useWatch('currRate') as number | undefined) ?? 0
+  const isNonInr      = !!currencyWatch && currencyWatch !== 'INR'
+  const fcOrderValue  = isNonInr && currRateWatch > 0
+    ? round2(orderValue / currRateWatch)
+    : null
 
   const processingDate = useAuthStore((s) => s.processingDate)
   const today    = dayjs()
@@ -197,6 +206,17 @@ export function OrderDetailsTab({
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} />
           </Form.Item>
         </Col>
+        {isNonInr && (
+          <Col span={4}>
+            <Form.Item label={`Order Value (${currencyWatch})`} style={mb}>
+              <Input
+                readOnly
+                value={fcOrderValue !== null ? fmt2(fcOrderValue) : '—'}
+                style={{ fontFamily: 'monospace', color: '#B45309', textAlign: 'right' }}
+              />
+            </Form.Item>
+          </Col>
+        )}
         <Col span={8}>
           <Form.Item name="remarks" label="Remarks" style={mb}>
             <Input placeholder="Optional remarks" disabled={disabled} />
