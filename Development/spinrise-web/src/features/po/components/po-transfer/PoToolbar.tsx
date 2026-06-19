@@ -49,6 +49,15 @@ export function PoToolbar({
         disabled={!isView || busy} onClick={onNew} />
       <TbBtn icon={<SearchOutlined />} label="Find" kbd="F2"
         disabled={!isView || busy} onClick={onFind} />
+        {/* Record navigation — VIEW mode, bounded by the FY index. */}
+      <TbBtn icon={<StepBackwardOutlined />} variant="icon"
+        disabled={!isView || busy || !canPrev} onClick={onFirst} title="First record" />
+      <TbBtn icon={<LeftOutlined />} variant="icon"
+        disabled={!isView || busy || !canPrev} onClick={onPrev} title="Previous record" />
+      <TbBtn icon={<RightOutlined />} variant="icon"
+        disabled={!isView || busy || !canNext} onClick={onNext} title="Next record" />
+      <TbBtn icon={<StepForwardOutlined />} variant="icon"
+        disabled={!isView || busy || !canNext} onClick={onLast} title="Last record" />
       <TbBtn icon={<DeleteOutlined />} label="Delete" kbd="F3" variant="danger"
         disabled={!isView || busy || !hasRecord} onClick={onDelete} />
 
@@ -65,17 +74,7 @@ export function PoToolbar({
       <TbBtn icon={<PrinterOutlined />} label="Print" kbd="F7"
         disabled={!isView || busy || !hasRecord} onClick={onPrint} />
 
-      <span style={{ flex: 1 }} />
-
-      {/* Record navigation — VIEW mode, bounded by the FY index. */}
-      <TbBtn icon={<StepBackwardOutlined />} variant="icon"
-        disabled={!isView || busy || !canPrev} onClick={onFirst} title="First record" />
-      <TbBtn icon={<LeftOutlined />} variant="icon"
-        disabled={!isView || busy || !canPrev} onClick={onPrev} title="Previous record" />
-      <TbBtn icon={<RightOutlined />} variant="icon"
-        disabled={!isView || busy || !canNext} onClick={onNext} title="Next record" />
-      <TbBtn icon={<StepForwardOutlined />} variant="icon"
-        disabled={!isView || busy || !canNext} onClick={onLast} title="Last record" />
+      
     </div>
   )
 }

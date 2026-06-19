@@ -97,7 +97,7 @@ export class PoTransferPage {
   }
 
   async goto() {
-    await this.page.goto('/po/transfer')
+    await this.page.goto('/po-transfer')
     await this.page.waitForLoadState('networkidle')
     // "New PO" button is enabled in VIEW mode once lookups finish loading
     await expect(this.btnAdd).toBeEnabled({ timeout: 15_000 })

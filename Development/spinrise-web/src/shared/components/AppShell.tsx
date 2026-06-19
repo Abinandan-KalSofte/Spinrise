@@ -39,7 +39,7 @@ function mk(
 }
 
 function wrapLabel(text: string) {
-  return <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'inline-block' }}>{text}</span>
+  return <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1, display: 'inline-block' }}>{text}</span>
 }
 
 // Paths that live under the "Purchase Requisition (PR)" sub-group.
@@ -66,19 +66,19 @@ const NAV_ITEMS: MenuItem[] = [
       mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval'),           <SafetyCertificateOutlined />),
     ]),
     mk('grp-transfer', wrapLabel('PR to PO Transfer'), '', [
-      mk('/po/transfer', wrapLabel('PR to PO Transfer'), <RetweetOutlined />),
+      mk('/po-transfer', wrapLabel('PR to PO Transfer'), <RetweetOutlined />),
     ]),
   ]),
    mk('grp-reports', 'Reports', <FileExclamationOutlined  />, [
     mk('grp-reports-pr', wrapLabel('Periodic Reports'), '', [
-      mk('/pr-report',            wrapLabel('Purchase Requisition Report'),                         <FilePdfOutlined />),
+      mk('/pr-report',            wrapLabel('Purchase Requisition List'),                         <FilePdfOutlined />),
     ]),
   ]),
 ]
 
 function getOpenKeys(path: string): string[] {
   if (PR_PATHS.some((p) => path.startsWith(p))) return ['grp-purchase', 'grp-pr']
-  if (path.startsWith('/po/transfer'))          return ['grp-purchase', 'grp-transfer']
+  if (path.startsWith('/po-transfer'))          return ['grp-purchase', 'grp-transfer']
   return []
 }
 

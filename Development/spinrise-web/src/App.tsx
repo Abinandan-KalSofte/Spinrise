@@ -38,7 +38,7 @@ const router = createBrowserRouter([
           { path: '/pr-cancellation', element: <PrCancellationPage /> },
           { path: '/pr-first-approval', element: <PrFirstApprovalPage /> },
           { path: '/pr-final-approval', element: <FinalLevelApprovalPage /> },
-          { path: '/po/transfer', element: <PrToPoTransferPage /> },
+          { path: '/po-transfer', element: <PrToPoTransferPage /> },
           { path: '/pr-report', element: <PrReportPage /> },
         ],
       },

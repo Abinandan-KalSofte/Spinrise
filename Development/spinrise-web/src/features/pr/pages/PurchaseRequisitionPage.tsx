@@ -285,6 +285,27 @@ export default function PurchaseRequisitionPage() {
           onClick={() => setFindOpen(true)}
         />
         <TbSep />
+        {/* Record navigation — far right (matches PO Transfer pattern) */}
+        <TbBtn variant="icon" icon={<DoubleLeftOutlined style={{ fontSize: 10 }} />}
+          disabled={isEditing || pageBusy || isDeleteMode}
+          title="First record (Ctrl+Home)"
+          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('FIRST') })}
+        />
+        <TbBtn variant="icon" icon={<LeftOutlined style={{ fontSize: 10 }} />}
+          disabled={isEditing || pageBusy || isDeleteMode}
+          title="Previous record (Ctrl+←)"
+          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('PREV') })}
+        />
+        <TbBtn variant="icon" icon={<RightOutlined style={{ fontSize: 10 }} />}
+          disabled={isEditing || pageBusy || isDeleteMode}
+          title="Next record (Ctrl+→)"
+          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('NEXT') })}
+        />
+        <TbBtn variant="icon" icon={<DoubleRightOutlined style={{ fontSize: 10 }} />}
+          disabled={isEditing || pageBusy || isDeleteMode}
+          title="Last record (Ctrl+End)"
+          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('LAST') })}
+        />
         {/* Delete actions */}
         <TbBtn
           variant="danger"
@@ -325,28 +346,7 @@ export default function PurchaseRequisitionPage() {
           disabled={isEditing || !savedPrNo || isDeleteMode || pageBusy}
           onClick={() => void handlePrint()}
         />
-        {/* Record navigation — far right (matches PO Transfer pattern) */}
-        <span style={{ flex: 1 }} />
-        <TbBtn variant="icon" icon={<DoubleLeftOutlined style={{ fontSize: 10 }} />}
-          disabled={isEditing || pageBusy || isDeleteMode}
-          title="First record (Ctrl+Home)"
-          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('FIRST') })}
-        />
-        <TbBtn variant="icon" icon={<LeftOutlined style={{ fontSize: 10 }} />}
-          disabled={isEditing || pageBusy || isDeleteMode}
-          title="Previous record (Ctrl+←)"
-          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('PREV') })}
-        />
-        <TbBtn variant="icon" icon={<RightOutlined style={{ fontSize: 10 }} />}
-          disabled={isEditing || pageBusy || isDeleteMode}
-          title="Next record (Ctrl+→)"
-          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('NEXT') })}
-        />
-        <TbBtn variant="icon" icon={<DoubleRightOutlined style={{ fontSize: 10 }} />}
-          disabled={isEditing || pageBusy || isDeleteMode}
-          title="Last record (Ctrl+End)"
-          onClick={() => guardDirty(() => { setIsDeleteMode(false); void navigateRecord('LAST') })}
-        />
+        
       </div>
 
       {/* ── Status bars ── */}

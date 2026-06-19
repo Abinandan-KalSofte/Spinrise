@@ -27,7 +27,7 @@ import { PrPrintPreviewModal } from '@/features/pr/components/PrPrintPreviewModa
 // Composes the orchestration hook with all presentation components inside the
 // existing AppShell. Pending Gate-0 items stay behind their adapters: GST route
 // via the hook's onSupplierChange (Q4); header-tax via propagateHeaderTax (Q5);
-// budget (BR-16/17) server-driven via the save-error path. Mounted at /po/transfer.
+// budget (BR-16/17) server-driven via the save-error path. Mounted at /po-transfer.
 
 export default function PrToPoTransferPage() {
   usePageTitle('PR to PO Transfer')
