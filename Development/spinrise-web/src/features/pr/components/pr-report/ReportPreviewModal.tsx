@@ -257,9 +257,8 @@ export function ReportPreviewModal({ open, blobUrl, filename, loading, onClose }
       open={open}
       onCancel={handleClose}
       width="90vw"
-      style={{ top: 16, maxWidth: 1400 }}
+      style={{ top: 16, maxWidth: 1400, padding: 0, overflow: 'hidden' }}
       styles={{
-        content: { padding: 0, overflow: 'hidden' },
         header:  {
           padding:      '10px 16px',
           borderBottom: `1px solid ${BORDER}`,
