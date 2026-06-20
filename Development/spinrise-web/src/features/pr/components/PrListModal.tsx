@@ -146,7 +146,7 @@ export default function PrListModal({ open, mode, fDate, lDate, onSelect, onClos
       open={open}
       onCancel={onClose}
       footer={null}
-      width={900}
+      width="min(95vw, 900px)"
       styles={{ body: { padding: '12px 16px' } }}
       destroyOnClose
     >

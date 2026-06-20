@@ -93,7 +93,7 @@ export default function PrToPoTransferPage() {
   const activeBodyTab = showDelivery ? bodyTab : 'lines'
 
   // ── Toolbar actions ────────────────────────────────────────────────────────
-  const handleNew    = () => { setBodyTab('lines'); void f.enterAddMode().then((ok) => { if (ok) setPrPickerOpen(true) }) }
+  const handleNew    = () => { setBodyTab('lines'); setHeaderTab('order'); void f.enterAddMode().then((ok) => { if (ok) setPrPickerOpen(true) }) }
   const handleFind   = () => setFindOpen(true)
   // Delete flow: always open the Find PO modal first so the user picks which PO
   // to delete — prevents accidental deletion of whichever PO happens to be loaded.
@@ -240,7 +240,7 @@ export default function PrToPoTransferPage() {
       {f.mode === 'ADD' && (
         <div style={{
           background: '#EFF6FF', borderBottom: '2px solid #3B82F6', borderLeft: '4px solid #3B82F6',
-          padding: '7px 16px', fontSize: 11, color: '#1D4ED8', fontWeight: 500,
+          padding: '9px 16px', fontSize: 12, color: '#1D4ED8', fontWeight: 600,
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{
@@ -321,20 +321,15 @@ export default function PrToPoTransferPage() {
           <div>
             <span style={{ fontSize: 12, color: '#92400E', fontWeight: 700 }}>Select PR Lines</span>
             <span style={{ fontSize: 11, color: '#B45309', marginLeft: 8 }}>
-              Browse and select approved Purchase Requisition lines to add to this PO
+              {f.draftLines.length === 0
+                ? 'Browse and select approved Purchase Requisition lines to add to this PO'
+                : 'Edit selection or add more PR lines to this PO'}
             </span>
           </div>
-          <span style={{
-            marginLeft: 'auto',
-            background: f.draftLines.length > 0 ? '#FEF3C7' : '#FEF9EC',
-            color: '#B45309', border: '1px solid #FDE68A',
-            fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
-          }}>
-            {f.draftLines.length} line{f.draftLines.length !== 1 ? 's' : ''} selected
-          </span>
           <button
             onClick={() => setPrPickerOpen(true)}
             style={{
+              marginLeft: 'auto',
               display: 'inline-flex', alignItems: 'center', gap: 5,
               padding: '5px 14px', borderRadius: 6,
               border: '1px solid #185FA5', background: '#185FA5',
@@ -343,6 +338,15 @@ export default function PrToPoTransferPage() {
             }}
           >
             <SearchOutlined /> Browse PR Lines
+            {f.draftLines.length > 0 && (
+              <span style={{
+                background: 'rgba(255,255,255,0.25)', color: '#fff',
+                fontSize: 10, fontWeight: 700, padding: '1px 6px',
+                borderRadius: 10, marginLeft: 4,
+              }}>
+                {f.draftLines.length}
+              </span>
+            )}
           </button>
         </div>
       )}

@@ -95,7 +95,7 @@ export default function ItemSelectionModal({ open, onSelect, onClose }: Props) {
       open={open}
       onCancel={onClose}
       footer={null}
-      width={820}
+      width="min(95vw, 820px)"
       styles={{ body: { padding: '12px 16px' } }}
     >
       <Input

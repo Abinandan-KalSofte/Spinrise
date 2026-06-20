@@ -48,7 +48,7 @@ export default function UndoPickerModal({ open, list, loading, onSelect, onClose
       open={open}
       onCancel={handleClose}
       footer={null}
-      width={820}
+      width="min(95vw, 820px)"
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{

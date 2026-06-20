@@ -8,8 +8,11 @@ import { TabPanel } from './_fieldKit'
 
 interface CancelStatusTabProps { disabled: boolean }
 
-const mb   = { marginBottom: 8 }
+const lbl: React.CSSProperties = {
+  fontSize: 10, fontWeight: 600, color: '#475569', marginBottom: 3, whiteSpace: 'nowrap',
+}
 const full = { width: '100%' }
+const fi   = { marginBottom: 0 }
 
 export function CancelStatusTab({ disabled: _disabled }: CancelStatusTabProps) {
   // Always read-only — Sprint 1 decision. The prop is retained in the interface
@@ -18,26 +21,50 @@ export function CancelStatusTab({ disabled: _disabled }: CancelStatusTabProps) {
 
   return (
     <TabPanel>
-      <Row gutter={[12, 0]} align="bottom">
-        <Col span={4}><Form.Item name="reminder" label="Reminder" style={mb}><Input placeholder="—" disabled={alwaysDisabled} /></Form.Item></Col>
-        <Col span={4}><Form.Item name="status" label="Status" style={mb}><Input placeholder="—" disabled={alwaysDisabled} style={{ fontFamily: 'monospace' }} /></Form.Item></Col>
+      <Row gutter={[12, 8]} align="bottom">
+        <Col span={4}>
+          <div style={lbl}>Reminder</div>
+          <Form.Item name="reminder" style={fi}>
+            <Input placeholder="—" disabled={alwaysDisabled} />
+          </Form.Item>
+        </Col>
+        <Col span={4}>
+          <div style={lbl}>Status</div>
+          <Form.Item name="status" style={fi}>
+            <Input placeholder="—" disabled={alwaysDisabled} style={{ fontFamily: 'monospace' }} />
+          </Form.Item>
+        </Col>
         <Col span={2}>
-          <Form.Item name="cancelled" valuePropName="checked" label=" " colon={false} style={mb}>
+          {/* Spacer div matches label height so checkbox aligns with adjacent fields */}
+          <div style={{ ...lbl, visibility: 'hidden' }}>_</div>
+          <Form.Item name="cancelled" valuePropName="checked" style={fi}>
             <Checkbox disabled={alwaysDisabled}>Cancelled</Checkbox>
           </Form.Item>
         </Col>
         <Col span={4}>
-          <Form.Item name="cancelDate" label="Cancellation Date" style={mb}>
+          <div style={lbl}>Cancellation Date</div>
+          <Form.Item name="cancelDate" style={fi}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={alwaysDisabled} placeholder="—" />
           </Form.Item>
         </Col>
-        <Col span={4}><Form.Item name="cancelReason" label="Reason" style={mb}><Input disabled={alwaysDisabled} placeholder="—" /></Form.Item></Col>
         <Col span={4}>
-          <Form.Item name="approved" label="Approved" style={mb}>
-            <Select disabled={alwaysDisabled} options={[{ value: 'NO', label: 'NO' }, { value: 'YES', label: 'YES' }]} placeholder="—"/>
+          <div style={lbl}>Reason</div>
+          <Form.Item name="cancelReason" style={fi}>
+            <Input disabled={alwaysDisabled} placeholder="—" />
           </Form.Item>
         </Col>
-        <Col span={4}><Form.Item name="approvedBy" label="Approved By" style={mb}><Input disabled={alwaysDisabled} placeholder="—"/></Form.Item></Col>
+        <Col span={4}>
+          <div style={lbl}>Approved</div>
+          <Form.Item name="approved" style={fi}>
+            <Select disabled={alwaysDisabled} options={[{ value: 'NO', label: 'NO' }, { value: 'YES', label: 'YES' }]} placeholder="—" />
+          </Form.Item>
+        </Col>
+        <Col span={4}>
+          <div style={lbl}>Approved By</div>
+          <Form.Item name="approvedBy" style={fi}>
+            <Input disabled={alwaysDisabled} placeholder="—" />
+          </Form.Item>
+        </Col>
       </Row>
     </TabPanel>
   )

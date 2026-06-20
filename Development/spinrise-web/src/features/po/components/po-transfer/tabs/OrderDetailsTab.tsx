@@ -21,6 +21,13 @@ import { NON_NEGATIVE_INPUT_PROPS } from '../../../utils/poTransferRules'
 const fmt2   = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const round2 = (n: number) => Math.round(n * 100) / 100
 
+const lbl: React.CSSProperties = {
+  fontSize: 10, fontWeight: 600, color: '#475569', marginBottom: 3, whiteSpace: 'nowrap',
+}
+const req = <span style={{ color: '#ff4d4f', marginRight: 2 }}>*</span>
+const full = { width: '100%' }
+const fi   = { marginBottom: 0 }
+
 interface OrderDetailsTabProps {
   mode:             ScreenMode
   disabled:         boolean
@@ -70,15 +77,17 @@ export function OrderDetailsTab({
 
   return (
     <TabPanel>
-      <Row gutter={[12, 0]}>
+      <Row gutter={[12, 8]}>
         <Col span={2}>
-          <Form.Item name="poNo" label="PO No." style={mb}>
+          <div style={lbl}>PO No.</div>
+          <Form.Item name="poNo" style={fi}>
             <Input readOnly placeholder="Auto" style={{ fontFamily: 'monospace', color: '#185FA5' }} />
           </Form.Item>
         </Col>
         <Col span={2}>
+          <div style={lbl}>PO Date</div>
           {/* CR-024: disabledDate uses fyPastDisabledDate with lastPoDate lower bound */}
-          <Form.Item name="poDate" label="PO Date"
+          <Form.Item name="poDate"
             validateTrigger={['onChange', 'onBlur']}
             rules={[{
               validator: (_, val: Dayjs | null) => {
@@ -92,16 +101,17 @@ export function OrderDetailsTab({
                 return Promise.resolve()
               },
             }]}
-            style={mb}>
+            style={fi}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} allowClear={false}
               disabledDate={fyPastDisabledDate(processingDate, lastPoDate)}
             />
           </Form.Item>
         </Col>
         <Col span={3}>
-          <Form.Item name="orderType" label="Order Type" required
+          <div style={lbl}>{req}Order Type</div>
+          <Form.Item name="orderType"
             rules={[{ required: true, message: 'Order Type is required' }]}
-            validateTrigger="onBlur" style={mb}>
+            validateTrigger="onBlur" style={fi}>
             <Select
               showSearch optionFilterProp="label" placeholder="Select order type…" disabled={disabled}
               filterSort={priorityFilterSort}
@@ -110,9 +120,10 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={10}>
-          <Form.Item name="supplier" label="Supplier" required
+          <div style={lbl}>{req}Supplier</div>
+          <Form.Item name="supplier"
             rules={[{ required: true, message: 'Supplier is required' }]}
-            validateTrigger="onBlur" style={mb}>
+            validateTrigger="onBlur" style={fi}>
             <Select
               showSearch optionFilterProp="label" placeholder="Select supplier — type to filter…" disabled={disabled}
               filterOption={prefixFilterOption} filterSort={priorityFilterSort}
@@ -123,35 +134,41 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={3}>
-          <Form.Item name="gstin" label="GSTIN" style={mb}>
+          <div style={lbl}>GSTIN</div>
+          <Form.Item name="gstin" style={fi}>
             <Input readOnly placeholder="Auto" style={{ fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
         <Col span={4}>
-          <Form.Item name="gstState" label="GST State" style={mb}>
+          <div style={lbl}>GST State</div>
+          <Form.Item name="gstState" style={fi}>
             <Input readOnly placeholder="Auto" style={{ fontFamily: 'monospace' }} />
-          </Form.Item>
-        </Col>
-        <Col span={4}>
-          <Form.Item name="inspect" label="Inspect" style={mb}>
-            <Select disabled={disabled} options={[{ value: 'YES', label: 'Yes' }, { value: 'NO', label: 'No' }]} />
           </Form.Item>
         </Col>
 
         <Col span={4}>
-          <Form.Item name="formType" label="Form Type" style={mb}>
+          <div style={lbl}>Inspect</div>
+          <Form.Item name="inspect" style={fi}>
+            <Select disabled={disabled} options={[{ value: 'YES', label: 'Yes' }, { value: 'NO', label: 'No' }]} />
+          </Form.Item>
+        </Col>
+        <Col span={4}>
+          <div style={lbl}>Form Type</div>
+          <Form.Item name="formType" style={fi}>
             <Select allowClear placeholder="03 — NONE" disabled={disabled} optionFilterProp="label"
               options={formTypes.map((f) => ({ value: f.formCode, label: `${f.formCode} – ${f.formName}` }))} />
           </Form.Item>
         </Col>
         <Col span={4}>
-          <Form.Item name="refNo" label="Ref. No." style={mb}>
+          <div style={lbl}>Ref. No.</div>
+          <Form.Item name="refNo" style={fi}>
             <Input placeholder="Optional" disabled={disabled} />
           </Form.Item>
         </Col>
         {/* CR-025 / CR-028: Ref Date cannot be a future date and must be within FY */}
         <Col span={4}>
-          <Form.Item name="refDate" label="Ref. Date"
+          <div style={lbl}>Ref. Date</div>
+          <Form.Item name="refDate"
             validateTrigger={['onChange', 'onBlur']}
             rules={[{
               validator: (_, val: Dayjs | null) => {
@@ -163,7 +180,7 @@ export function OrderDetailsTab({
                 return Promise.resolve()
               },
             }]}
-            style={mb}>
+            style={fi}>
             <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled}
               disabledDate={(d) => {
                 if (d.isBefore(fyStart, 'day') || d.isAfter(fyEnd, 'day')) return true
@@ -175,7 +192,8 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={4}>
-          <Form.Item name="roundOff" label="Round Off" style={mb}>
+          <div style={lbl}>Round Off</div>
+          <Form.Item name="roundOff" style={fi}>
             <InputNumber
               precision={2} controls={false} disabled={disabled}
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }}
@@ -183,13 +201,15 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={4}>
-          <Form.Item name="poValue" label="Order Value (₹)" style={mb}>
+          <div style={lbl}>Order Value (₹)</div>
+          <Form.Item name="poValue" style={fi}>
             <Input readOnly style={{ fontFamily: 'monospace', color: '#185FA5', textAlign: 'right' }} />
           </Form.Item>
         </Col>
 
         <Col span={4}>
-          <Form.Item name="currency" label="Currency" style={mb}>
+          <div style={lbl}>Currency</div>
+          <Form.Item name="currency" style={fi}>
             <Select
               showSearch optionFilterProp="label" allowClear
               placeholder="Select currency…" disabled={disabled}
@@ -200,14 +220,16 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={4}>
-          <Form.Item name="currRate" label="Curr. Rate" style={mb}>
+          <div style={lbl}>Curr. Rate</div>
+          <Form.Item name="currRate" style={fi}>
             <InputNumber {...NON_NEGATIVE_INPUT_PROPS} disabled precision={4} controls={false}
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} />
           </Form.Item>
         </Col>
         {isNonInr && (
           <Col span={4}>
-            <Form.Item label={`Order Value (${currencyWatch})`} style={mb}>
+            <div style={lbl}>Order Value ({currencyWatch})</div>
+            <Form.Item style={fi}>
               <Input
                 readOnly
                 value={fcOrderValue !== null ? fmt2(fcOrderValue) : '—'}
@@ -217,7 +239,8 @@ export function OrderDetailsTab({
           </Col>
         )}
         <Col span={8}>
-          <Form.Item name="remarks" label="Remarks" style={mb}>
+          <div style={lbl}>Remarks</div>
+          <Form.Item name="remarks" style={fi}>
             <Input placeholder="Optional remarks" disabled={disabled} />
           </Form.Item>
         </Col>
@@ -225,6 +248,3 @@ export function OrderDetailsTab({
     </TabPanel>
   )
 }
-
-const mb   = { marginBottom: 8 }
-const full = { width: '100%' }

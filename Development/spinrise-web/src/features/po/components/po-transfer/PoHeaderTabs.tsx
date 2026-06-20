@@ -8,6 +8,7 @@ import {
   StopOutlined,
   TruckOutlined,
 } from '@ant-design/icons'
+import { Tooltip } from 'antd'
 import dayjs from 'dayjs'
 import { OrderDetailsTab } from './tabs/OrderDetailsTab'
 import { TaxDiscountTab } from './tabs/TaxDiscountTab'
@@ -160,7 +161,12 @@ export function PoHeaderTabs(props: PoHeaderTabsProps) {
           </span>
           {createdBy && (
             <span style={{ fontSize: 11, color: '#9AA5B4' }}>
-              Created by <strong style={{ color: '#4B5563' }}>{createdBy}</strong>
+              Created by{' '}
+              <Tooltip title={createdBy}>
+                <strong style={{ color: '#4B5563', cursor: 'help', borderBottom: '1px dotted #9AA5B4' }}>
+                  {createdBy}
+                </strong>
+              </Tooltip>
             </span>
           )}
         </div>

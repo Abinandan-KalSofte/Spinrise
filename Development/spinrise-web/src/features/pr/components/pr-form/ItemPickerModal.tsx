@@ -184,7 +184,7 @@ export function ItemPickerModal({
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={860}
+      width="min(95vw, 860px)"
       destroyOnClose
       styles={{ body: { padding: 0 } }}
       title={

@@ -85,7 +85,7 @@ export function PRPickerModal({ open, mode, onSelect, onCancel }: PRPickerModalP
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={820}
+      width="min(95vw, 820px)"
       destroyOnClose
       styles={{ body: { padding: 0 } }}
       title={

@@ -15,8 +15,11 @@ interface PaymentTabProps {
   orderValue: number
 }
 
-const mb = { marginBottom: 8 }
+const lbl: React.CSSProperties = {
+  fontSize: 10, fontWeight: 600, color: '#475569', marginBottom: 3, whiteSpace: 'nowrap',
+}
 const full = { width: '100%' }
+const fi   = { marginBottom: 0 }
 
 export function PaymentTab({ disabled, banks, payTerms, orderValue }: PaymentTabProps) {
   const payMode = (Form.useWatch('payMode') as string | undefined) ?? 'DIRECT'
@@ -34,60 +37,104 @@ export function PaymentTab({ disabled, banks, payTerms, orderValue }: PaymentTab
 
   return (
     <TabPanel>
-      <Row gutter={[12, 0]}>
+      <Row gutter={[12, 8]}>
         <Col span={24}>
-          <Form.Item name="payMode" label="Payment Mode" style={mb}>
-            <Radio.Group disabled={disabled}>
-              <Radio value="DIRECT">Direct</Radio>
-              <Radio value="BANK">Through Bank</Radio>
-            </Radio.Group>
-          </Form.Item>
-        </Col>
-      </Row>
-
-      <Row gutter={[12, 0]}>
-        <Col span={6}>
-          <Form.Item name="paymentTermCode" label="Payment Term" style={mb}>
-            <Select
-              showSearch
-              allowClear
-              optionFilterProp="label"
-              placeholder="Select payment term"
-              disabled={disabled}
-              options={payTerms.map((t) => ({
-                value: t.payTermCode,
-                label: `${t.payTermCode} – ${t.payTermDesc}`,
-              }))}
+          <div style={lbl}>Payment Mode</div>
+          <Form.Item name="payMode" style={fi}>
+            <Radio.Group disabled={disabled} optionType="button" buttonStyle="outline" size="small"
+              options={[{ label: 'Direct', value: 'DIRECT' }, { label: 'Through Bank', value: 'BANK' }]}
             />
           </Form.Item>
         </Col>
-      </Row>
 
-      {!isBank ? (
-        <Row gutter={[12, 0]}>
-          <Col span={5}><Form.Item name="directInstr" label="Direct Instruction" style={mb}><Input disabled={disabled} placeholder="Enter payment instruction…" /></Form.Item></Col>
-          <Col span={4}><Form.Item name="advAmt" label="Advance Amount" style={mb} rules={[advAmtRule]} validateTrigger="onChange"><InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
-          <Col span={4}><Form.Item name="modeOfPayment" label="Mode of Payment" style={mb}>
-            <Select disabled={disabled} options={['NEFT', 'RTGS', 'Cheque', 'Cash'].map((v) => ({ value: v, label: v }))} />
-          </Form.Item></Col>
-          <Col span={4}><Form.Item name="payRef" label="Payment Ref." style={mb}><Input disabled={disabled} /></Form.Item></Col>
-          <Col span={4}><Form.Item name="payRefDate" label="Ref. Date" style={mb}><DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} /></Form.Item></Col>
-        </Row>
-      ) : (
-        <Row gutter={[12, 0]}>
-          <Col span={5}><Form.Item name="bankCode" label="Bank" style={mb}>
-            <Select showSearch optionFilterProp="label" placeholder="Bank code + name" disabled={disabled}
-              options={banks.map((b) => ({ value: b.bankCode, label: `${b.bankCode} – ${b.bankName}` }))} />
-          </Form.Item></Col>
-          <Col span={4}><Form.Item name="paymentTerms" label="Payment Terms" style={mb}><Input disabled={disabled} placeholder="e.g. 30 days net" /></Form.Item></Col>
-          <Col span={3}><Form.Item name="advAmt" label="Advance Amount" style={mb} rules={[advAmtRule]} validateTrigger="onChange"><InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled} style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} /></Form.Item></Col>
-          <Col span={3}><Form.Item name="modeOfPayment" label="Mode of Payment" style={mb}>
-            <Select disabled={disabled} options={['NEFT', 'RTGS', 'LC'].map((v) => ({ value: v, label: v }))} />
-          </Form.Item></Col>
-          <Col span={4}><Form.Item name="chequeNo" label="Cheque No." style={mb}><Input disabled={disabled} /></Form.Item></Col>
-          <Col span={4}><Form.Item name="chequeDate" label="Cheque Date" style={mb}><DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} /></Form.Item></Col>
-        </Row>
-      )}
+        <Col span={6}>
+          <div style={lbl}>Payment Term</div>
+          <Form.Item name="paymentTermCode" style={fi}>
+            <Select
+              showSearch allowClear optionFilterProp="label"
+              placeholder="Select payment term" disabled={disabled}
+              options={payTerms.map((t) => ({ value: t.payTermCode, label: `${t.payTermCode} – ${t.payTermDesc}` }))}
+            />
+          </Form.Item>
+        </Col>
+
+        {!isBank ? (
+          <>
+            <Col span={5}>
+              <div style={lbl}>Direct Instruction</div>
+              <Form.Item name="directInstr" style={fi}>
+                <Input disabled={disabled} placeholder="Enter payment instruction…" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <div style={lbl}>Advance Amount</div>
+              <Form.Item name="advAmt" style={fi} rules={[advAmtRule]} validateTrigger="onChange">
+                <InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled}
+                  style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <div style={lbl}>Mode of Payment</div>
+              <Form.Item name="modeOfPayment" style={fi}>
+                <Select disabled={disabled} options={['NEFT', 'RTGS', 'Cheque', 'Cash'].map((v) => ({ value: v, label: v }))} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <div style={lbl}>Payment Ref.</div>
+              <Form.Item name="payRef" style={fi}>
+                <Input disabled={disabled} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <div style={lbl}>Ref. Date</div>
+              <Form.Item name="payRefDate" style={fi}>
+                <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} />
+              </Form.Item>
+            </Col>
+          </>
+        ) : (
+          <>
+            <Col span={5}>
+              <div style={lbl}>Bank</div>
+              <Form.Item name="bankCode" style={fi}>
+                <Select showSearch optionFilterProp="label" placeholder="Bank code + name" disabled={disabled}
+                  options={banks.map((b) => ({ value: b.bankCode, label: `${b.bankCode} – ${b.bankName}` }))} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <div style={lbl}>Payment Terms</div>
+              <Form.Item name="paymentTerms" style={fi}>
+                <Input disabled={disabled} placeholder="e.g. 30 days net" />
+              </Form.Item>
+            </Col>
+            <Col span={3}>
+              <div style={lbl}>Advance Amount</div>
+              <Form.Item name="advAmt" style={fi} rules={[advAmtRule]} validateTrigger="onChange">
+                <InputNumber {...NON_NEGATIVE_INPUT_PROPS} precision={2} controls={false} disabled={disabled}
+                  style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }} />
+              </Form.Item>
+            </Col>
+            <Col span={3}>
+              <div style={lbl}>Mode of Payment</div>
+              <Form.Item name="modeOfPayment" style={fi}>
+                <Select disabled={disabled} options={['NEFT', 'RTGS', 'LC'].map((v) => ({ value: v, label: v }))} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <div style={lbl}>Cheque No.</div>
+              <Form.Item name="chequeNo" style={fi}>
+                <Input disabled={disabled} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <div style={lbl}>Cheque Date</div>
+              <Form.Item name="chequeDate" style={fi}>
+                <DatePicker format="DD-MMM-YYYY" style={full} disabled={disabled} />
+              </Form.Item>
+            </Col>
+          </>
+        )}
+      </Row>
     </TabPanel>
   )
 }

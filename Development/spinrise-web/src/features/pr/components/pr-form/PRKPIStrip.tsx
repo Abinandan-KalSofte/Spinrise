@@ -121,7 +121,7 @@ function KPICard({
     <div style={{
       background: '#fff', border: `1px solid ${C.border}`,
       borderLeft: accent ? `3px solid ${accent}` : `1px solid ${C.border}`,
-      borderRadius: 8, padding: '7px 12px', minWidth: 0,
+      borderRadius: 8, padding: '7px 12px', flex: 1, minWidth: 140,
     }}>
       <div style={{ fontSize: 10, fontWeight: 600, color: C.text3, letterSpacing: '0.3px', marginBottom: 2 }}>{label}</div>
       <div style={{
@@ -158,12 +158,11 @@ export function PRKPIStrip({ validLinesCount, totalQtyDisplay, totalCost, prDate
 
   // FSD §2 (CEO R2.0 #17): cards 3-5 hidden in Add mode; only visible after first save
   const showExtended = !isNewMode && !hideApprovalStatus
-  const cols = isNewMode ? 2 : hideApprovalStatus ? 4 : 5
 
   return (
     <div style={{ background: C.bg2, borderTop: `1px solid ${C.border}`, padding: '8px 16px', flexShrink: 0 }}>
       {!hideApprovalStatus && <ApprovalStageBar prStatus={prStatus} savedPrNo={savedPrNo} cancelReason={cancelReason} />}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <KPICard label="Total Lines" value={validLinesCount}
           sub={`${validLinesCount === 1 ? 'Item' : 'Items'} in this PR`}
           valueColor={C.blue} accent={C.blue} />

@@ -38,7 +38,7 @@ export default function CancelPickerModal({ open, list, loading, onSelect, onClo
       open={open}
       onCancel={handleClose}
       footer={null}
-      width={820}
+      width="min(95vw, 820px)"
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{

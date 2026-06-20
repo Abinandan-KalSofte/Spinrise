@@ -47,4 +47,4 @@ export function ApprovalTab({ currentPo }: ApprovalTabProps) {
   )
 }
 
-const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 500, color: '#4a4a4a', marginBottom: 4 }
+const lbl: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: '#475569', marginBottom: 3 }

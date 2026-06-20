@@ -57,6 +57,13 @@ body {
 .spinrise-nav-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 3px; }
 .spinrise-nav-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
 
+/* ── Main content area — thin scrollbar (visible when viewport height < 768px) ── */
+.spinrise-content-area { scrollbar-width: thin; scrollbar-color: rgba(24,95,165,0.35) transparent; }
+.spinrise-content-area::-webkit-scrollbar { width: 6px; }
+.spinrise-content-area::-webkit-scrollbar-track { background: transparent; }
+.spinrise-content-area::-webkit-scrollbar-thumb { background: rgba(24,95,165,0.30); border-radius: 3px; }
+.spinrise-content-area::-webkit-scrollbar-thumb:hover { background: rgba(24,95,165,0.55); }
+
 /* Parent group titles + Dashboard get stronger emphasis than child leaves. */
 .spinrise-nav.ant-menu > .ant-menu-item,
 .spinrise-nav .ant-menu-submenu > .ant-menu-submenu-title { font-weight: 600; }

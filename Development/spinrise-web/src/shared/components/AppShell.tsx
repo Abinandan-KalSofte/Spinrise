@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Layout, Menu, Button, Dropdown, ConfigProvider, Modal } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useNavigationGuardStore } from '@/shared/store/useNavigationGuardStore'
@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons'
 import { useAuthStore } from '@/features/auth/store/useAuthStore'
 import { authApi } from '@/features/auth/api/authApi'
+import { useIdleTimer } from '@/shared/hooks/useIdleTimer'
 import type { MenuProps } from 'antd'
 
 const { Sider, Header, Content } = Layout
@@ -87,9 +88,11 @@ export default function AppShell() {
   const location          = useLocation()
   const [collapsed, setCollapsed] = useState(false)
 
-  const user             = useAuthStore((s) => s.user)
-  const tokens           = useAuthStore((s) => s.tokens)
-  const clearAuthSession = useAuthStore((s) => s.clearAuthSession)
+  const user              = useAuthStore((s) => s.user)
+  const tokens            = useAuthStore((s) => s.tokens)
+  const isAuthenticated   = useAuthStore((s) => s.isAuthenticated)
+  const clearAuthSession  = useAuthStore((s) => s.clearAuthSession)
+  const setSessionExpired = useAuthStore((s) => s.setSessionExpired)
 
   const isDirty          = useNavigationGuardStore((s) => s.isDirty)
   const onConfirmDiscard = useNavigationGuardStore((s) => s.onConfirmDiscard)
@@ -109,6 +112,15 @@ export default function AppShell() {
       navigate(to, { replace })
     }
   }
+
+  const handleIdle = useCallback(async () => {
+    const { tokens: currentTokens } = useAuthStore.getState()
+    await authApi.logout(currentTokens?.refreshToken).catch(() => {})
+    clearAuthSession()
+    setSessionExpired(true)
+  }, [clearAuthSession, setSessionExpired])
+
+  useIdleTimer(handleIdle, isAuthenticated)
 
   const handleLogout = async () => {
     await authApi.logout(tokens?.refreshToken).catch(() => {})
@@ -136,7 +148,7 @@ export default function AppShell() {
         collapsed={collapsed}
         width={270}
         collapsedWidth={64}
-        breakpoint="lg"
+        breakpoint="xl"
         onBreakpoint={(broken) => setCollapsed(broken)}
         style={{
           background: '#0f172a',
@@ -274,8 +286,10 @@ export default function AppShell() {
         </Header>
 
         {/* Page content */}
-        <Content style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <Outlet />
+        <Content className="spinrise-content-area" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: '720px', minWidth: '960px' }}>
+            <Outlet />
+          </div>
         </Content>
       </Layout>
     </Layout>

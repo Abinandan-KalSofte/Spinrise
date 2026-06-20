@@ -58,12 +58,10 @@ export function PoToolbar({
         disabled={!isView || busy || !canNext} onClick={onNext} title="Next record" />
       <TbBtn icon={<StepForwardOutlined />} variant="icon"
         disabled={!isView || busy || !canNext} onClick={onLast} title="Last record" />
-      <TbBtn icon={<DeleteOutlined />} label="Delete" kbd="F3" variant="danger"
-        disabled={!isView || busy || !hasRecord} onClick={onDelete} />
 
       <TbSep />
 
-      <TbBtn icon={<SaveOutlined />} label={saveLabel} kbd={isDelete ? 'F8' : 'ctrl+s'}
+      <TbBtn icon={<SaveOutlined />} label={saveLabel} kbd={isDelete ? 'F8' : 'Ctrl+S'}
         variant={isDelete ? 'danger-filled' : 'primary'}
         disabled={isView || busy} onClick={onSave} />
       <TbBtn icon={<CloseOutlined />} label="Cancel" kbd="F6"
@@ -73,6 +71,11 @@ export function PoToolbar({
 
       <TbBtn icon={<PrinterOutlined />} label="Print" kbd="F7"
         disabled={!isView || busy || !hasRecord} onClick={onPrint} />
+
+      <TbSep />
+
+      <TbBtn icon={<DeleteOutlined />} label="Delete" kbd="F3" variant="danger"
+        disabled={!isView || busy || !hasRecord} onClick={onDelete} />
 
       
     </div>

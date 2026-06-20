@@ -144,7 +144,7 @@ export default function PoListModal({ open, fDate, lDate, onSelect, onClose }: P
       open={open}
       onCancel={onClose}
       footer={null}
-      width={900}
+      width="min(95vw, 900px)"
       styles={{ body: { padding: '12px 16px' } }}
       destroyOnClose
     >

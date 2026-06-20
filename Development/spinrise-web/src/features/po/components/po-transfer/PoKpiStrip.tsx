@@ -24,7 +24,7 @@ export function PoKpiStrip({ mode, totals, approvalStatus, approvalActor }: PoKp
 
   return (
     <div style={{
-      display: 'flex', gap: 8, padding: '8px 16px', background: '#F5F5F3',
+      display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 16px', background: '#F5F5F3',
       borderTop: '1px solid #e2e2e2', flexShrink: 0,
     }}>
       <Card accent="#185FA5" label="Total Lines" value={String(totals.totalLines)} sub="PO line items" />
@@ -36,8 +36,8 @@ export function PoKpiStrip({ mode, totals, approvalStatus, approvalActor }: PoKp
         <Card accent="#3B6D11" label="Total GST" value={fmt2(totals.totalGst)} valSmall sub="CGST + SGST / IGST" warning />
       )}
 
-      <Card accent="#BA7517" label="Total Order Value" value={`₹${fmt2(totals.totalOrderValue)}`}
-        valColor="#BA7517" sub="Incl. GST & TCS" />
+      <Card accent="#185FA5" label="Total Order Value" value={`₹${fmt2(totals.totalOrderValue)}`}
+        sub="Incl. GST & TCS" />
 
       {!hideExtra && (
         <div style={cardStyle('#722ED1')}>
@@ -103,7 +103,7 @@ function Pipeline({ status }: { status?: string }) {
 
 const cardStyle = (accent?: string): React.CSSProperties => ({
   background: '#fff', border: '1px solid #e2e2e2', borderRadius: 8, padding: '8px 14px',
-  flex: 1, minWidth: 120, maxWidth: 240,
+  flex: 1, minWidth: 140, maxWidth: 320,
   ...(accent ? { borderLeft: `3px solid ${accent}` } : {}),
 })
 const kpiLabel: React.CSSProperties = { fontSize: 10, fontWeight: 500, color: '#888', marginBottom: 3 }
