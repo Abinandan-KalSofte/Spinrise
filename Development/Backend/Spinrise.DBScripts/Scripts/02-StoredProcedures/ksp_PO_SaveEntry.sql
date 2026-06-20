@@ -43,7 +43,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @FreightPosition  VARCHAR(10)    = 'BEFORE',  -- FRT_FLG:  'BEFORE'→'B', 'AFTER'→'A'
     @InsurancePosition VARCHAR(10)   = 'BEFORE',  -- Ins_Flg:  'BEFORE'→'B', 'AFTER'→'A'
     @ExciseIncPacking VARCHAR(5)     = 'N',        -- EXC_FLG:  'Y'/'N'
-    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026). Not wired in SPINRISE.
+    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg: 'BEFORE'→'B', 'AFTER'→'A'
     -- Payment
     @PayMode          VARCHAR(10)    = 'DIRECT',
     @DirectInstr      VARCHAR(200)   = NULL,
@@ -341,7 +341,7 @@ BEGIN
             CurrCode,  FCurRate, CARCODE, INSPECT,
             Form_type, refno,   refDate, REMARKS,
             DISPER, Cessper, FREIGHT, PCKPER, Pack_Amt, INSPER, Ins_Amt, SURPER, ADDTAXPER,
-            FILENO, FCACharg, FRTFLG, disflg, PACK_FLG, FRT_FLG, EXC_FLG, Ins_Flg,
+            FILENO, FCACharg, FRTFLG, disflg, PACK_FLG, FRT_FLG, EXC_FLG, Ins_Flg, Cess_Flg,
             PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS, paytermcode,
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
@@ -351,7 +351,7 @@ BEGIN
             CGSTAMT, SGSTAMT, IGSTAMT,
             cust_gstinno, cust_gststcode,
             FirstlevelApp, Conflg, poprintflg,
-            createdby, createddt
+            createdby, createddt, htcs_amt
         )
         VALUES
         (
@@ -381,6 +381,7 @@ BEGIN
             CASE WHEN UPPER(RTRIM(ISNULL(@FreightPosition,'')))  = 'AFTER' THEN 'A' ELSE 'B' END,  -- FRT_FLG
             ISNULL(UPPER(RTRIM(@ExciseIncPacking)), 'N'),                                           -- EXC_FLG
             CASE WHEN UPPER(RTRIM(ISNULL(@InsurancePosition,''))) = 'AFTER' THEN 'A' ELSE 'B' END, -- Ins_Flg
+            CASE WHEN UPPER(RTRIM(ISNULL(@CessApp,'')))           = 'AFTER' THEN 'A' ELSE 'B' END, -- Cess_Flg
             CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
             NULLIF(RTRIM(ISNULL(@DirectInstr,'')),   ''),
             NULLIF(RTRIM(ISNULL(@BankCode,'')),      ''),
@@ -414,7 +415,8 @@ BEGIN
             @Conflg,                  -- 'Y' if PoConf='N' (auto-confirm), else 'N'
             'N',                      -- poprintflg
             @UserId,
-            @CreatedDt
+            @CreatedDt, 
+			@TcsPer
         );
 
         -- FSD §14: Reset amendment/cancellation flags on every new save

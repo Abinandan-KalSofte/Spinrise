@@ -57,7 +57,7 @@ public class AddPoHeaderRequest
     public string  FreightPosition      { get; init; } = "BEFORE";
     public string  InsurancePosition    { get; init; } = "BEFORE";
     public string  ExciseIncludePacking { get; init; } = "N";
-    public string  CessApp              { get; init; } = "BEFORE";
+    public string  CessPosition         { get; init; } = "BEFORE";
     // Payment
     public string   PayMode       { get; init; } = "DIRECT";
     public string   DirectInstr   { get; init; } = "";

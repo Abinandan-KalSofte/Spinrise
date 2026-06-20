@@ -250,7 +250,7 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("FreightPosition",      request.Header.FreightPosition);
         p.Add("InsurancePosition",    request.Header.InsurancePosition);
         p.Add("ExciseIncPacking", request.Header.ExciseIncludePacking);  // CHANGED BY CLAUDE: was "ExciseIncludePacking" — SP parameter is @ExciseIncPacking (no "lude"); mismatch caused EXC_FLG to always default to 'N'
-        p.Add("CessApp",              request.Header.CessApp);
+        p.Add("CessApp",              request.Header.CessPosition);
         p.Add("PayMode",         request.Header.PayMode);
         p.Add("DirectInstr",     request.Header.DirectInstr);
         p.Add("BankCode",        request.Header.BankCode);

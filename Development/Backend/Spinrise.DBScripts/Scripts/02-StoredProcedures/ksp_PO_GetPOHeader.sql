@@ -75,7 +75,7 @@ BEGIN
         CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
-        'N'                                                                                   AS ExciseIncludePacking,  -- EXC_FLG retired (pre-GST)
+        CASE WHEN UPPER(RTRIM(ISNULL(h.EXC_FLG, 'N'))) = 'Y' THEN 'Y' ELSE 'N' END           AS ExciseIncludePacking,
         -- Charge amounts: Pack_Amt and Ins_Amt stored in DB; others derived from stored %
         ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
         ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
