@@ -936,7 +936,6 @@ export function usePoTransferForm() {
 
   const headerNegativeFields: { key: keyof PoHeaderFormValues; label: string }[] = [
     { key: 'currRate', label: 'Currency Rate' },
-    { key: 'roundOff', label: 'Round Off' },
     { key: 'tcsPer', label: 'TCS %' },
     { key: 'discPer', label: 'Discount %' },
     { key: 'discAmt', label: 'Discount Amount' },

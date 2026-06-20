@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Checkbox, Input, Modal, Tag, Typography, type InputRef } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import * as poApi from '../api/poTransferApi'
 import type { EligiblePrLine } from '../types'
 import { MODAL_TH as TH, MODAL_TD as TD } from '@/shared/styles/erpTable'
@@ -87,7 +88,7 @@ export function PrPickerModal({ open, divCode, alreadyAdded, onLoad, onCancel }:
 
   return (
     <Modal
-      open={open} onCancel={onCancel} footer={null} width={920} destroyOnClose
+      open={open} onCancel={onCancel} footer={null} width="min(95vw, 920px)" destroyOnClose
       styles={{ body: { padding: 0 } }}
       title={<span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Browse Approved PR Lines</span>}
     >
@@ -152,7 +153,7 @@ export function PrPickerModal({ open, divCode, alreadyAdded, onLoad, onCancel }:
                       <Checkbox checked={isSel} disabled={isDuplicate} onChange={() => !isDuplicate && toggle(row)} />
                     </td>
                     <td style={{ ...TD, fontFamily: 'monospace', fontWeight: 600 }}>{row.prNo}</td>
-                    <td style={TD}>{row.prDate}</td>
+                    <td style={TD}>{row.prDate ? dayjs(row.prDate).format('DD-MMM-YYYY') : '—'}</td>
                     <td style={{ ...TD, fontFamily: 'monospace', color: '#185FA5' }}>{row.itemCode}</td>
                     <td style={{ ...TD, minWidth: 180 }}>
                       {row.itemName}

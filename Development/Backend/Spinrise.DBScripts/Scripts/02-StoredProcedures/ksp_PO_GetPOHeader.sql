@@ -58,6 +58,9 @@ BEGIN
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
         ISNULL(h.FREIGHT, 0)                                        AS FreightAmt,
+        CASE WHEN ISNULL(h.ORDVAL, 0) > 0
+             THEN ROUND(ISNULL(h.FREIGHT, 0) * 100.0 / h.ORDVAL, 2)
+             ELSE 0 END                                             AS FreightPer,
         ISNULL(h.PCKPER, 0)                                         AS PackPer,
         ISNULL(h.INSPER, 0)                                         AS InsurPer,
         ISNULL(h.SURPER, 0)                                         AS SurchargePer,
@@ -88,8 +91,9 @@ BEGIN
         ISNULL(h.ADV_PER, 0)                                        AS AdvPer,
         ISNULL(h.ADV_AMT, 0)                                        AS AdvAmt,
         RTRIM(ISNULL(h.advpaymenttype, ''))                         AS ModeOfPayment,
-        ''                                                          AS PayRef,
-        NULL                                                        AS PayRefDate,
+        RTRIM(ISNULL(h.chqno, ''))                                  AS PayRef,    -- FIX: CHQNO stores PayRef (DIRECT) or ChequeNo (BANK) via COALESCE; return same value
+        CASE WHEN h.chqdt IS NULL THEN NULL
+             ELSE CONVERT(varchar(10), CAST(h.chqdt AS DATE), 120) END AS PayRefDate, -- FIX: CHQDT stores PayRefDate (DIRECT) or ChequeDate (BANK) via COALESCE
         RTRIM(ISNULL(h.chqno, ''))                                  AS ChequeNo,
         CASE WHEN h.chqdt IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(h.chqdt AS DATE), 120) END AS ChequeDate,
@@ -102,7 +106,7 @@ BEGIN
         RTRIM(ISNULL(h.SPL_INS, ''))                                AS SpecialInstr,
         RTRIM(ISNULL(h.DEL_INS2, ''))                               AS Despatch,
         RTRIM(ISNULL(h.Note, ''))                                   AS Purpose,
-        ''                                                          AS OtherLevies,
+        RTRIM(ISNULL(h.Note2, ''))                                  AS OtherLevies, -- FIX: was hardcoded ''; @OtherLevies maps to Note2 per SaveEntry comment
         RTRIM(ISNULL(h.PriceTerm, ''))                              AS PricingTerms,
         RTRIM(ISNULL(h.RemarksPF, ''))                              AS PackForwarding,
         RTRIM(ISNULL(h.RemarksIns, ''))                             AS Insurance,
