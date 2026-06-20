@@ -30,7 +30,8 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
     private const float BdCell = 0.5f;
 
     // ── Column widths (mm) — 11 cols ─────────────────────────────────────────────
-    private static readonly float[] Cols = { 8f, 54f, 17f, 16f, 11f, 19f, 11f, 13f, 13f, 13f, 18f };
+    // OA-02: Rate/Unit widened 19→23 to fit "5,00,000.0000" without wrapping; ItemName compensated 54→50
+    private static readonly float[] Cols = { 8f, 50f, 17f, 16f, 11f, 23f, 11f, 13f, 13f, 13f, 18f };
 
     // ── Indian number format ──────────────────────────────────────────────────────
     private static readonly NumberFormatInfo InFmt = new()
@@ -330,8 +331,10 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
          {
              table.ColumnsDefinition(cols =>
              {
+                 // OA-01: RelativeColumn fills full container width — ConstantColumn left a stray
+                 // vertical border past the last "Value" column.
                  foreach (var w in Cols)
-                     cols.ConstantColumn(w, Unit.Millimetre);
+                     cols.RelativeColumn(w);
              });
 
              table.Header(h =>
@@ -516,10 +519,11 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
             row.ConstantItem(83, Unit.Millimetre)
                .Column(col =>
                {
-                   void AmtRow(string label, string value, bool bold = false)
+                   void AmtRow(string label, string value, bool bold = false, bool topBorder = false)
                    {
-                       col.Item()
-                          .BorderBottom(BdCell).BorderColor(Black)
+                       var item = col.Item();
+                       if (topBorder) item = item.BorderTop(BdCell).BorderColor(Black);
+                       item.BorderBottom(BdCell).BorderColor(Black)
                           .Row(r =>
                           {
                               r.RelativeItem()
@@ -542,16 +546,11 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
                    }
 
                    AmtRow("Total",                   F2(totalLineValue));
-                   AmtRow("Discount",                totalDiscount == 0m ? "" : F2(totalDiscount)); // F-01: always show
-                   if (isIntraState)
-                   {
-                       if (totalCgst != 0m) AmtRow("CGST", F2(totalCgst));
-                       if (totalSgst != 0m) AmtRow("SGST", F2(totalSgst));
-                   }
-                   else
-                   {
-                       if (totalIgst != 0m) AmtRow("IGST", F2(totalIgst));
-                   }
+                   AmtRow("Discount",                totalDiscount == 0m ? "" : F2(totalDiscount));
+                   // OA-01: always render all three GST rows — blank fields misread as "not calculated"
+                   AmtRow("CGST",                   F2(totalCgst));
+                   AmtRow("SGST",                   F2(totalSgst));
+                   AmtRow("IGST",                   F2(totalIgst));
                    AmtRow("Freight",                 _po.FreightAmt == 0m ? "" : F2(_po.FreightAmt)); // F-02: always show
                    AmtRow("Insurance Amt.",          _po.InsAmt     == 0m ? "" : F2(_po.InsAmt));      // F-03: always show
                    AmtRow("Packing & Forwarding",    _po.PackAmt    == 0m ? "" : F2(_po.PackAmt));     // F-04: always show
@@ -559,7 +558,9 @@ internal sealed class PurchaseOrderDocumentV2 : IDocument
                    var tcsPer = _po.Lines.FirstOrDefault(l => l.TcsPer != 0m)?.TcsPer ?? 0m;
                    AmtRow($"TCS {F3(tcsPer)}%",      F2(totalTcs));                                    // F-06: always show
                    AmtRow("Round off",               F2(_po.RoundOff));                                // F-07: always show
-                   AmtRow("Total Amount",            $"INR  {F2(grandTotal)}", bold: true);             // F-08: INR in value
+                   // F-08: dynamic currency (falls back to INR); topBorder visually separates grand total
+                   var totalCurr = string.IsNullOrWhiteSpace(_po.Currency) ? "INR" : _po.Currency;
+                   AmtRow("Total Amount",            $"{totalCurr}  {F2(grandTotal)}", bold: true, topBorder: true);
                });
         });
     }
