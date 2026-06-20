@@ -89,7 +89,7 @@ BEGIN
         CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
         CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
         CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS TcsPer,
+        ISNULL(h.htcs_amt, 0)                                       AS TcsPer,
         ISNULL(h.DISPER, 0)                                         AS DiscPer,
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
