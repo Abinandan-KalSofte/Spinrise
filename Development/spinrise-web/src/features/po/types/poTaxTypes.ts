@@ -50,7 +50,6 @@ export interface LineTaxDetail {
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
   cessTaxPos:       'BEFORE' | 'AFTER'
-  exciseIncPacking: 'Y' | 'N'
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'

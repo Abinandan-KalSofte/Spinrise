@@ -53,7 +53,6 @@ interface DraftTax {
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
   cessTaxPos:       'BEFORE' | 'AFTER'
-  exciseIncPacking: 'Y' | 'N'
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
@@ -98,7 +97,6 @@ const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
     freightPos:       line?.taxSaved ? (line.freightPos       ?? hd.freightPos)       : hd.freightPos,
     insuranceDuty:    line?.taxSaved ? (line.insuranceDuty    ?? hd.insuranceDuty)    : hd.insuranceDuty,
     cessTaxPos:       line?.taxSaved ? (line.cessTaxPos       ?? hd.cessTaxPos)       : hd.cessTaxPos,
-    exciseIncPacking: line?.taxSaved ? (line.exciseIncPacking ?? hd.exciseIncPacking) : hd.exciseIncPacking,
     freightType:      line?.taxSaved ? (line.freightType      ?? hd.freightType)      : hd.freightType,
     discApp:          line?.taxSaved ? (line.discApp          ?? hd.discApp)          : hd.discApp,
     packApp:          line?.taxSaved ? (line.packApp          ?? hd.packApp)          : hd.packApp,
@@ -243,7 +241,6 @@ export function GstTaxDetailsModal({
       freightPos:       tax.freightPos,
       insuranceDuty:    tax.insuranceDuty,
       cessTaxPos:       tax.cessTaxPos,
-      exciseIncPacking: tax.exciseIncPacking,
       freightType:      tax.freightType,
       discApp:          tax.discApp,
       packApp:          tax.packApp,
@@ -401,9 +398,6 @@ export function GstTaxDetailsModal({
               <AppRadio label="Packing Application" value={tax.packApp}          disabled={isDelete || isView}
                 onChange={(v) => set('packApp',          v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Excise Inc. Packing" value={tax.exciseIncPacking} disabled={isDelete || isView}
-                onChange={(v) => set('exciseIncPacking', v as 'Y' | 'N')}
-                options={[{ value: 'Y', label: 'Yes' }, { value: 'N', label: 'No' }]} />              
               <AppRadio label="Insurance Position"  value={tax.insuranceDuty}    disabled={isDelete || isView}
                 onChange={(v) => set('insuranceDuty',    v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Duty' }, { value: 'AFTER', label: 'After Duty' }]} />

@@ -155,7 +155,6 @@ export interface PoLine {
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
   cessTaxPos:       'BEFORE' | 'AFTER'
-  exciseIncPacking: 'Y' | 'N'
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
@@ -244,7 +243,6 @@ export interface PoHeader {
   freightPosition:      'BEFORE' | 'AFTER'
   insurancePosition:    'BEFORE' | 'AFTER'
   cessPosition:         'BEFORE' | 'AFTER'
-  exciseIncludePacking: 'Y' | 'N'
 
   // Payment
   payMode:          'DIRECT' | 'BANK'   // BR-15 when BANK
@@ -351,7 +349,6 @@ export interface SavePoLineRequest {
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
   cessTaxPos:       'BEFORE' | 'AFTER'
-  exciseIncPacking: 'Y' | 'N'
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'

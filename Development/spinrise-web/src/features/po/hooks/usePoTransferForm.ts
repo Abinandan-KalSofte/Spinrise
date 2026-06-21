@@ -57,7 +57,6 @@ export interface GstHeaderDefaults {
   freightPos:      'BEFORE' | 'AFTER'
   insuranceDuty:   'BEFORE' | 'AFTER'
   cessTaxPos:      'BEFORE' | 'AFTER'
-  exciseIncPacking: 'Y' | 'N'
   freightType:     'PAID' | 'TOPAY'
   discApp:         'BEFORE' | 'AFTER'
   packApp:         'BEFORE' | 'AFTER'
@@ -77,7 +76,7 @@ export const FIELD_TAB_MAP: Record<string, HeaderTabKey> = {
   packPer: 'tax', packAmt: 'tax', insurPer: 'tax', insurAmt: 'tax',
   addTaxPer: 'tax', addTaxAmtHdr: 'tax', cessPer: 'tax', cessAmt: 'tax',
   freightType: 'tax', freightPos: 'tax', discApp: 'tax', packApp: 'tax',
-  insuranceDuty: 'tax', cessTaxPos: 'tax', exciseIncPacking: 'tax',
+  insuranceDuty: 'tax', cessTaxPos: 'tax',
   // Payment
   payMode: 'payment', directInstr: 'payment', advAmt: 'payment', advPer: 'payment',
   modeOfPayment: 'payment', payRef: 'payment', payRefDate: 'payment',
@@ -208,7 +207,6 @@ export interface PoHeaderFormValues {
   packApp:       'BEFORE' | 'AFTER'
   insuranceDuty: 'BEFORE' | 'AFTER'  // insurance before/after duty
   cessTaxPos:    'BEFORE' | 'AFTER'  // cess before/after tax
-  exciseIncPacking: 'Y' | 'N'
   // Payment
   payMode:       'DIRECT' | 'BANK'
   directInstr:   string
@@ -333,7 +331,6 @@ export function usePoTransferForm() {
   const hFreightPos       = Form.useWatch('freightPos',       headerForm)
   const hInsuranceDuty    = Form.useWatch('insuranceDuty',    headerForm)
   const hCessTaxPos       = Form.useWatch('cessTaxPos',       headerForm)
-  const hExciseIncPacking = Form.useWatch('exciseIncPacking', headerForm)
   const hFreightType      = Form.useWatch('freightType',      headerForm)
   const hDiscApp          = Form.useWatch('discApp',          headerForm)
   const hPackApp          = Form.useWatch('packApp',          headerForm)
@@ -349,12 +346,11 @@ export function usePoTransferForm() {
     freightPos:       (hFreightPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
     insuranceDuty:    (hInsuranceDuty    as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
     cessTaxPos:       (hCessTaxPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-    exciseIncPacking: (hExciseIncPacking as 'Y' | 'N' | undefined)           ?? 'N',
     freightType:      (hFreightType      as 'PAID' | 'TOPAY' | undefined)    ?? 'PAID',
     discApp:          (hDiscApp          as 'BEFORE' | 'AFTER' | undefined)  ?? 'BEFORE',
     packApp:          (hPackApp          as 'BEFORE' | 'AFTER' | undefined)  ?? 'BEFORE',
   }), [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hCessPer, hTcsPer, hFcaFob,
-       hFreightPos, hInsuranceDuty, hCessTaxPos, hExciseIncPacking,
+       hFreightPos, hInsuranceDuty, hCessTaxPos,
        hFreightType, hDiscApp, hPackApp])
 
   // Grid tax sync: when header tax % fields change in ADD mode, propagate to all
@@ -382,12 +378,11 @@ export function usePoTransferForm() {
         cessTaxPos:       (hCessTaxPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
         discApp:          (hDiscApp          as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
         packApp:          (hPackApp          as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-        exciseIncPacking: (hExciseIncPacking as 'Y' | 'N'           | undefined) ?? 'N',
         freightType:      (hFreightType      as 'PAID' | 'TOPAY'    | undefined) ?? 'PAID',
       })
     }))
   }, [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hTcsPer, // eslint-disable-line react-hooks/exhaustive-deps
-      hFreightPos, hInsuranceDuty, hCessTaxPos, hDiscApp, hPackApp, hExciseIncPacking, hFreightType])
+      hFreightPos, hInsuranceDuty, hCessTaxPos, hDiscApp, hPackApp, hFreightType])
 
   // ── Load lookups on mount ───────────────────────────────────────────────────
   const loadLookups = useCallback(async () => {
@@ -565,7 +560,6 @@ export function usePoTransferForm() {
       freightPos:       gstHeaderDefaults.freightPos,
       insuranceDuty:    gstHeaderDefaults.insuranceDuty,
       cessTaxPos:       gstHeaderDefaults.cessTaxPos,
-      exciseIncPacking: gstHeaderDefaults.exciseIncPacking,
       freightType:      gstHeaderDefaults.freightType,
       discApp:          gstHeaderDefaults.discApp,
       packApp:          gstHeaderDefaults.packApp,
@@ -709,7 +703,6 @@ export function usePoTransferForm() {
     packApp:     'BEFORE',
     insuranceDuty:    'BEFORE',
     cessTaxPos:       'BEFORE',
-    exciseIncPacking: 'N',
     payMode:     'DIRECT',
     cancelled:   false,
     formType:    formTypes[0]?.formCode ?? '',   // auto-default first available form type
@@ -766,7 +759,6 @@ export function usePoTransferForm() {
       freightPos:       l.freightPos       ?? 'BEFORE',
       insuranceDuty:    l.insuranceDuty    ?? 'BEFORE',
       cessTaxPos:       l.cessTaxPos       ?? 'BEFORE',
-      exciseIncPacking: l.exciseIncPacking ?? 'N',
       freightType:      l.freightType      ?? 'PAID',
       discApp:          l.discApp          ?? 'BEFORE',
       packApp:          l.packApp          ?? 'BEFORE',
@@ -834,7 +826,6 @@ export function usePoTransferForm() {
       packApp:       po.packApp,
       insuranceDuty:    po.insurancePosition  ?? 'BEFORE',
       cessTaxPos:       po.cessPosition       ?? 'BEFORE',
-      exciseIncPacking: po.exciseIncludePacking ?? 'N',
       payMode:       po.payMode,
       directInstr:   po.directInstr,
       bankCode:         po.bankCode,
@@ -1217,7 +1208,6 @@ export function usePoTransferForm() {
       freightPos:       l.freightPos,
       insuranceDuty:    l.insuranceDuty,
       cessTaxPos:       l.cessTaxPos,
-      exciseIncPacking: l.exciseIncPacking,
       freightType:      l.freightType,
       discApp:          l.discApp,
       packApp:          l.packApp,
@@ -1262,7 +1252,6 @@ export function usePoTransferForm() {
         freightPosition:      v.freightPos,
         insurancePosition:    v.insuranceDuty,
         cessPosition:         v.cessTaxPos,
-        exciseIncludePacking: v.exciseIncPacking,
         payMode: v.payMode, directInstr: v.directInstr, bankCode: v.bankCode,
         paymentTerms: v.paymentTerms, paymentTermCode: v.paymentTermCode ?? '',
         advPer: 0, advAmt: v.advAmt ?? 0,

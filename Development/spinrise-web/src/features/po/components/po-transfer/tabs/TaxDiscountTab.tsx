@@ -43,7 +43,6 @@ const APPLICABILITY: { label: string; name: string; opts: { label: string; value
   { label: 'Insurance Position',   name: 'insuranceDuty',   opts: [{ label: 'Bef Duty', value: 'BEFORE' }, { label: 'Aft Duty', value: 'AFTER' }],
     tooltip: "Insurance is assessed against customs duty, not tax — hence 'Duty' instead of 'Tax'" },
   { label: 'Cess Position',        name: 'cessTaxPos',      opts: [{ label: 'Before',   value: 'BEFORE' }, { label: 'After',   value: 'AFTER'  }] },
-  { label: 'Excise Incl. Packing', name: 'exciseIncPacking', opts: [{ label: 'Yes',     value: 'Y'      }, { label: 'No',      value: 'N'      }] },
 ]
 
 export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps) {
