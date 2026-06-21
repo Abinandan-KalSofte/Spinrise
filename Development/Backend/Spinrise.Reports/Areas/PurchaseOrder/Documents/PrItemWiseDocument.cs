@@ -4,7 +4,7 @@ using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Spinrise.Application.Areas.PurchaseOrder.PrReport.DTOs;
 
-namespace Spinrise.API.Areas.PurchaseOrder.Reports;
+namespace Spinrise.Reports.Areas.PurchaseOrder.Documents;
 
 public sealed class PrItemWiseDocument : IDocument
 {

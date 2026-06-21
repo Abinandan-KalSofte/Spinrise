@@ -1,10 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using QuestPDF.Fluent;
-using Spinrise.API.Areas.PurchaseOrder.Reports;
 using Spinrise.API.Controllers;
 using Spinrise.Application.Areas.PurchaseOrder.PrReport.DTOs;
-using Spinrise.Application.Areas.PurchaseOrder.PrReport.Interfaces;
+using Spinrise.Reports.Areas.PurchaseOrder.Reports;
 
 namespace Spinrise.API.Areas.PurchaseOrder.Controllers;
 
@@ -13,25 +11,35 @@ namespace Spinrise.API.Areas.PurchaseOrder.Controllers;
 [Route("api/v1/pr/report")]
 public class PrReportController : BaseApiController
 {
-    private readonly IPrReportService _service;
+    private readonly PrItemwisePdfReport  _itemwise;
+    private readonly PrDeptWisePdfReport  _deptwise;
+    private readonly PrDateWisePdfReport  _datewise;
 
-    public PrReportController(IPrReportService service)
-        => _service = service;
+    public PrReportController(
+        PrItemwisePdfReport itemwise,
+        PrDeptWisePdfReport deptwise,
+        PrDateWisePdfReport datewise)
+    {
+        _itemwise = itemwise;
+        _deptwise = deptwise;
+        _datewise = datewise;
+    }
 
     [HttpGet("download")]
     public async Task<IActionResult> Download(
-        [FromQuery] string divCode,
-        [FromQuery] string reportType,
-        [FromQuery] DateTime fromDate,
-        [FromQuery] DateTime toDate,
+        [FromQuery] string    divCode,
+        [FromQuery] string    reportType,
+        [FromQuery] DateTime  fromDate,
+        [FromQuery] DateTime  toDate,
         [FromQuery] string?   depCode   = null,
         [FromQuery] bool      allItems  = true,
         [FromQuery] string[]? itemCodes = null,
+        [FromQuery] string    format    = "pdf",
         CancellationToken ct = default)
     {
         var request = new PrReportRequest
         {
-            DivCode   = divCode,
+            DivCode    = divCode,
             ReportType = reportType,
             FromDate   = fromDate,
             ToDate     = toDate,
@@ -40,36 +48,22 @@ public class PrReportController : BaseApiController
             ItemCodes  = itemCodes ?? [],
         };
 
-        byte[] pdf;
-        string filename;
+        var rpt = reportType.Trim().ToLowerInvariant();
+        var fmt = format.Trim().ToLowerInvariant();
 
-        switch (reportType.Trim().ToLowerInvariant())
+        return (rpt, fmt) switch
         {
-            case "datewise":
-            {
-                var rows = await _service.GetDateWiseAsync(request, ct);
-                pdf      = Document.Create(c => new PrDateWiseDocument(rows, request).Compose(c)).GeneratePdf();
-                filename = $"PRDatewise_{fromDate:yyyyMMdd}_{toDate:yyyyMMdd}.pdf";
-                break;
-            }
-            case "departmentwise":
-            {
-                var rows = await _service.GetDeptWiseAsync(request, ct);
-                pdf      = Document.Create(c => new PrDeptWiseDocument(rows, request).Compose(c)).GeneratePdf();
-                filename = $"PRDeptWise_{fromDate:yyyyMMdd}_{toDate:yyyyMMdd}.pdf";
-                break;
-            }
-            case "itemwise":
-            {
-                var rows = await _service.GetItemWiseAsync(request, ct);
-                pdf      = Document.Create(c => new PrItemWiseDocument(rows, request).Compose(c)).GeneratePdf();
-                filename = $"PRItemWise_{fromDate:yyyyMMdd}_{toDate:yyyyMMdd}.pdf";
-                break;
-            }
-            default:
-                return BadRequest(Spinrise.Shared.Models.ApiResponse.Fail($"Unknown reportType '{reportType}'."));
-        }
+            ("datewise",       "pdf") => File(await _datewise.GenerateAsync(request, ct), "application/pdf",
+                                              $"PRDatewise_{fromDate:yyyyMMdd}_{toDate:yyyyMMdd}.pdf"),
 
-        return File(pdf, "application/pdf", filename);
+            ("departmentwise", "pdf") => File(await _deptwise.GenerateAsync(request, ct), "application/pdf",
+                                              $"PRDeptWise_{fromDate:yyyyMMdd}_{toDate:yyyyMMdd}.pdf"),
+
+            ("itemwise",       "pdf") => File(await _itemwise.GenerateAsync(request, ct), "application/pdf",
+                                              $"PRItemWise_{fromDate:yyyyMMdd}_{toDate:yyyyMMdd}.pdf"),
+
+            _ => BadRequest(Spinrise.Shared.Models.ApiResponse.Fail(
+                     $"Unknown reportType '{reportType}' or format '{format}'."))
+        };
     }
 }

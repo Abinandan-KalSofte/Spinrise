@@ -5,9 +5,9 @@ using QuestPDF.Infrastructure;
 using Spinrise.Application.Areas.PurchaseOrder.PoEntry.DTOs;
 using Spinrise.Shared.Utilities;
 
-namespace Spinrise.API.Areas.PurchaseOrder.Print;
+namespace Spinrise.Reports.Areas.PurchaseOrder.Documents;
 
-internal sealed class PurchaseOrderDocumentV2 : IDocument
+public sealed class PurchaseOrderDocumentV2 : IDocument
 {
     private readonly PoPrintDto _po;
 

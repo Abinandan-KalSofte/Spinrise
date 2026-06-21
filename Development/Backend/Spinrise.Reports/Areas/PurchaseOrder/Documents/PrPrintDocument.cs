@@ -3,10 +3,11 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Spinrise.Application.Areas.PurchaseOrder.PurchaseRequisition.DTOs;
+using Spinrise.Reports.Core.Engine;
 
-namespace Spinrise.API.Areas.PurchaseOrder.Print;
+namespace Spinrise.Reports.Areas.PurchaseOrder.Documents;
 
-internal sealed class PrPrintDocument : IDocument
+public sealed class PrPrintDocument : IDocument
 {
     private readonly PrPrintDto _pr;
 
@@ -158,7 +159,7 @@ internal sealed class PrPrintDocument : IDocument
                     new("Approved Date", _pr.PresidentAppDate,                      RightLabelW, SepW),
 
 
-                    
+
                 }),
             RightPanel: new InfoPanelConfig(
                 WidthMm: 0, IndentMm: RightIndent, PadVMm: 3f, RowSpacingMm: 3f,

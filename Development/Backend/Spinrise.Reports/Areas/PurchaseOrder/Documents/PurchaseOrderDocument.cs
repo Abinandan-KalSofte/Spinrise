@@ -3,10 +3,11 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Spinrise.Application.Areas.PurchaseOrder.PoEntry.DTOs;
+using Spinrise.Reports.Core.Engine;
 
-namespace Spinrise.API.Areas.PurchaseOrder.Print;
+namespace Spinrise.Reports.Areas.PurchaseOrder.Documents;
 
-internal sealed class PurchaseOrderDocument : IDocument
+public sealed class PurchaseOrderDocument : IDocument
 {
     private readonly PoPrintDto _po;
 
@@ -355,9 +356,9 @@ internal sealed class PurchaseOrderDocument : IDocument
             Font:        new StyleFont(FontFamily, FsSig),
             Blocks: new SigBlockConfig[]
             {
-                new("Created By",          _po.CreatedBy,      Date: _po.CreatedDt,  RightBorder: true,  PadV: 8f, PadH: 10f, NamePadTop: 6f),
-                new("First Level Approval", _po.FirstLevelApp, Date: null,           RightBorder: true,  PadV: 8f, PadH: 10f, NamePadTop: 6f),
-                new("Authorised Signatory", null,              Date: null,           RightBorder: false, PadV: 8f, PadH: 10f, NamePadTop: 6f),
+                new("Created By",           _po.CreatedBy,      Date: _po.CreatedDt,  RightBorder: true,  PadV: 8f, PadH: 10f, NamePadTop: 6f),
+                new("First Level Approval", _po.FirstLevelApp,  Date: null,           RightBorder: true,  PadV: 8f, PadH: 10f, NamePadTop: 6f),
+                new("Authorised Signatory", null,               Date: null,           RightBorder: false, PadV: 8f, PadH: 10f, NamePadTop: 6f),
             });
     }
 }

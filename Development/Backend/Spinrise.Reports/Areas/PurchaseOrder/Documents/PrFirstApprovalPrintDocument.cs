@@ -2,10 +2,11 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Spinrise.Application.Areas.PurchaseOrder.FirstLevelApproval.DTOs;
+using Spinrise.Reports.Core.Engine;
 
-namespace Spinrise.API.Areas.PurchaseOrder.Print;
+namespace Spinrise.Reports.Areas.PurchaseOrder.Documents;
 
-internal sealed class PrFirstApprovalPrintDocument : IDocument
+public sealed class PrFirstApprovalPrintDocument : IDocument
 {
     private readonly PrApprovalReportDto _data;
 

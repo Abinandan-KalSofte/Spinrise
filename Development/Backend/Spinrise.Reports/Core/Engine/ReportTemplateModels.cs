@@ -1,4 +1,4 @@
-namespace Spinrise.API.Areas.PurchaseOrder.Print;
+namespace Spinrise.Reports.Core.Engine;
 
 // ── Shared enums ──────────────────────────────────────────────────────────────
 public enum DA { Left, Center, Right }

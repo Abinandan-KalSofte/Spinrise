@@ -1,7 +1,7 @@
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 
-namespace Spinrise.API.Areas.PurchaseOrder.Print;
+namespace Spinrise.Reports.Core.Engine;
 
 public static class QuestPdfTemplateEngine
 {

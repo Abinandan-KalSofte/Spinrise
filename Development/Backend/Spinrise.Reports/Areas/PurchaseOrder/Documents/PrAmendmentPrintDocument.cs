@@ -2,10 +2,11 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Spinrise.Application.Areas.PurchaseOrder.Amendment.DTOs;
+using Spinrise.Reports.Core.Engine;
 
-namespace Spinrise.API.Areas.PurchaseOrder.Print;
+namespace Spinrise.Reports.Areas.PurchaseOrder.Documents;
 
-internal sealed class PrAmendmentPrintDocument : IDocument
+public sealed class PrAmendmentPrintDocument : IDocument
 {
     private readonly PrAmendmentPrintDto _dto;
 

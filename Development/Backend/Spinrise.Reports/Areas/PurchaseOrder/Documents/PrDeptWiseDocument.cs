@@ -4,9 +4,9 @@ using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Spinrise.Application.Areas.PurchaseOrder.PrReport.DTOs;
 
-namespace Spinrise.API.Areas.PurchaseOrder.Reports;
+namespace Spinrise.Reports.Areas.PurchaseOrder.Documents;
 
-public sealed class PrDateWiseDocument : IDocument
+public sealed class PrDeptWiseDocument : IDocument
 {
     private const string Navy   = "#000080";
     private const string Maroon = "#800000";
@@ -19,21 +19,21 @@ public sealed class PrDateWiseDocument : IDocument
     private const string QtyFmt = "#,##0.000";
 
     private const float W1 = 48;    // PR No.
-    private const float W2 = 68;    // Item Code
-    private const float W3 = 220;   // Item Description
-    private const float W4 = 40;    // Unit
-    private const float W5 = 120;   // Department Name
+    private const float W2 = 58;    // PR Date
+    private const float W3 = 70;    // Item Code
+    private const float W4 = 226;   // Item Name
+    private const float W5 = 44;    // Unit
     private const float W6 = 80;    // Required Quantity
     private const float W7 = 80;    // Ordered Quantity
     private const float W8 = 80;    // Received Quantity
-    private const float W9 = 77;    // Status
+    private const float W9 = 127;   // Status
 
-    private readonly IReadOnlyList<PrDateWiseRowDto> _rows;
+    private readonly IReadOnlyList<PrDeptWiseRowDto> _rows;
     private readonly PrReportRequest _request;
     private readonly string _printName;
     private readonly string _unitName;
 
-    public PrDateWiseDocument(IReadOnlyList<PrDateWiseRowDto> rows, PrReportRequest request)
+    public PrDeptWiseDocument(IReadOnlyList<PrDeptWiseRowDto> rows, PrReportRequest request)
     {
         _rows = rows;
         _request = request;
@@ -43,7 +43,7 @@ public sealed class PrDateWiseDocument : IDocument
 
     public DocumentMetadata GetMetadata() => new()
     {
-        Title  = "Purchase Requisition Report - Date Wise",
+        Title  = "Purchase Requisition Report - Department Wise",
         Author = "SpinRise",
     };
 
@@ -96,7 +96,7 @@ public sealed class PrDateWiseDocument : IDocument
                 layers.Layer().AlignMiddle().Text(t =>
                 {
                     t.AlignCenter();
-                    t.Span("Option : Date wise").FontSize(8).Bold().FontColor(Teal);
+                    t.Span("Option : Department wise").FontSize(8).Bold().FontColor(Teal);
                 });
             });
             col.Item().PaddingTop(3).LineHorizontal(0.75f).LineColor(Black);
@@ -114,8 +114,9 @@ public sealed class PrDateWiseDocument : IDocument
         }
 
         var ordered = _rows
-            .OrderBy(r => r.PrDate)
+            .OrderBy(r => r.DepName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => ParsePrNo(r.PrNo))
+            .ThenBy(r => r.PrDate)
             .ThenBy(r => r.ItemCode, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -137,10 +138,10 @@ public sealed class PrDateWiseDocument : IDocument
             table.Header(h =>
             {
                 HCell(h, "PR. No.");
+                HCell(h, "PR. Date");
                 HCell(h, "Item Code");
                 HCell(h, "Item Description");
                 HCell(h, "Unit", Align.Center);
-                HCell(h, "Department Name");
                 HCell(h, "Required Quantity", Align.Right);
                 HCell(h, "Ordered Quantity", Align.Right);
                 HCell(h, "Received Quantity", Align.Right, padR: 8);
@@ -148,21 +149,21 @@ public sealed class PrDateWiseDocument : IDocument
                 h.Cell().ColumnSpan(9).PaddingTop(1).LineHorizontal(0.75f).LineColor(Black);
             });
 
-            foreach (var g in ordered.GroupBy(r => r.PrDate?.Date))
+            foreach (var g in ordered.GroupBy(r => (r.DepCode, r.DepName)))
             {
-                var label = g.Key.HasValue
-                    ? g.Key.Value.ToString("dd/MM/yy", CultureInfo.InvariantCulture)
-                    : "(no date)";
+                var dep = string.IsNullOrWhiteSpace(g.Key.DepCode)
+                    ? g.Key.DepName
+                    : $"{g.Key.DepCode}  —  {g.Key.DepName}";
                 table.Cell().ColumnSpan(9).PaddingLeft(2).PaddingTop(4).PaddingBottom(1)
-                     .Text(t => t.Span($"PR Date :   {label}").FontFamily(Font).FontSize(8).Bold().FontColor(Maroon));
+                     .Text(t => t.Span($"Department :   {dep}").FontFamily(Font).FontSize(8).Bold().FontColor(Green));
 
                 foreach (var r in g)
                 {
                     DCell(table, r.PrNo);
+                    DCell(table, r.PrDate?.ToString("dd/MM/yy", CultureInfo.InvariantCulture) ?? "");
                     DCell(table, r.ItemCode, GreenStyle);
                     DCell(table, r.ItemName);
                     DCell(table, r.Uom, BodyStyle, Align.Center);
-                    DCell(table, r.DepName);
                     DCell(table, r.QtyReqd.ToString(QtyFmt, CultureInfo.InvariantCulture), BodyStyle, Align.Right);
                     DCell(table, r.QtyOrdered.ToString(QtyFmt, CultureInfo.InvariantCulture), BodyStyle, Align.Right);
                     DCell(table, r.QtyReceived.ToString(QtyFmt, CultureInfo.InvariantCulture), BodyStyle, Align.Right, padR: 8);
@@ -170,19 +171,7 @@ public sealed class PrDateWiseDocument : IDocument
                 }
             }
 
-            var totReqd     = _rows.Sum(r => r.QtyReqd);
-            var totOrdered  = _rows.Sum(r => r.QtyOrdered);
-            var totReceived = _rows.Sum(r => r.QtyReceived);
-
-            table.Cell().ColumnSpan(9).PaddingTop(1).LineHorizontal(0.75f).LineColor(Black);
-            table.Cell().ColumnSpan(5)
-                 .PaddingLeft(4).PaddingVertical(2)
-                 .Text(t => { t.AlignRight(); t.Span("Grand Total :").FontFamily(Font).FontSize(8).Bold().FontColor(Black); });
-            TCell(table, totReqd.ToString(QtyFmt, CultureInfo.InvariantCulture));
-            TCell(table, totOrdered.ToString(QtyFmt, CultureInfo.InvariantCulture));
-            TCell(table, totReceived.ToString(QtyFmt, CultureInfo.InvariantCulture), padR: 8);
-            table.Cell().Height(0);
-            table.Cell().ColumnSpan(9).PaddingTop(1).LineHorizontal(0.75f).LineColor(Black);
+            table.Cell().ColumnSpan(9).PaddingTop(2).LineHorizontal(0.75f).LineColor(Black);
         });
     }
 
@@ -200,12 +189,6 @@ public sealed class PrDateWiseDocument : IDocument
     {
         table.Cell().PaddingLeft(padL).PaddingRight(padR).PaddingTop(1).PaddingBottom(1)
              .Text(t => { ApplyAlign(t, align); var s = t.Span(text); (style ?? BodyStyle)(s); });
-    }
-
-    private static void TCell(TableDescriptor table, string text, float padL = 2, float padR = 2)
-    {
-        table.Cell().PaddingLeft(padL).PaddingRight(padR).PaddingVertical(2)
-             .Text(t => { t.AlignRight(); t.Span(text).FontFamily(Font).FontSize(8).Bold().FontColor(Black); });
     }
 
     private static void ApplyAlign(TextDescriptor t, Align a)

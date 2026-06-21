@@ -138,6 +138,9 @@ builder.Services.AddScoped<IPoEntryRepository, PoEntryRepository>();
 builder.Services.AddScoped<IPoEntryService, PoEntryService>();
 builder.Services.AddScoped<IPrReportRepository, PrReportRepository>();
 builder.Services.AddScoped<IPrReportService, PrReportService>();
+builder.Services.AddScoped<Spinrise.Reports.Areas.PurchaseOrder.Reports.PrItemwisePdfReport>();
+builder.Services.AddScoped<Spinrise.Reports.Areas.PurchaseOrder.Reports.PrDeptWisePdfReport>();
+builder.Services.AddScoped<Spinrise.Reports.Areas.PurchaseOrder.Reports.PrDateWisePdfReport>();
 
 // ══════════════════════════════════════════════════════════════════════════
 var app = builder.Build();
