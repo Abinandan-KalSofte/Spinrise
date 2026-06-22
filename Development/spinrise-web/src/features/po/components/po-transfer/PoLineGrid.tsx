@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import { Button, Input, InputNumber, Tooltip } from "antd";
-import { DeleteOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import { DeleteOutlined } from "@ant-design/icons";
 import { erpTh, ERP_TD as TD } from "@/shared/styles/erpTable";
 import type { PoLine, ScreenMode } from "../../types";
 import {
@@ -408,9 +408,9 @@ export function PoLineGrid({
         </span>
         <span style={{ flex: 1 }} />
         {isAdd && (
-          <Tooltip title="Edit Rate / Quantity inline · click Tax Code to enter GST & tax · double-click row for details">
-            <InfoCircleOutlined style={{ color: '#94A3B8', fontSize: 14, cursor: 'help' }} />
-          </Tooltip>
+          <span style={{ fontSize: 11, color: '#888' }}>
+            Edit Rate / Quantity inline · click Tax Code to enter GST & tax · double-click row for details
+          </span>
         )}
         {isDelete && (
           <span

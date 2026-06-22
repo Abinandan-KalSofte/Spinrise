@@ -7,8 +7,15 @@ export * from './types/poTransferTypes'
 // Single PO-number formatter — used by Doc Band, Order Details tab, toasts and
 // the delete dialog so the displayed number is identical everywhere (6-digit,
 // e.g. PO-000123). Returns '' when no number yet (CD-03 — never a guess).
-export const formatPoNo = (poNo: number | null | undefined): string =>
-  poNo ? `PO-${String(poNo).padStart(6, '0')}` : ''
+// POT-AM-06: pass amdSeq to append amendment suffix (e.g. PO-000123-A2).
+export const formatPoNo = (
+  poNo:    number | null | undefined,
+  amdSeq?: number | null,
+): string => {
+  if (!poNo) return ''
+  const base = `PO-${String(poNo).padStart(6, '0')}`
+  return amdSeq ? `${base}-A${amdSeq}` : base
+}
 
 // ── PO line item status badge colours (HTML route badges / status chips) ─────
 // Matches the HTML token palette; maps to existing theme tokens at render time.

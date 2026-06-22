@@ -134,12 +134,14 @@ const recalcLine = (line: PoLine): PoLine => {
   const addTaxAmt    = pctOf(taxable, line.addTaxPer)
   const tcsAmt       = pctOf(taxable, line.tcsPer)
 
-  // CR-012: assessable base adjusts per position flags
+  // CR-012 / POT-TD-10: assessable base adjusts per position flags.
+  // cessTaxPos='BEFORE' includes cess in the GST base (same formula as the modal).
   let gstBase = taxable
   if (line.discApp       === 'BEFORE') gstBase = round2(gstBase - discountAmt)
   if (line.freightPos    === 'BEFORE') gstBase = round2(gstBase + freightAmt)
   if (line.packApp       === 'BEFORE') gstBase = round2(gstBase + packingAmt)
   if (line.insuranceDuty === 'BEFORE') gstBase = round2(gstBase + insuranceAmt)
+  if (line.cessTaxPos    === 'BEFORE') gstBase = round2(gstBase + cessAmt)
 
   const cgstAmt = isLocal ? pctOf(gstBase, line.cgstPer) : 0
   const sgstAmt = isLocal ? pctOf(gstBase, line.sgstPer) : 0
@@ -161,6 +163,21 @@ const recalcLine = (line: PoLine): PoLine => {
     taxPer: isLocal ? (line.cgstPer || 0) + (line.sgstPer || 0) : (line.igstPer || 0),
   }
 }
+
+// Hydrates a DB-loaded PO line without running client-side recalc.
+// Position flags live only in PO_ORDH (not PO_ORDL) so they propagate from header.
+// NetAmount and all charge amounts are DB-stored — preserved verbatim.
+const hydrateLineFromDb = (line: PoLine, po: PoHeader): PoLine => ({
+  ...line,
+  freightPos:    (po.freightPosition  ?? 'BEFORE') as PoLine['freightPos'],
+  insuranceDuty: (po.insurancePosition ?? 'BEFORE') as PoLine['insuranceDuty'],
+  cessTaxPos:    (po.cessPosition     ?? 'BEFORE') as PoLine['cessTaxPos'],
+  freightType:   (po.freightType      ?? 'PAID')   as PoLine['freightType'],
+  discApp:       (po.discApp          ?? 'BEFORE') as PoLine['discApp'],
+  packApp:       (po.packApp          ?? 'BEFORE') as PoLine['packApp'],
+  taxableValue:  line.value,
+  taxSaved:      true,
+})
 
 // ── Header form values (AntD Form; dates as Dayjs) ───────────────────────────
 export interface PoHeaderFormValues {
@@ -491,10 +508,11 @@ export function usePoTransferForm() {
     const route    = getGstRouteFromState(gstState)
     const fixedPo  = { ...po, gstState }
     return {
-      ...fixedPo,
-      lines: fixedPo.lines.map((line) => hydrateLoadedLine(line, route, fixedPo)),
+      ...po,
+      gstState,
+      lines: po.lines.map((line) => hydrateLineFromDb(line, po)),
     }
-  }, [hydrateLoadedLine])
+  }, [])
 
   // Supplier selection: fill GSTIN/GST State (UX-06) and re-route all lines (Q4).
   const onSupplierChange = useCallback(async (supplier: SupplierOption | null) => {

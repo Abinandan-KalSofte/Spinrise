@@ -192,6 +192,18 @@ export interface DeliveryScheduleLine {
   slots:    DeliverySlot[]    // unlimited rows (OQ-NEW B)
 }
 
+// ── Amendment history item (POT-AM-06) ───────────────────────────────────────
+// One entry per amendment version; server populates amdHistory[] on PoHeader.
+// amdSeq = 1 → "A1", 2 → "A2", etc. for display in AmendmentTab and PoDocBand.
+export interface AmdHistoryItem {
+  amdSeq:     number          // 1-based amendment sequence
+  amdOrderNo: number          // PO number of this amendment
+  amdDate:    string          // ISO or DD-MMM-YYYY
+  amdRefNo:   string | null   // reference PO number
+  amdRefDate: string | null
+  raisedBy:   string
+}
+
 // ── PO header (PO_ORDH) ──────────────────────────────────────────────────────
 
 export interface PoHeader {
@@ -283,10 +295,15 @@ export interface PoHeader {
   approvedBy:   string
 
   // Amendment (read-only history)
+  // POT-AM-06: amdSeq is the amendment sequence number (1 = A1, 2 = A2, …).
+  // amdHistory holds prior amendment records when the server returns them;
+  // both fields are optional for backward compatibility with older API responses.
   amdOrderNo:   number | null
   amdDate:      string | null
   amdRefNo:     string | null
   amdRefDate:   string | null
+  amdSeq?:      number | null       // amendment sequence counter (A1, A2, …)
+  amdHistory?:  AmdHistoryItem[]    // prior amendment records (server-provided)
 
   // Approval (read-only)
   approvalStatus: string

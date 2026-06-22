@@ -40,7 +40,7 @@ const APPLICABILITY: { label: string; name: string; opts: { label: string; value
   { label: 'Freight Position',     name: 'freightPos',      opts: [{ label: 'Before',   value: 'BEFORE' }, { label: 'After',   value: 'AFTER'  }] },
   { label: 'Discount Application', name: 'discApp',         opts: [{ label: 'Before',   value: 'BEFORE' }, { label: 'After',   value: 'AFTER'  }] },
   { label: 'Packing Charge',       name: 'packApp',         opts: [{ label: 'Before',   value: 'BEFORE' }, { label: 'After',   value: 'AFTER'  }] },
-  { label: 'Insurance Position',   name: 'insuranceDuty',   opts: [{ label: 'Bef Duty', value: 'BEFORE' }, { label: 'Aft Duty', value: 'AFTER' }],
+  { label: 'Insurance Position',   name: 'insuranceDuty',   opts: [{ label: 'Before Duty', value: 'BEFORE' }, { label: 'After Duty', value: 'AFTER' }],
     tooltip: "Insurance is assessed against customs duty, not tax — hence 'Duty' instead of 'Tax'" },
   { label: 'Cess Position',        name: 'cessTaxPos',      opts: [{ label: 'Before',   value: 'BEFORE' }, { label: 'After',   value: 'AFTER'  }] },
 ]
