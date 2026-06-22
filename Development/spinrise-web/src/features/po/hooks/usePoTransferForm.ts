@@ -465,14 +465,36 @@ export function usePoTransferForm() {
     return recalcLine(applyGstRouteToLine(line, route, gstTaxCodes))
   }, [gstTaxCodes])
 
+  // For VIEW / loaded records: apply route corrections without recomputing amounts.
+  // Stored DB values (discAmt, freightAmt, igstAmt, netAmount, etc.) are preserved
+  // exactly as returned by the API. Position flags are not stored per-line in
+  // PO_ORDL — they are header-level — so we seed them from the header here so the
+  // line carries correct flags for UI display and any future re-entry into ADD mode.
+  const hydrateLoadedLine = useCallback((
+    line: PoLine,
+    route: GstRoute,
+    po: PoHeader,
+  ): PoLine => ({
+    ...applyGstRouteToLine(line, route, gstTaxCodes),
+    discApp:       (po.discApp           ?? 'BEFORE') as 'BEFORE' | 'AFTER',
+    packApp:       (po.packApp           ?? 'BEFORE') as 'BEFORE' | 'AFTER',
+    freightPos:    (po.freightPosition   ?? 'BEFORE') as 'BEFORE' | 'AFTER',
+    insuranceDuty: (po.insurancePosition ?? 'BEFORE') as 'BEFORE' | 'AFTER',
+    cessTaxPos:    (po.cessPosition      ?? 'BEFORE') as 'BEFORE' | 'AFTER',
+    freightType:   (po.freightType       ?? 'PAID')   as 'PAID'   | 'TOPAY',
+    taxableValue:  line.value,
+    taxSaved:      true,
+  }), [gstTaxCodes])
+
   const normalizePoForGstState = useCallback((po: PoHeader): PoHeader => {
     const gstState = resolveGstStateDisplay(po.gstState)
+    const route    = getGstRouteFromState(gstState)
+    const fixedPo  = { ...po, gstState }
     return {
-      ...po,
-      gstState,
-      lines: po.lines.map((line) => normalizeLineForGstState(line, gstState)),
+      ...fixedPo,
+      lines: fixedPo.lines.map((line) => hydrateLoadedLine(line, route, fixedPo)),
     }
-  }, [normalizeLineForGstState])
+  }, [hydrateLoadedLine])
 
   // Supplier selection: fill GSTIN/GST State (UX-06) and re-route all lines (Q4).
   const onSupplierChange = useCallback(async (supplier: SupplierOption | null) => {
