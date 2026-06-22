@@ -813,12 +813,14 @@ BEGIN
         ISNULL(l.ADDTAXPER, 0)                                      AS AddTaxPer,
         ISNULL(l.ADDTAXAMT, 0)                                      AS AddTaxAmt,
         ISNULL(l.FCACharg,  0)                                      AS FcaFob,
-        -- POT-TC-04: Landing Cost (net per line = taxable + GST + TCS + charges - discount)
+        -- POT-TC-04 / POT-TC-03: Net line total = taxable + charges - discount + GST + TCS
+        -- Fix: cess_amt was missing from the sum, causing NetAmount to under-report by the cess charge.
         ISNULL(l.ORDVAL,0)
           - ISNULL(l.disamt,0)
           + ISNULL(l.Packamt,0)
           + ISNULL(l.Frgt1Amt,0)
           + ISNULL(l.Ins_amt,0)
+          + ISNULL(l.cess_amt,0)
           + ISNULL(l.cgstamt,0)
           + ISNULL(l.sgstamt,0)
           + ISNULL(l.igstamt,0)
@@ -1065,12 +1067,14 @@ BEGIN
         ISNULL(l.ADDTAXPER, 0)                                      AS AddTaxPer,
         ISNULL(l.ADDTAXAMT, 0)                                      AS AddTaxAmt,
         ISNULL(l.FCACharg,  0)                                      AS FcaFob,
-        -- POT-TC-04: Landing Cost (net per line = taxable + GST + TCS + charges - discount)
+        -- POT-TC-04 / POT-TC-03: Net line total = taxable + charges - discount + GST + TCS
+        -- Fix: cess_amt was missing from the sum, causing NetAmount to under-report by the cess charge.
         ISNULL(l.ORDVAL,0)
           - ISNULL(l.disamt,0)
           + ISNULL(l.Packamt,0)
           + ISNULL(l.Frgt1Amt,0)
           + ISNULL(l.Ins_amt,0)
+          + ISNULL(l.cess_amt,0)
           + ISNULL(l.cgstamt,0)
           + ISNULL(l.sgstamt,0)
           + ISNULL(l.igstamt,0)
