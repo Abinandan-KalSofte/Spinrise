@@ -44,6 +44,7 @@ export function DeliveryScheduleGrid({
   mode, deliveryLines, onAddSlot, onUpdateSlot, onRemoveSlot,
 }: DeliveryScheduleGridProps) {
   const ro = mode !== 'ADD'
+  const isAdd = mode === 'ADD'
 
   const schedTotal = round3(deliveryLines.reduce((s, d) => s + scheduled(d), 0))
   const poTotal    = round3(deliveryLines.reduce((s, d) => s + (d.poQty || 0), 0))
@@ -61,9 +62,13 @@ export function DeliveryScheduleGrid({
           {deliveryLines.length} Item{deliveryLines.length !== 1 ? 's' : ''}
         </span>
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: '#888' }}>
-          Add unlimited delivery rows per item · Σ Scheduled Qty must equal PO Qty per item
-        </span>
+        {
+          isAdd && (
+            <span style={{ fontSize: 11, color: '#888' }}>
+              Add unlimited delivery rows per item · Σ Scheduled Qty must equal PO Qty per item
+            </span>
+          )
+        }
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>

@@ -97,7 +97,18 @@ export default function PrToPoTransferPage() {
   const handleFind   = () => setFindOpen(true)
   // Delete flow: always open the Find PO modal first so the user picks which PO
   // to delete — prevents accidental deletion of whichever PO happens to be loaded.
-  const handleDelete = () => { setDeleteReason(''); setDeletePickOpen(true) }
+  // POT-AM-05: cancelled POs cannot be amended or deleted; block and inform the user.
+  const handleDelete = () => {
+    if (f.currentPo?.cancelled) {
+      notificationService.warning(
+        'Amendment Not Allowed',
+        'Amendment not allowed for cancelled Purchase Orders.',
+      )
+      return
+    }
+    setDeleteReason('')
+    setDeletePickOpen(true)
+  }
   const handleCancel = () => { setDeleteReason(''); setBodyTab('lines'); f.cancelMode() }
   const handleSave   = () => {
     if (f.mode === 'DELETE') {
@@ -119,10 +130,19 @@ export default function PrToPoTransferPage() {
   }
 
   // Delete-find: user picks a PO → load it → enter DELETE mode immediately.
+  // POT-AM-05: block if the loaded PO is cancelled.
   const handleDeletePickSelect = (po: { poNo: number; poDate: string }) => {
     setDeletePickOpen(false)
     void f.loadRecord(po.poNo, po.poDate).then((loaded) => {
-      if (loaded) f.enterDeleteMode(loaded)
+      if (!loaded) return
+      if (loaded.cancelled) {
+        notificationService.warning(
+          'Amendment Not Allowed',
+          'Amendment not allowed for cancelled Purchase Orders.',
+        )
+        return
+      }
+      f.enterDeleteMode(loaded)
     })
   }
 

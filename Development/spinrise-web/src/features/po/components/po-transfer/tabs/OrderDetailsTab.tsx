@@ -107,8 +107,8 @@ export function OrderDetailsTab({
             />
           </Form.Item>
         </Col>
-        <Col span={3}>
-          <div style={lbl}>{req}Order Type</div>
+        <Col span={4}>
+          <div style={lbl}>Order Type {req}</div>
           <Form.Item name="orderType"
             rules={[{ required: true, message: 'Order Type is required' }]}
             validateTrigger="onBlur" style={fi}>
@@ -120,7 +120,7 @@ export function OrderDetailsTab({
           </Form.Item>
         </Col>
         <Col span={10}>
-          <div style={lbl}>{req}Supplier</div>
+          <div style={lbl}>Supplier {req}</div>
           <Form.Item name="supplier"
             rules={[{ required: true, message: 'Supplier is required' }]}
             validateTrigger="onBlur" style={fi}>
@@ -139,7 +139,7 @@ export function OrderDetailsTab({
             <Input readOnly placeholder="Auto" style={{ fontFamily: 'monospace' }} />
           </Form.Item>
         </Col>
-        <Col span={4}>
+        <Col span={3}>
           <div style={lbl}>GST State</div>
           <Form.Item name="gstState" style={fi}>
             <Input readOnly placeholder="Auto" style={{ fontFamily: 'monospace' }} />

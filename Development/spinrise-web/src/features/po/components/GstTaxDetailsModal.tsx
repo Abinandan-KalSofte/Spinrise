@@ -139,13 +139,19 @@ export function GstTaxDetailsModal({
   // CR-013: taxable uses editable localRate/localQty from DraftTax
   const taxable = round2((tax.localRate || 0) * (tax.localQty || 0))
 
-  // CR-012: standard Indian GST assessable base formula
+  // CR-012 / CR-010 / POT-TD-10: standard Indian GST assessable base formula.
   // Charge amounts are stored in DraftTax (CR-011) — no snap-back on direct entry.
+  // All position-flag changes re-derive gstBase in the same render, so the Tax
+  // Breakdown panel updates instantly — no save-and-reopen required (CR-010).
   let gstBase = taxable
-  if (tax.discApp      === 'BEFORE') gstBase = round2(gstBase - tax.discAmt)
-  if (tax.freightPos   === 'BEFORE') gstBase = round2(gstBase + tax.freightAmt)
-  if (tax.packApp      === 'BEFORE') gstBase = round2(gstBase + tax.packingAmt)
+  if (tax.discApp       === 'BEFORE') gstBase = round2(gstBase - tax.discAmt)
+  if (tax.freightPos    === 'BEFORE') gstBase = round2(gstBase + tax.freightAmt)
+  if (tax.packApp       === 'BEFORE') gstBase = round2(gstBase + tax.packingAmt)
   if (tax.insuranceDuty === 'BEFORE') gstBase = round2(gstBase + tax.insuranceAmt)
+  // POT-TD-10: Cess Before/After duty toggle — when BEFORE, cess is part of the
+  // assessable base so GST is computed on (taxable + cess); when AFTER, cess is
+  // added to the total after GST (unchanged net amount, different GST base).
+  if (tax.cessTaxPos    === 'BEFORE') gstBase = round2(gstBase + tax.cessAmt)
 
   const cgstAmt   = isLocal ? pctOf(gstBase, tax.cgstPer) : 0
   const sgstAmt   = isLocal ? pctOf(gstBase, tax.sgstPer) : 0

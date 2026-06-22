@@ -41,7 +41,7 @@ export function InstructionsTab({ disabled, carriers, deliveryLocations, billing
     <TabPanel>
       <Row gutter={[12, 8]}>
         <Col span={6}>
-          <div style={lbl}>{req}Carrier</div>
+          <div style={lbl}>Carrier {req}</div>
           {/* CR-034: Carrier is mandatory. No default — starts blank in ADD mode.
               BR-14 is enforced here (field-level) AND at save time in the hook. */}
           <Form.Item name="carrier"
