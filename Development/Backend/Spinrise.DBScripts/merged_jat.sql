@@ -804,6 +804,7 @@ BEGIN
         ISNULL(l.Frgt1Amt,  0)                                      AS FreightAmt,
         ISNULL(l.Ins_per,   0)                                      AS InsurancePer,
         ISNULL(l.Ins_amt,   0)                                      AS InsuranceAmt,
+        ISNULL(l.OTHCHGS,   0)                                      AS OtherCharges,
         ISNULL(l.cess_per,  0)                                      AS CessPer,
         ISNULL(l.cess_amt,  0)                                      AS CessAmt,
         RTRIM(ISNULL(l.ADDTAX_CODE, ''))                            AS AddTaxCode,
@@ -822,6 +823,7 @@ BEGIN
           + ISNULL(l.Packamt,0)
           + ISNULL(l.Frgt1Amt,0)
           + ISNULL(l.Ins_amt,0)
+          + ISNULL(l.OTHCHGS,0)
           + ISNULL(l.cess_amt,0)
           + ISNULL(l.cgstamt,0)
           + ISNULL(l.sgstamt,0)
@@ -1061,6 +1063,7 @@ BEGIN
         ISNULL(l.Frgt1Amt,  0)                                      AS FreightAmt,
         ISNULL(l.Ins_per,   0)                                      AS InsurancePer,
         ISNULL(l.Ins_amt,   0)                                      AS InsuranceAmt,
+        ISNULL(l.OTHCHGS,   0)                                      AS OtherCharges,
         ISNULL(l.cess_per,  0)                                      AS CessPer,
         ISNULL(l.cess_amt,  0)                                      AS CessAmt,
         RTRIM(ISNULL(l.ADDTAX_CODE, ''))                            AS AddTaxCode,
@@ -1079,6 +1082,7 @@ BEGIN
           + ISNULL(l.Packamt,0)
           + ISNULL(l.Frgt1Amt,0)
           + ISNULL(l.Ins_amt,0)
+          + ISNULL(l.OTHCHGS,0)
           + ISNULL(l.cess_amt,0)
           + ISNULL(l.cgstamt,0)
           + ISNULL(l.sgstamt,0)
@@ -1303,6 +1307,7 @@ BEGIN
             ISNULL(j.InsurancePer, 0)        AS InsurancePer,
             ISNULL(j.CessPer,      0)        AS CessPer,
             ISNULL(j.FcaFob,       0)        AS FcaFob,
+            ISNULL(j.OtherCharges, 0)        AS OtherCharges,
             RTRIM(ISNULL(j.AddTaxCode, ''))  AS AddTaxCode,
             ISNULL(j.AddTaxPer,    0)        AS AddTaxPer,
             RTRIM(ISNULL(j.DiscApp,       'BEFORE')) AS DiscApp,
@@ -1337,6 +1342,7 @@ BEGIN
             InsurancePer  NUMERIC(10,2)  '$.insurancePer',
             CessPer       NUMERIC(10,2)  '$.cessPer',
             FcaFob        NUMERIC(13,2)  '$.fcaFob',
+            OtherCharges  NUMERIC(13,2)  '$.otherCharges',
             AddTaxCode    VARCHAR(10)    '$.addTaxCode',
             AddTaxPer     NUMERIC(10,2)  '$.addTaxPer',
             DiscApp       VARCHAR(10)    '$.discApp',
@@ -1591,6 +1597,7 @@ BEGIN
             PACKPER,  Packamt,
             Frgt1per, Frgt1Amt,
             Ins_per,  Ins_amt,
+            OTHCHGS,
             cess_per, cess_amt,
             ADDTAX_CODE, ADDTAXPER, ADDTAXAMT,
             FCACharg,
@@ -1633,6 +1640,7 @@ BEGIN
             ROUND(((l.Rate * l.Qty) - ROUND((l.Rate * l.Qty) * l.DiscPer / 100.0, 2)) * COALESCE(NULLIF(l.FreightPer,   0), @FreightPer)   / 100.0, 2),
             COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer),
             ROUND(((l.Rate * l.Qty) - ROUND((l.Rate * l.Qty) * l.DiscPer / 100.0, 2)) * COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer) / 100.0, 2),
+            l.OtherCharges,
             COALESCE(NULLIF(l.CessPer,      0), @CessPer),
             ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.CessPer,      0), @CessPer)      / 100.0, 2),
             NULLIF(l.AddTaxCode, ''),

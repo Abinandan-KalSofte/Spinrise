@@ -224,6 +224,7 @@ BEGIN
         ISNULL(l.Frgt1Amt,  0)                                      AS FreightAmt,
         ISNULL(l.Ins_per,   0)                                      AS InsurancePer,
         ISNULL(l.Ins_amt,   0)                                      AS InsuranceAmt,
+        ISNULL(l.OTHCHGS,   0)                                      AS OtherCharges,
         ISNULL(l.cess_per,  0)                                      AS CessPer,
         ISNULL(l.cess_amt,  0)                                      AS CessAmt,
         RTRIM(ISNULL(l.ADDTAX_CODE, ''))                            AS AddTaxCode,
@@ -241,6 +242,7 @@ BEGIN
           + ISNULL(l.Packamt,0)
           + ISNULL(l.Frgt1Amt,0)
           + ISNULL(l.Ins_amt,0)
+          + ISNULL(l.OTHCHGS,0)
           + ISNULL(l.cess_amt,0)
           + ISNULL(l.cgstamt,0)
           + ISNULL(l.sgstamt,0)

@@ -113,6 +113,7 @@ public class AddPoLineRequest
     public decimal FcaFob        { get; init; }
     public string  AddTaxCode    { get; init; } = "";
     public decimal AddTaxPer     { get; init; }
+    public decimal OtherCharges  { get; init; }
     public string  DiscApp       { get; init; } = "BEFORE";
     public string  PackApp       { get; init; } = "BEFORE";
     public string  FreightPos    { get; init; } = "BEFORE";

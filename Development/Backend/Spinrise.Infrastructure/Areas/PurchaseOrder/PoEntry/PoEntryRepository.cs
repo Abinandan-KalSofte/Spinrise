@@ -210,6 +210,7 @@ public class PoEntryRepository : IPoEntryRepository
                 insurancePer  = l.InsurancePer,
                 cessPer       = l.CessPer,
                 fcaFob        = l.FcaFob,
+                otherCharges  = l.OtherCharges,
                 addTaxCode    = l.AddTaxCode,
                 addTaxPer     = l.AddTaxPer,
                 discApp       = l.DiscApp,

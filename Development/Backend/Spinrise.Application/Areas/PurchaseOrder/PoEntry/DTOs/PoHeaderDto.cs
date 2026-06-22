@@ -65,6 +65,7 @@ public class PoLineDto
     public decimal AddTaxPer     { get; set; }
     public decimal AddTaxAmt     { get; set; }
     public decimal FcaFob        { get; set; }
+    public decimal OtherCharges  { get; set; }
     public string  DiscApp       { get; set; } = "BEFORE";
     public string  PackApp       { get; set; } = "BEFORE";
     public string  FreightPos    { get; set; } = "BEFORE";
