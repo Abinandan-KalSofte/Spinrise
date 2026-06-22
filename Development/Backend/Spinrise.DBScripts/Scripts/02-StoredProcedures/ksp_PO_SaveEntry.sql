@@ -484,9 +484,10 @@ BEGIN
             COALESCE(NULLIF(l.PackingPer,   0), @PackPer),
             ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.PackingPer,   0), @PackPer)   / 100.0, 2),
             COALESCE(NULLIF(l.FreightPer,   0), @FreightPer),
-            ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.FreightPer,   0), @FreightPer)   / 100.0, 2),
+            -- POT-TC-01: Freight and Insurance base = item value net of discount (not gross)
+            ROUND(((l.Rate * l.Qty) - ROUND((l.Rate * l.Qty) * l.DiscPer / 100.0, 2)) * COALESCE(NULLIF(l.FreightPer,   0), @FreightPer)   / 100.0, 2),
             COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer),
-            ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer) / 100.0, 2),
+            ROUND(((l.Rate * l.Qty) - ROUND((l.Rate * l.Qty) * l.DiscPer / 100.0, 2)) * COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer) / 100.0, 2),
             COALESCE(NULLIF(l.CessPer,      0), @CessPer),
             ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.CessPer,      0), @CessPer)      / 100.0, 2),
             NULLIF(l.AddTaxCode, ''),
