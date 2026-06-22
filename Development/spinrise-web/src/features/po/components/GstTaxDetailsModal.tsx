@@ -179,9 +179,22 @@ export function GstTaxDetailsModal({
     }))
   }
 
-  // CR-011: % change → update per + re-derive stored amount (no snap-back)
+  // CR-011: % change → update per + re-derive stored amount (no snap-back).
+  // POT-TC-01 cascade: discount change shifts netAfterDisc → packing, freight, insurance recompute from stored %.
   const setDiscPer  = (v: number | null) => {
-    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, discPer: per, discAmt: pctOf(taxable, per) }))
+    const per = clampNonNegativeNumber(v)
+    setTax((p) => {
+      const discAmt = pctOf(taxable, per)
+      const net     = round2(taxable - discAmt)
+      return {
+        ...p,
+        discPer: per,
+        discAmt,
+        packingAmt:   pctOf(net, p.packingPer),
+        freightAmt:   pctOf(net, p.freightPer),
+        insuranceAmt: pctOf(net, p.insurancePer),
+      }
+    })
   }
   const setPackPer  = (v: number | null) => {
     const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, packingPer: per, packingAmt: pctOf(taxable - p.discAmt, per) }))
@@ -195,9 +208,21 @@ export function GstTaxDetailsModal({
     setTax((p) => ({ ...p, insurancePer: per, insuranceAmt: pctOf(round2(taxable - p.discAmt), per) })) // POT-TC-01
   }
 
-  // Amount change → store directly + back-compute per only (amount stays as typed)
-  const onDiscAmt  = (v: number | null) =>
-    setTax((p) => ({ ...p, discAmt: clampNonNegativeNumber(v), discPer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
+  // Amount change → store directly + back-compute per; cascade net-base charges (POT-TC-01).
+  const onDiscAmt  = (v: number | null) => {
+    setTax((p) => {
+      const discAmt = clampNonNegativeNumber(v)
+      const net     = round2(taxable - discAmt)
+      return {
+        ...p,
+        discAmt,
+        discPer:      backCalcPer(discAmt, taxable),
+        packingAmt:   pctOf(net, p.packingPer),
+        freightAmt:   pctOf(net, p.freightPer),
+        insuranceAmt: pctOf(net, p.insurancePer),
+      }
+    })
+  }
   const onPackAmt  = (v: number | null) =>
     setTax((p) => ({ ...p, packingAmt: clampNonNegativeNumber(v), packingPer: backCalcPer(clampNonNegativeNumber(v), taxable - p.discAmt) }))
   // POT-TC-01: back-calc % against net-after-discount so the stored % round-trips correctly
@@ -208,6 +233,41 @@ export function GstTaxDetailsModal({
   // Other Amount — direct entry only, no % field
   const onOtherAmt = (v: number | null) =>
     setTax((p) => ({ ...p, otherAmt: clampNonNegativeNumber(v) }))
+
+  // CR-013 + POT-TC-01: rate/qty change shifts taxable → cascade ALL percentage-based amounts.
+  // discAmt recomputes from discPer (not the other way around) so the % is always the source of truth.
+  const onLocalQty = (v: number | null) => {
+    const newQty = clampNonNegativeNumber(v)
+    setTax((p) => {
+      const newTaxable = round2((p.localRate || 0) * newQty)
+      const discAmt    = pctOf(newTaxable, p.discPer)
+      const net        = round2(newTaxable - discAmt)
+      return {
+        ...p,
+        localQty:     newQty,
+        discAmt,
+        packingAmt:   pctOf(net, p.packingPer),
+        freightAmt:   pctOf(net, p.freightPer),
+        insuranceAmt: pctOf(net, p.insurancePer),
+      }
+    })
+  }
+  const onLocalRate = (v: number | null) => {
+    const newRate = clampNonNegativeNumber(v)
+    setTax((p) => {
+      const newTaxable = round2(newRate * (p.localQty || 0))
+      const discAmt    = pctOf(newTaxable, p.discPer)
+      const net        = round2(newTaxable - discAmt)
+      return {
+        ...p,
+        localRate:    newRate,
+        discAmt,
+        packingAmt:   pctOf(net, p.packingPer),
+        freightAmt:   pctOf(net, p.freightPer),
+        insuranceAmt: pctOf(net, p.insurancePer),
+      }
+    })
+  }
 
   // ── Apply ─────────────────────────────────────────────────────────────────
   const handleApply = () => {
@@ -292,7 +352,7 @@ export function GstTaxDetailsModal({
                 size="small" precision={3} controls={false} disabled={isDelete || isView}
                 value={tax.localQty}
                 style={{ width: 90, fontFamily: 'monospace', textAlign: 'right' }}
-                onChange={(v) => set('localQty', clampNonNegativeNumber(v))}
+                onChange={onLocalQty}
               />
               <label style={{ fontSize: 11, color: '#888', marginLeft: 4 }}>Rate</label>
               <InputNumber
@@ -300,7 +360,7 @@ export function GstTaxDetailsModal({
                 size="small" precision={4} controls={false} disabled={isDelete || isView}
                 value={tax.localRate}
                 style={{ width: 110, fontFamily: 'monospace', textAlign: 'right' }}
-                onChange={(v) => set('localRate', clampNonNegativeNumber(v))}
+                onChange={onLocalRate}
               />
             </span>
           </div>

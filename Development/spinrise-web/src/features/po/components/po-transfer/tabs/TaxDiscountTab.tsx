@@ -27,9 +27,10 @@ const lbl: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, color: '#475569', marginBottom: 3, whiteSpace: 'nowrap',
 }
 
-// useNetBase: true → amount = (lineItemValue − discAmt) × % per POT-TC-01
-const CHARGES: { label: string; perName: string; amtName: string; useNetBase?: boolean }[] = [
-  { label: 'Discount',  perName: 'discPer',    amtName: 'discAmt'    },
+// useNetBase: true → amount = (lineItemValue − discAmt) × % per POT-TC-01.
+// cascadeNet: true → when this field changes, also recompute all useNetBase fields.
+const CHARGES: { label: string; perName: string; amtName: string; useNetBase?: boolean; cascadeNet?: boolean }[] = [
+  { label: 'Discount',  perName: 'discPer',    amtName: 'discAmt',    cascadeNet: true },
   { label: 'Packing',   perName: 'packPer',    amtName: 'packAmt'    },
   { label: 'Insurance', perName: 'insurPer',   amtName: 'insurAmt',   useNetBase: true },
   { label: 'Freight',   perName: 'freightPer', amtName: 'freightAmt', useNetBase: true },
@@ -55,7 +56,18 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
     return round2(base - discAmt)
   }
 
-  const onPerChange = (perField: string, amtField: string, value: number | string | null, useNetBase?: boolean) => {
+  // After computing this field's amount, recompute all net-base fields (freight, insurance).
+  const cascadeNetBaseFields = (newDiscAmt: number) => {
+    const netBase   = round2(base - newDiscAmt)
+    const freightPer = (form.getFieldValue('freightPer') as number) || 0
+    const insurPer   = (form.getFieldValue('insurPer')   as number) || 0
+    form.setFieldsValue({
+      freightAmt: round2(freightPer * netBase / 100),
+      insurAmt:   round2(insurPer   * netBase / 100),
+    })
+  }
+
+  const onPerChange = (perField: string, amtField: string, value: number | string | null, useNetBase?: boolean, cascadeNet?: boolean) => {
     if (base <= 0) {
       notificationService.warning('No Line Items', 'Please add PO line items before entering charges.')
       form.setFieldsValue({ [perField]: 0, [amtField]: 0 })
@@ -65,9 +77,10 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
     const amt = round2(per * getEffectiveBase(useNetBase) / 100)
     if (!Number.isFinite(amt)) return
     form.setFieldValue(amtField, amt)
+    if (cascadeNet) cascadeNetBaseFields(amt)
   }
 
-  const onAmtChange = (perField: string, amtField: string, value: number | string | null, useNetBase?: boolean) => {
+  const onAmtChange = (perField: string, amtField: string, value: number | string | null, useNetBase?: boolean, cascadeNet?: boolean) => {
     if (base <= 0) {
       notificationService.warning('No Line Items', 'Please add PO line items before entering charges.')
       form.setFieldsValue({ [perField]: 0, [amtField]: 0 })
@@ -78,6 +91,7 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
     const per = eff > 0 ? round2(amt / eff * 100) : 0
     if (!Number.isFinite(per)) return
     form.setFieldValue(perField, per)
+    if (cascadeNet) cascadeNetBaseFields(amt)
   }
 
   useEffect(() => {
@@ -122,17 +136,17 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
         <div style={{ width: 1, background: '#d1d5db', flexShrink: 0, margin: '16px 4px 0', alignSelf: 'stretch' }} />
 
         {/* Deduction charge pairs */}
-        {CHARGES.map(({ label, perName, amtName, useNetBase }) => (
+        {CHARGES.map(({ label, perName, amtName, useNetBase, cascadeNet }) => (
           <div key={perName} style={{ flex: 1, minWidth: 155 }}>
             <div style={lbl}>{label}</div>
             <div style={{ display: 'flex', gap: 4 }}>
               <Form.Item name={perName} style={{ marginBottom: 0, flex: 1, minWidth: 0 }}>
                 <InputNumber {...pct} addonAfter="%" disabled={disabled}
-                  onChange={(v) => onPerChange(perName, amtName, v, useNetBase)} />
+                  onChange={(v) => onPerChange(perName, amtName, v, useNetBase, cascadeNet)} />
               </Form.Item>
               <Form.Item name={amtName} style={{ marginBottom: 0, flex: 1, minWidth: 0 }}>
                 <InputNumber {...pct} addonAfter="₹" disabled={disabled}
-                  onChange={(v) => onAmtChange(perName, amtName, v, useNetBase)} />
+                  onChange={(v) => onAmtChange(perName, amtName, v, useNetBase, cascadeNet)} />
               </Form.Item>
             </div>
           </div>
