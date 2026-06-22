@@ -51,12 +51,12 @@ export interface GstHeaderDefaults {
   freightPer:      number
   insurancePer:    number
   addTaxPer:       number
-  cessPer:         number
+  // cessPer removed — Other Amount is entered directly in the GST modal (not seeded from header)
   tcsPer:          number
   fcaFob:          number
   freightPos:      'BEFORE' | 'AFTER'
   insuranceDuty:   'BEFORE' | 'AFTER'
-  cessTaxPos:      'BEFORE' | 'AFTER'
+  // cessTaxPos removed — fixed 'AFTER' in modal; Other Amount never affects GST base
   freightType:     'PAID' | 'TOPAY'
   discApp:         'BEFORE' | 'AFTER'
   packApp:         'BEFORE' | 'AFTER'
@@ -74,9 +74,9 @@ export const FIELD_TAB_MAP: Record<string, HeaderTabKey> = {
   cgstPer: 'tax', sgstPer: 'tax', igstPer: 'tax', tcsPer: 'tax', fcaFob: 'tax', fileNo: 'tax',
   discPer: 'tax', discAmt: 'tax', freightPer: 'tax', freightAmt: 'tax',
   packPer: 'tax', packAmt: 'tax', insurPer: 'tax', insurAmt: 'tax',
-  addTaxPer: 'tax', addTaxAmtHdr: 'tax', cessPer: 'tax', cessAmt: 'tax',
+  addTaxPer: 'tax', addTaxAmtHdr: 'tax',
   freightType: 'tax', freightPos: 'tax', discApp: 'tax', packApp: 'tax',
-  insuranceDuty: 'tax', cessTaxPos: 'tax',
+  insuranceDuty: 'tax',
   // Payment
   payMode: 'payment', directInstr: 'payment', advAmt: 'payment', advPer: 'payment',
   modeOfPayment: 'payment', payRef: 'payment', payRefDate: 'payment',
@@ -105,19 +105,19 @@ const toIsoDate = (d: string | null | undefined): string => {
   return p.isValid() ? p.format('YYYY-MM-DD') : ''
 }
 
-// ── Pure line recompute ──────────────────────────────────────────────────────
-// Standard Indian GST formula (CR-012). GST is computed on the assessable base,
-// which adjusts for discount/freight/packing/insurance position flags (BEFORE/AFTER).
+// ── Pure line recompute — POT-TC-01 ─────────────────────────────────────────
+// Indian GST formula per POT-TC-01 business rule (CR-012).
 //
-//   Taxable Value  = Rate × Qty
-//   Discount       = Taxable × disc%
-//   Packing        = (Taxable − Discount) × packing%
-//   Freight        = Taxable × freight%
-//   Insurance      = Taxable × insurance%
-//   GST Base       = Taxable ± charges per position flags
-//   CGST/SGST/IGST = GST Base × rate%   (route-driven, server Q4)
-//   TCS            = Taxable × tcs%     (always on raw taxable)
-//   Net Amount     = Taxable − Discount + Packing + Freight + Insurance + All Tax
+//   Gross          = Rate × Qty
+//   Discount       = Gross × disc%
+//   NetAfterDisc   = Gross − Discount
+//   Packing        = NetAfterDisc × packing%   (existing; preserved)
+//   Freight        = NetAfterDisc × freight%   (POT-TC-01: was Gross × freight%)
+//   Insurance      = NetAfterDisc × insurance% (POT-TC-01: was Gross × insurance%)
+//   GST Base       = Gross ± charges per position flags (BEFORE/AFTER)
+//   CGST/SGST/IGST = GST Base × rate%          (route-driven, server Q4)
+//   TCS            = Gross × tcs%              (always on raw gross)
+//   Net Amount     = Gross − Discount + Packing + Freight + Insurance + All Tax
 // FCA/FOB is a pass-through reference value and is not folded into Net.
 const calcLineValue = (rate: number, qty: number) => round2((rate || 0) * (qty || 0))
 const pctOf = (base: number, pct: number) => round2((base * (pct || 0)) / 100)
@@ -127,28 +127,28 @@ const recalcLine = (line: PoLine): PoLine => {
   const isLocal = line.route === 'LOCAL'
 
   const discountAmt  = pctOf(taxable, line.discPer)
-  const packingAmt   = pctOf(taxable - discountAmt, line.packingPer)
-  const freightAmt   = pctOf(taxable, line.freightPer)
-  const insuranceAmt = pctOf(taxable, line.insurancePer)
-  const cessAmt      = pctOf(taxable, line.cessPer ?? 0)
-  const addTaxAmt    = pctOf(taxable, line.addTaxPer)
-  const tcsAmt       = pctOf(taxable, line.tcsPer)
+  const netAfterDisc = round2(taxable - discountAmt)          // POT-TC-01 base for freight & insurance
+  const packingAmt   = pctOf(netAfterDisc, line.packingPer)
+  const freightAmt   = pctOf(netAfterDisc, line.freightPer)   // POT-TC-01
+  const insuranceAmt = pctOf(netAfterDisc, line.insurancePer) // POT-TC-01
+  const otherChargeAmt = pctOf(taxable, line.otherCharges ?? 0)
+  const addTaxAmt      = pctOf(taxable, line.addTaxPer)
+  const tcsAmt         = pctOf(taxable, line.tcsPer)
 
   // CR-012 / POT-TD-10: assessable base adjusts per position flags.
-  // cessTaxPos='BEFORE' includes cess in the GST base (same formula as the modal).
+  // Other Amount is always AFTER — it never shifts the GST assessable base.
   let gstBase = taxable
   if (line.discApp       === 'BEFORE') gstBase = round2(gstBase - discountAmt)
   if (line.freightPos    === 'BEFORE') gstBase = round2(gstBase + freightAmt)
   if (line.packApp       === 'BEFORE') gstBase = round2(gstBase + packingAmt)
   if (line.insuranceDuty === 'BEFORE') gstBase = round2(gstBase + insuranceAmt)
-  if (line.cessTaxPos    === 'BEFORE') gstBase = round2(gstBase + cessAmt)
 
   const cgstAmt = isLocal ? pctOf(gstBase, line.cgstPer) : 0
   const sgstAmt = isLocal ? pctOf(gstBase, line.sgstPer) : 0
   const igstAmt = isLocal ? 0 : pctOf(gstBase, line.igstPer)
 
   const gstTotal = round2(cgstAmt + sgstAmt + igstAmt)
-  const totalTax = round2(gstTotal + addTaxAmt + tcsAmt + cessAmt)
+  const totalTax = round2(gstTotal + addTaxAmt + tcsAmt + otherChargeAmt)
   const netAmount = round2(
     taxable - discountAmt + packingAmt + freightAmt + insuranceAmt + totalTax,
   )
@@ -171,7 +171,6 @@ const hydrateLineFromDb = (line: PoLine, po: PoHeader): PoLine => ({
   ...line,
   freightPos:    (po.freightPosition  ?? 'BEFORE') as PoLine['freightPos'],
   insuranceDuty: (po.insurancePosition ?? 'BEFORE') as PoLine['insuranceDuty'],
-  cessTaxPos:    (po.cessPosition     ?? 'BEFORE') as PoLine['cessTaxPos'],
   freightType:   (po.freightType      ?? 'PAID')   as PoLine['freightType'],
   discApp:       (po.discApp          ?? 'BEFORE') as PoLine['discApp'],
   packApp:       (po.packApp          ?? 'BEFORE') as PoLine['packApp'],
@@ -214,8 +213,6 @@ export interface PoHeaderFormValues {
   insurAmt:      number         // computed from insurPer × line item value
   addTaxPer:     number
   addTaxAmtHdr:  number         // computed from addTaxPer × line item value
-  cessPer:       number
-  cessAmt:       number
   fileNo:        string
   fcaFob:        number
   freightType:   'PAID' | 'TOPAY'
@@ -223,7 +220,6 @@ export interface PoHeaderFormValues {
   discApp:       'BEFORE' | 'AFTER'
   packApp:       'BEFORE' | 'AFTER'
   insuranceDuty: 'BEFORE' | 'AFTER'  // insurance before/after duty
-  cessTaxPos:    'BEFORE' | 'AFTER'  // cess before/after tax
   // Payment
   payMode:       'DIRECT' | 'BANK'
   directInstr:   string
@@ -341,13 +337,11 @@ export function usePoTransferForm() {
   const hFreightPer       = Form.useWatch('freightPer',       headerForm)
   const hInsurPer         = Form.useWatch('insurPer',         headerForm)
   const hAddTaxPer        = Form.useWatch('addTaxPer',        headerForm)
-  const hCessPer          = Form.useWatch('cessPer',          headerForm)
   const hTcsPer           = Form.useWatch('tcsPer',           headerForm)
   const hFcaFob           = Form.useWatch('fcaFob',           headerForm)
   const hRoundOff         = Form.useWatch('roundOff',         headerForm)
   const hFreightPos       = Form.useWatch('freightPos',       headerForm)
   const hInsuranceDuty    = Form.useWatch('insuranceDuty',    headerForm)
-  const hCessTaxPos       = Form.useWatch('cessTaxPos',       headerForm)
   const hFreightType      = Form.useWatch('freightType',      headerForm)
   const hDiscApp          = Form.useWatch('discApp',          headerForm)
   const hPackApp          = Form.useWatch('packApp',          headerForm)
@@ -357,18 +351,15 @@ export function usePoTransferForm() {
     freightPer:      hFreightPer ?? 0,
     insurancePer:    hInsurPer   ?? 0,
     addTaxPer:       hAddTaxPer  ?? 0,
-    cessPer:         hCessPer    ?? 0,
     tcsPer:          hTcsPer     ?? 0,
     fcaFob:          hFcaFob     ?? 0,
-    freightPos:       (hFreightPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-    insuranceDuty:    (hInsuranceDuty    as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-    cessTaxPos:       (hCessTaxPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-    freightType:      (hFreightType      as 'PAID' | 'TOPAY' | undefined)    ?? 'PAID',
-    discApp:          (hDiscApp          as 'BEFORE' | 'AFTER' | undefined)  ?? 'BEFORE',
-    packApp:          (hPackApp          as 'BEFORE' | 'AFTER' | undefined)  ?? 'BEFORE',
-  }), [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hCessPer, hTcsPer, hFcaFob,
-       hFreightPos, hInsuranceDuty, hCessTaxPos,
-       hFreightType, hDiscApp, hPackApp])
+    freightPos:      (hFreightPos    as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+    insuranceDuty:   (hInsuranceDuty as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+    freightType:     (hFreightType   as 'PAID' | 'TOPAY' | undefined)   ?? 'PAID',
+    discApp:         (hDiscApp       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+    packApp:         (hPackApp       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+  }), [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hTcsPer, hFcaFob,
+       hFreightPos, hInsuranceDuty, hFreightType, hDiscApp, hPackApp])
 
   // Grid tax sync: when header tax % fields change in ADD mode, propagate to all
   // unsaved lines (taxSaved=false) immediately. Rows with taxSaved=true retain
@@ -390,16 +381,15 @@ export function usePoTransferForm() {
         addTaxPer:        hAddTaxPer        ?? 0,
         tcsPer:           hTcsPer           ?? 0,
         // CR-010: Before/After flag changes propagate immediately to unsaved lines
-        freightPos:       (hFreightPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-        insuranceDuty:    (hInsuranceDuty    as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-        cessTaxPos:       (hCessTaxPos       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-        discApp:          (hDiscApp          as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-        packApp:          (hPackApp          as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-        freightType:      (hFreightType      as 'PAID' | 'TOPAY'    | undefined) ?? 'PAID',
+        freightPos:       (hFreightPos    as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        insuranceDuty:    (hInsuranceDuty as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        discApp:          (hDiscApp       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        packApp:          (hPackApp       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
+        freightType:      (hFreightType   as 'PAID' | 'TOPAY'   | undefined) ?? 'PAID',
       })
     }))
   }, [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hTcsPer, // eslint-disable-line react-hooks/exhaustive-deps
-      hFreightPos, hInsuranceDuty, hCessTaxPos, hDiscApp, hPackApp, hFreightType])
+      hFreightPos, hInsuranceDuty, hDiscApp, hPackApp, hFreightType])
 
   // ── Load lookups on mount ───────────────────────────────────────────────────
   const loadLookups = useCallback(async () => {
@@ -568,7 +558,7 @@ export function usePoTransferForm() {
       packingPer:    gstHeaderDefaults.packingPer,
       freightPer:    gstHeaderDefaults.freightPer,
       insurancePer:  gstHeaderDefaults.insurancePer,
-      cessPer:       gstHeaderDefaults.cessPer,
+      otherCharges:      0,   // Other Amount not seeded from header — entered directly in GST modal
       fcaFob:        gstHeaderDefaults.fcaFob,
       addTaxCode:    '',
       addTaxPer:     gstHeaderDefaults.addTaxPer,
@@ -576,7 +566,6 @@ export function usePoTransferForm() {
       // Applicability flags — seeded from header, editable per-line in GST modal.
       freightPos:       gstHeaderDefaults.freightPos,
       insuranceDuty:    gstHeaderDefaults.insuranceDuty,
-      cessTaxPos:       gstHeaderDefaults.cessTaxPos,
       freightType:      gstHeaderDefaults.freightType,
       discApp:          gstHeaderDefaults.discApp,
       packApp:          gstHeaderDefaults.packApp,
@@ -667,7 +656,7 @@ export function usePoTransferForm() {
       packingPer:    clampNonNegativeNumber(detail.packingPer),
       freightPer:    clampNonNegativeNumber(detail.freightPer),
       insurancePer:  clampNonNegativeNumber(detail.insurancePer),
-      cessPer:       clampNonNegativeNumber(detail.cessPer),
+      otherCharges:      clampNonNegativeNumber(detail.otherCharges),
       fcaFob:        clampNonNegativeNumber(detail.fcaFob),
       addTaxPer:     clampNonNegativeNumber(detail.addTaxPer),
     }, target.route, gstTaxCodes)
@@ -719,7 +708,6 @@ export function usePoTransferForm() {
     discApp:     'BEFORE',
     packApp:     'BEFORE',
     insuranceDuty:    'BEFORE',
-    cessTaxPos:       'BEFORE',
     payMode:     'DIRECT',
     cancelled:   false,
     formType:    formTypes[0]?.formCode ?? '',   // auto-default first available form type
@@ -732,7 +720,6 @@ export function usePoTransferForm() {
     packPer: 0, packAmt: 0,
     insurPer: 0, insurAmt: 0,
     addTaxPer: 0, addTaxAmtHdr: 0,
-    cessPer: 0, cessAmt: 0,
     fcaFob: 0,
     creditDays: 0, advAmt: 0,
     otherLevies: '',
@@ -768,14 +755,13 @@ export function usePoTransferForm() {
       packingPer:       l.packingPer       ?? 0,
       freightPer:       l.freightPer       ?? 0,
       insurancePer:     l.insurancePer     ?? 0,
-      cessPer:          l.cessPer          ?? 0,
+      otherCharges:         l.otherCharges         ?? 0,
       fcaFob:           l.fcaFob           ?? 0,
       addTaxCode:       l.addTaxCode       ?? '',
       addTaxPer:        l.addTaxPer        ?? 0,
       addTaxAmt:        l.addTaxAmt        ?? 0,
       freightPos:       l.freightPos       ?? 'BEFORE',
       insuranceDuty:    l.insuranceDuty    ?? 'BEFORE',
-      cessTaxPos:       l.cessTaxPos       ?? 'BEFORE',
       freightType:      l.freightType      ?? 'PAID',
       discApp:          l.discApp          ?? 'BEFORE',
       packApp:          l.packApp          ?? 'BEFORE',
@@ -833,8 +819,6 @@ export function usePoTransferForm() {
       insurAmt:      po.insuranceAmt        ?? 0,
       addTaxPer:     po.addTaxPer,
       addTaxAmtHdr:  po.addTaxAmt           ?? 0,
-      cessPer:       po.cessPer             ?? 0,
-      cessAmt:       po.cessAmt             ?? 0,
       fileNo:        po.fileNo,
       fcaFob:        po.fcaFob,
       freightType:   po.freightType,
@@ -842,7 +826,6 @@ export function usePoTransferForm() {
       discApp:       po.discApp,
       packApp:       po.packApp,
       insuranceDuty:    po.insurancePosition  ?? 'BEFORE',
-      cessTaxPos:       po.cessPosition       ?? 'BEFORE',
       payMode:       po.payMode,
       directInstr:   po.directInstr,
       bankCode:         po.bankCode,
@@ -943,6 +926,7 @@ export function usePoTransferForm() {
   }, [divCode, processingDate])
 
   const headerNegativeFields: { key: keyof PoHeaderFormValues; label: string }[] = [
+    { key: 'roundOff', label: 'Round Off' },
     { key: 'currRate', label: 'Currency Rate' },
     { key: 'tcsPer', label: 'TCS %' },
     { key: 'discPer', label: 'Discount %' },
@@ -955,8 +939,6 @@ export function usePoTransferForm() {
     { key: 'insurAmt', label: 'Insurance Amount' },
     { key: 'addTaxPer', label: 'GST %' },
     { key: 'addTaxAmtHdr', label: 'GST Amount' },
-    { key: 'cessPer', label: 'Other %' },
-    { key: 'cessAmt', label: 'Other Amount' },
     { key: 'fcaFob', label: 'FCA / FOB' },
     { key: 'creditDays', label: 'Credit Days' },
     { key: 'advAmt', label: 'Advance Amount' },
@@ -969,7 +951,7 @@ export function usePoTransferForm() {
     { key: 'packingPer', label: 'Packing %' },
     { key: 'freightPer', label: 'Freight %' },
     { key: 'insurancePer', label: 'Insurance %' },
-    { key: 'cessPer', label: 'Other %' },
+    { key: 'otherCharges', label: 'Other %' },
     { key: 'cgstPer', label: 'CGST %' },
     { key: 'cgstAmt', label: 'CGST Amount' },
     { key: 'sgstPer', label: 'SGST %' },
@@ -1218,13 +1200,12 @@ export function usePoTransferForm() {
       packingPer:       l.packingPer,
       freightPer:       l.freightPer,
       insurancePer:     l.insurancePer,
-      cessPer:          l.cessPer,
+      otherCharges:         l.otherCharges,
       fcaFob:           l.fcaFob,
       addTaxCode:       l.addTaxCode,
       addTaxPer:        l.addTaxPer,
       freightPos:       l.freightPos,
       insuranceDuty:    l.insuranceDuty,
-      cessTaxPos:       l.cessTaxPos,
       freightType:      l.freightType,
       discApp:          l.discApp,
       packApp:          l.packApp,
@@ -1264,11 +1245,8 @@ export function usePoTransferForm() {
         packingAmt:           v.packAmt         ?? 0,
         insuranceAmt:         v.insurAmt        ?? 0,
         addTaxAmt:            0,
-        cessPer:              v.cessPer         ?? 0,
-        cessAmt:              v.cessAmt         ?? 0,
         freightPosition:      v.freightPos,
         insurancePosition:    v.insuranceDuty,
-        cessPosition:         v.cessTaxPos,
         payMode: v.payMode, directInstr: v.directInstr, bankCode: v.bankCode,
         paymentTerms: v.paymentTerms, paymentTermCode: v.paymentTermCode ?? '',
         advPer: 0, advAmt: v.advAmt ?? 0,

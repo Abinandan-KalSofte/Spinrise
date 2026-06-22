@@ -42,14 +42,14 @@ export interface LineTaxDetail {
   packingPer:    number      // Packing & Forwarding %
   freightPer:    number      // Freight %
   insurancePer:  number      // Insurance %
-  cessPer:       number      // Cess %
+  otherCharges:      number      // Other Amount % — back-calculated from user-entered amount; SP receives as cessPer
   fcaFob:        number      // FCA / FOB charges
   addTaxCode:    string      // Additional Tax code (reuses GST tax-code master)
   addTaxPer:     number      // Additional Tax %
   // Applicability flags (Section C — editable per line in GST modal)
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
-  cessTaxPos:       'BEFORE' | 'AFTER'
+  // cessTaxPos removed — Other Amount is always AFTER; it never shifts the GST assessable base
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
