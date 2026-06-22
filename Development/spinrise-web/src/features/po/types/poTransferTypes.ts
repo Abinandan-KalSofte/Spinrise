@@ -155,7 +155,7 @@ export interface PoLine {
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
   // cessTaxPos removed — Other Amount is always AFTER; it never affects the GST assessable base
-  freightType:      'PAID' | 'TOPAY'
+  // freightType removed — FRTFLG is header-only; PO_ORDL has no Freight Type column
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
   // ── Computed money fields (recalcLine) ─────────────────────────────────────
@@ -361,8 +361,7 @@ export interface SavePoLineRequest {
   // Applicability flags
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
-  // cessTaxPos removed — always 'AFTER'; SP receives hardcoded value
-  freightType:      'PAID' | 'TOPAY'
+  // freightType removed — FRTFLG is header-only; PO_ORDL has no Freight Type column
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
   slots:            DeliverySlot[]   // unlimited delivery rows per item (OQ-NEW B)

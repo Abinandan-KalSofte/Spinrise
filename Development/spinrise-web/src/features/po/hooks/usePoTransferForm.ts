@@ -56,8 +56,7 @@ export interface GstHeaderDefaults {
   fcaFob:          number
   freightPos:      'BEFORE' | 'AFTER'
   insuranceDuty:   'BEFORE' | 'AFTER'
-  // cessTaxPos removed — fixed 'AFTER' in modal; Other Amount never affects GST base
-  freightType:     'PAID' | 'TOPAY'
+  // freightType removed — FRTFLG is header-only; line-level modal no longer tracks it
   discApp:         'BEFORE' | 'AFTER'
   packApp:         'BEFORE' | 'AFTER'
 }
@@ -171,7 +170,6 @@ const hydrateLineFromDb = (line: PoLine, po: PoHeader): PoLine => ({
   ...line,
   freightPos:    (po.freightPosition  ?? 'BEFORE') as PoLine['freightPos'],
   insuranceDuty: (po.insurancePosition ?? 'BEFORE') as PoLine['insuranceDuty'],
-  freightType:   (po.freightType      ?? 'PAID')   as PoLine['freightType'],
   discApp:       (po.discApp          ?? 'BEFORE') as PoLine['discApp'],
   packApp:       (po.packApp          ?? 'BEFORE') as PoLine['packApp'],
   taxableValue:  line.value,
@@ -342,7 +340,6 @@ export function usePoTransferForm() {
   const hRoundOff         = Form.useWatch('roundOff',         headerForm)
   const hFreightPos       = Form.useWatch('freightPos',       headerForm)
   const hInsuranceDuty    = Form.useWatch('insuranceDuty',    headerForm)
-  const hFreightType      = Form.useWatch('freightType',      headerForm)
   const hDiscApp          = Form.useWatch('discApp',          headerForm)
   const hPackApp          = Form.useWatch('packApp',          headerForm)
   const gstHeaderDefaults = useMemo<GstHeaderDefaults>(() => ({
@@ -355,11 +352,10 @@ export function usePoTransferForm() {
     fcaFob:          hFcaFob     ?? 0,
     freightPos:      (hFreightPos    as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
     insuranceDuty:   (hInsuranceDuty as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-    freightType:     (hFreightType   as 'PAID' | 'TOPAY' | undefined)   ?? 'PAID',
     discApp:         (hDiscApp       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
     packApp:         (hPackApp       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
   }), [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hTcsPer, hFcaFob,
-       hFreightPos, hInsuranceDuty, hFreightType, hDiscApp, hPackApp])
+       hFreightPos, hInsuranceDuty, hDiscApp, hPackApp])
 
   // Grid tax sync: when header tax % fields change in ADD mode, propagate to all
   // unsaved lines (taxSaved=false) immediately. Rows with taxSaved=true retain
@@ -385,11 +381,10 @@ export function usePoTransferForm() {
         insuranceDuty:    (hInsuranceDuty as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
         discApp:          (hDiscApp       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
         packApp:          (hPackApp       as 'BEFORE' | 'AFTER' | undefined) ?? 'BEFORE',
-        freightType:      (hFreightType   as 'PAID' | 'TOPAY'   | undefined) ?? 'PAID',
       })
     }))
   }, [hDiscPer, hPackPer, hFreightPer, hInsurPer, hAddTaxPer, hTcsPer, // eslint-disable-line react-hooks/exhaustive-deps
-      hFreightPos, hInsuranceDuty, hDiscApp, hPackApp, hFreightType])
+      hFreightPos, hInsuranceDuty, hDiscApp, hPackApp])
 
   // ── Load lookups on mount ───────────────────────────────────────────────────
   const loadLookups = useCallback(async () => {
@@ -477,26 +472,10 @@ export function usePoTransferForm() {
   // exactly as returned by the API. Position flags are not stored per-line in
   // PO_ORDL — they are header-level — so we seed them from the header here so the
   // line carries correct flags for UI display and any future re-entry into ADD mode.
-  const hydrateLoadedLine = useCallback((
-    line: PoLine,
-    route: GstRoute,
-    po: PoHeader,
-  ): PoLine => ({
-    ...applyGstRouteToLine(line, route, gstTaxCodes),
-    discApp:       (po.discApp           ?? 'BEFORE') as 'BEFORE' | 'AFTER',
-    packApp:       (po.packApp           ?? 'BEFORE') as 'BEFORE' | 'AFTER',
-    freightPos:    (po.freightPosition   ?? 'BEFORE') as 'BEFORE' | 'AFTER',
-    insuranceDuty: (po.insurancePosition ?? 'BEFORE') as 'BEFORE' | 'AFTER',
-    cessTaxPos:    (po.cessPosition      ?? 'BEFORE') as 'BEFORE' | 'AFTER',
-    freightType:   (po.freightType       ?? 'PAID')   as 'PAID'   | 'TOPAY',
-    taxableValue:  line.value,
-    taxSaved:      true,
-  }), [gstTaxCodes])
+
 
   const normalizePoForGstState = useCallback((po: PoHeader): PoHeader => {
     const gstState = resolveGstStateDisplay(po.gstState)
-    const route    = getGstRouteFromState(gstState)
-    const fixedPo  = { ...po, gstState }
     return {
       ...po,
       gstState,
@@ -589,7 +568,6 @@ export function usePoTransferForm() {
       // Applicability flags — seeded from header, editable per-line in GST modal.
       freightPos:       gstHeaderDefaults.freightPos,
       insuranceDuty:    gstHeaderDefaults.insuranceDuty,
-      freightType:      gstHeaderDefaults.freightType,
       discApp:          gstHeaderDefaults.discApp,
       packApp:          gstHeaderDefaults.packApp,
       taxableValue:  0,
@@ -785,7 +763,6 @@ export function usePoTransferForm() {
       addTaxAmt:        l.addTaxAmt        ?? 0,
       freightPos:       l.freightPos       ?? 'BEFORE',
       insuranceDuty:    l.insuranceDuty    ?? 'BEFORE',
-      freightType:      l.freightType      ?? 'PAID',
       discApp:          l.discApp          ?? 'BEFORE',
       packApp:          l.packApp          ?? 'BEFORE',
       taxableValue:     l.taxableValue     ?? (l.rate * l.qty),
@@ -949,7 +926,6 @@ export function usePoTransferForm() {
   }, [divCode, processingDate])
 
   const headerNegativeFields: { key: keyof PoHeaderFormValues; label: string }[] = [
-    { key: 'roundOff', label: 'Round Off' },
     { key: 'currRate', label: 'Currency Rate' },
     { key: 'tcsPer', label: 'TCS %' },
     { key: 'discPer', label: 'Discount %' },
@@ -1229,7 +1205,6 @@ export function usePoTransferForm() {
       addTaxPer:        l.addTaxPer,
       freightPos:       l.freightPos,
       insuranceDuty:    l.insuranceDuty,
-      freightType:      l.freightType,
       discApp:          l.discApp,
       packApp:          l.packApp,
       slots:            slotsFor(l.lineNo),

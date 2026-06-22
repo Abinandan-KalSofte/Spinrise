@@ -50,7 +50,7 @@ export interface LineTaxDetail {
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
   // cessTaxPos removed — Other Amount is always AFTER; it never shifts the GST assessable base
-  freightType:      'PAID' | 'TOPAY'
+  // freightType removed — FRTFLG is PO header-level only; PO_ORDL has no Freight Type column
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
   // CR-013: optional rate/qty override from the GST modal

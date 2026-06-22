@@ -57,7 +57,6 @@ interface DraftTax {
   fcaFob:           number
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
-  freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
   // CR-013: editable rate/qty in modal
@@ -99,7 +98,6 @@ const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
     // Applicability: saved lines use their stored value; unsaved lines use Header.
     freightPos:       line?.taxSaved ? (line.freightPos       ?? hd.freightPos)    : hd.freightPos,
     insuranceDuty:    line?.taxSaved ? (line.insuranceDuty    ?? hd.insuranceDuty) : hd.insuranceDuty,
-    freightType:      line?.taxSaved ? (line.freightType      ?? hd.freightType)   : hd.freightType,
     discApp:          line?.taxSaved ? (line.discApp          ?? hd.discApp)       : hd.discApp,
     packApp:          line?.taxSaved ? (line.packApp          ?? hd.packApp)       : hd.packApp,
     // CR-013: editable rate/qty
@@ -307,7 +305,6 @@ export function GstTaxDetailsModal({
       addTaxPer:        0,     // CR-011a: removed from modal
       freightPos:       tax.freightPos,
       insuranceDuty:    tax.insuranceDuty,
-      freightType:      tax.freightType,
       discApp:          tax.discApp,
       packApp:          tax.packApp,
       // CR-013: propagate edited rate/qty back to the line
@@ -477,9 +474,6 @@ export function GstTaxDetailsModal({
               <AppRadio label="Freight Position"     value={tax.freightPos}   disabled={isDelete || isView}
                 onChange={(v) => set('freightPos',    v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Freight Payment"      value={tax.freightType}  disabled={isDelete || isView}
-                onChange={(v) => set('freightType',   v as 'PAID' | 'TOPAY')}
-                options={[{ value: 'PAID', label: 'Paid' }, { value: 'TOPAY', label: 'To Pay' }]} />
             </div>
 
           </div>
