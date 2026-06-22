@@ -107,7 +107,7 @@ BEGIN
         ISNULL(l.ORDVAL, 0)                                         AS Value,
         RTRIM(ISNULL(l.Tax_code, ''))                               AS TaxCode,
         ISNULL(l.taxper, 0)                                         AS TaxPer,
-        ISNULL(l.Taxamt, 0)                                         AS TaxAmt,
+        ISNULL(l.cgstamt,0) + ISNULL(l.sgstamt,0) + ISNULL(l.igstamt,0) AS TaxAmt,
         ISNULL(l.cgstper, 0)                                        AS CgstPer,
         ISNULL(l.cgstamt, 0)                                        AS CgstAmt,
         ISNULL(l.sgstper, 0)                                        AS SgstPer,

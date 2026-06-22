@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- merged_jat.sql — M01 PO (PR → PO Transfer + PO Approval)
 -- Database: JAT (172.16.16.52\sql2016)
 -- Contains ALL ksp_PO_* stored procedures.
@@ -1118,135 +1118,6 @@ GO
 
 
 
--- ============================================================
--- ksp_PO_GetPrint
--- Returns print data for a PO (PDF generation via QuestPDF).
--- Returns 2 result sets: (1) header with division letterhead,
---                        (2) PO lines.
--- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno,
---   add1, add2, add3, pincode, email — all verified.
--- FA_SLMAS confirmed columns: add1, add2, state, gstinno (lowercase). add3/city/pin unverified.
--- PO_ORDH: GST % columns don't exist — amounts only.
--- ============================================================
-CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPrint
-(
-    @DivCode VARCHAR(2),
-    @PoNo    NUMERIC(10,0),
-    @PoDate  DATE
-)
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    -- ─── Result set 1: Print header (div letterhead + PO header) ──────────────
-    SELECT
-        -- Division letterhead
-        div.DIV_LOGO                                                AS DivLogo,
-        RTRIM(ISNULL(div.divname, ''))                              AS DivName,
-        RTRIM(ISNULL(div.div_printname, div.divname))               AS DivPrintName,
-        RTRIM(ISNULL(div.div_unitname, ''))                         AS DivUnitName,
-        RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,
-        RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,
-        RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,
-        RTRIM(ISNULL(div.pincode, ''))                              AS DivPinCode,
-        RTRIM(ISNULL(div.PHONE1, ''))                               AS DivPhone,
-        RTRIM(ISNULL(div.email, ''))                                AS DivEmail,
-        RTRIM(ISNULL(div.gstinno, ''))                              AS DivGstin,
-        RTRIM(ISNULL(div.PAN, ''))                                  AS DivPan,
-        RTRIM(ISNULL(div.WEBADDR, ''))                              AS DivWeb,
-        -- PO header
-        RTRIM(h.DIVCODE)                                            AS DivCode,
-        h.PORDNO                                                    AS PoNo,
-        CONVERT(varchar(10), CAST(h.PORDDT AS DATE), 120)          AS PoDate,
-        RTRIM(ISNULL(h.SLCODE, ''))                                 AS SlCode,
-        RTRIM(ISNULL(sl.slname, ''))                                AS SlName,
-        RTRIM(ISNULL(sl.add1, '')) +
-            CASE WHEN RTRIM(ISNULL(sl.add2,  '')) <> '' THEN ', ' + RTRIM(sl.add2)  ELSE '' END +
-            CASE WHEN RTRIM(ISNULL(sl.state, '')) <> '' THEN ', ' + RTRIM(sl.state) ELSE '' END
-                                                                     AS SlAddress,
-        RTRIM(ISNULL(sl.gstinno, ''))                               AS SlGstin,
-        RTRIM(ISNULL(sl.phone1, ''))                                AS SlPhone,
-        RTRIM(ISNULL(sl.email, ''))                                 AS SlEmail,
-        RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
-        RTRIM(ISNULL(car.CARNAME, h.CARCODE))                       AS Carrier,
-        RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
-        ISNULL(h.FCurRate, 1)                                       AS CurrRate,
-        ISNULL(h.CRDDAYS, 0)                                        AS CreditDays,
-        CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
-        RTRIM(ISNULL(h.REMARKS, ''))                                AS Remarks,
-        -- PO_ORDH has no GST % columns — amounts only
-        CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
-        CAST(0 AS DECIMAL(10,2))                                    AS TcsPer,
-        ISNULL(h.DISPER, 0)                                         AS DiscPer,
-        ISNULL(h.FREIGHT, 0)                                        AS FreightAmt,
-        ISNULL(h.roff, 0)                                           AS RoundOff,
-        ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
-        RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
-        RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
-        RTRIM(ISNULL(h.createdby, ''))                              AS CreatedBy,
-        ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
-        -- Additional fields for V2 print
-        RTRIM(ISNULL(h.refno, ''))                                  AS RefNo,
-        CASE WHEN h.refDate IS NULL THEN ''
-             ELSE CONVERT(varchar(10), h.refDate, 103) END          AS RefDate,
-        CASE WHEN h.Duedate IS NULL THEN ''
-             ELSE CONVERT(varchar(10), h.Duedate, 103) END          AS DeliveryDate,
-        RTRIM(ISNULL(h.Note, ''))                                   AS Purpose,
-        RTRIM(ISNULL(h.paytermcode, ''))                            AS PayTerms,
-        ISNULL(h.Ins_Amt, 0)                                        AS InsAmt,
-        ISNULL(h.Pack_Amt, 0)                                       AS PackAmt,
-        LEFT(ISNULL(div.gstinno, ''), 2)                            AS DivStateCode,
-        LEFT(ISNULL(sl.gstinno, ''), 2)                             AS SlStateCode
-    FROM dbo.PO_ORDH h
-    LEFT JOIN dbo.pp_divmas div
-        ON RTRIM(div.divcode) = RTRIM(h.DIVCODE)
-    LEFT JOIN dbo.FA_SLMAS sl
-        ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
-    LEFT JOIN dbo.PO_CAR car
-        ON RTRIM(car.CARCODE) = RTRIM(h.CARCODE)
-    WHERE h.DIVCODE = @DivCode
-      AND h.PORDNO  = @PoNo
-      AND CAST(h.PORDDT AS DATE) = @PoDate;
-
-    -- ─── Result set 2: Print lines ────────────────────────────────────────────
-    SELECT
-        l.PORDSNO                                                   AS [LineNo],
-        RTRIM(l.ITEMCODE)                                           AS ItemCode,
-        RTRIM(ISNULL(i.itemname, ''))                               AS ItemName,
-        RTRIM(ISNULL(i.uom, ''))                                    AS Uom,
-        RTRIM(ISNULL(l.hsncode, ''))                                AS HsnCode,
-        l.PRNO                                                      AS PrNo,
-        l.PRSNO                                                     AS PrSno,
-        ISNULL(l.ORDqty, 0)                                         AS Qty,
-        ISNULL(l.Rate, 0)                                           AS Rate,
-        ISNULL(l.ORDVAL, 0)                                         AS Value,
-        RTRIM(ISNULL(l.Tax_code, ''))                               AS TaxCode,
-        ISNULL(l.taxper, 0)                                         AS TaxPer,
-        ISNULL(l.cgstamt,0) + ISNULL(l.sgstamt,0) + ISNULL(l.igstamt,0) AS TaxAmt,
-        ISNULL(l.cgstper, 0)                                        AS CgstPer,
-        ISNULL(l.cgstamt, 0)                                        AS CgstAmt,
-        ISNULL(l.sgstper, 0)                                        AS SgstPer,
-        ISNULL(l.sgstamt, 0)                                        AS SgstAmt,
-        ISNULL(l.igstper, 0)                                        AS IgstPer,
-        ISNULL(l.igstamt, 0)                                        AS IgstAmt,
-        ISNULL(l.Tcs_per, 0)                                        AS TcsPer,
-        ISNULL(l.Tcs_amt, 0)                                        AS TcsAmt,
-        ISNULL(l.disper, 0)                                         AS LineDis,
-        ISNULL(l.disamt, 0)                                         AS LineDisAmt
-    FROM dbo.PO_ORDL l
-    INNER JOIN dbo.IN_ITEM i
-        ON i.itemcode = l.ITEMCODE
-    WHERE l.DIVCODE = @DivCode
-      AND l.PORDNO  = @PoNo
-      AND CAST(l.PORDDT AS DATE) = @PoDate
-    ORDER BY l.PORDSNO;
-END;
-GO
-
-
-
 
 -- PO number allocation: FY-scoped MAX+1 with UPDLOCK+HOLDLOCK (see ksp_PO_SaveEntry §6).
 -- No SEQUENCE object required — numbers restart from STDOCNO each financial year.
@@ -1733,14 +1604,16 @@ BEGIN
             NULLIF(l.RequesterName, ''),
             l.DiscPer,
             ROUND((l.Rate * l.Qty) * l.DiscPer      / 100.0, 2),
-            l.PackingPer,
-            ROUND((l.Rate * l.Qty) * l.PackingPer   / 100.0, 2),
-            l.FreightPer,
-            ROUND((l.Rate * l.Qty) * l.FreightPer   / 100.0, 2),
-            l.InsurancePer,
-            ROUND((l.Rate * l.Qty) * l.InsurancePer / 100.0, 2),
-            l.CessPer,
-            ROUND((l.Rate * l.Qty) * l.CessPer      / 100.0, 2),
+            -- POT-TD-07/08/09/10: fall back to header % when per-line value is 0
+            -- (header charges set in TaxDiscountTab; per-line values arrive as 0)
+            COALESCE(NULLIF(l.PackingPer,   0), @PackPer),
+            ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.PackingPer,   0), @PackPer)   / 100.0, 2),
+            COALESCE(NULLIF(l.FreightPer,   0), @FreightPer),
+            ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.FreightPer,   0), @FreightPer)   / 100.0, 2),
+            COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer),
+            ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer) / 100.0, 2),
+            COALESCE(NULLIF(l.CessPer,      0), @CessPer),
+            ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.CessPer,      0), @CessPer)      / 100.0, 2),
             NULLIF(l.AddTaxCode, ''),
             l.AddTaxPer,
             ROUND((l.Rate * l.Qty) * l.AddTaxPer    / 100.0, 2),
