@@ -34,8 +34,8 @@ export function ApprovalTab({ currentPo }: ApprovalTabProps) {
         <Col span={4}>
           <div style={lbl}>L1 Approval</div>
           <Tag style={currentPo?.firstLevelApp === 'Y'
-            ? { background: '#D1FAE5', color: '#065F46', border: 'none', fontWeight: 700 }
-            : { background: '#FEF3C7', color: '#92400E', border: 'none', fontWeight: 700 }
+            ? { background: '#D1FAE5', color: '#065F46', border: 'none', fontWeight: 500 }
+            : { background: '#FEF3C7', color: '#92400E', border: 'none', fontWeight: 500 }
           }>
             {/* IST: "Approved" → "First Level Approved" */}
             {currentPo?.firstLevelApp === 'Y' ? 'First Level Approved' : 'Pending'}
@@ -44,7 +44,7 @@ export function ApprovalTab({ currentPo }: ApprovalTabProps) {
         <Col span={4}>
           <div style={lbl}>Final Approval</div>
           {/* IST: CONFIRMED/APPROVED → "Final Level Approved"; other states unchanged */}
-          <Tag style={{ background: badge.bg, color: badge.color, border: 'none', fontWeight: 700 }}>
+          <Tag style={{ background: badge.bg, color: badge.color, border: 'none', fontWeight: 500 }}>
             {finalApprovalLabel(status)}
           </Tag>
         </Col>

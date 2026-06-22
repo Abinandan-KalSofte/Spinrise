@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import { Button, Input, InputNumber, Tooltip } from "antd";
-import { DeleteOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import { DeleteOutlined } from "@ant-design/icons";
 import { erpTh, ERP_TD as TD } from "@/shared/styles/erpTable";
 import type { PoLine, ScreenMode } from "../../types";
 import {

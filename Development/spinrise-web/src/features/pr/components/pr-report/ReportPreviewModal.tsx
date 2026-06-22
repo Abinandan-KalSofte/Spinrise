@@ -13,13 +13,10 @@ import {
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { triggerDownload } from '../../api/prReportApi'
 
-// Configure PDF.js worker once at module scope
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString()
+pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
