@@ -361,8 +361,8 @@ export default function PrToPoTransferPage() {
             {f.draftLines.length > 0 && (
               <span style={{
                 background: 'rgba(255,255,255,0.25)', color: '#fff',
-                fontSize: 10, fontWeight: 700, padding: '1px 6px',
-                borderRadius: 10, marginLeft: 4,
+                fontSize: 10, fontWeight: 500, padding: '2px 6px',
+                borderRadius: 15, marginLeft: 4,
               }}>
                 {f.draftLines.length}
               </span>

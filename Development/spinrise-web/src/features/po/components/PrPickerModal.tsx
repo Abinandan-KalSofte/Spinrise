@@ -88,7 +88,7 @@ export function PrPickerModal({ open, divCode, alreadyAdded, onLoad, onCancel }:
 
   return (
     <Modal
-      open={open} onCancel={onCancel} footer={null} width="min(95vw, 920px)" destroyOnClose
+      open={open} onCancel={onCancel} footer={null} width="min(95vw, 1020px)" destroyOnClose
       styles={{ body: { padding: 0 } }}
       title={<span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Browse Approved PR Lines</span>}
     >
@@ -118,8 +118,8 @@ export function PrPickerModal({ open, divCode, alreadyAdded, onLoad, onCancel }:
                 <Checkbox checked={allChecked} indeterminate={selCount > 0 && !allChecked}
                   onChange={() => toggleAll(!allChecked)} />
               </th>
-              <th style={{ ...TH, width: 110 }}>PR No.</th>
-              <th style={{ ...TH, width: 90 }}>PR Date</th>
+              <th style={{ ...TH, width: 50 }}>PR No.</th>
+              <th style={{ ...TH, width: 100 }}>PR Date</th>
               <th style={{ ...TH, width: 80 }}>Item Code</th>
               <th style={{ ...TH, minWidth: 180 }}>Item Name</th>
               <th style={{ ...TH, width: 50, textAlign: 'center' }}>UOM</th>

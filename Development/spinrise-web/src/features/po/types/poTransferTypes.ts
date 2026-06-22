@@ -145,7 +145,7 @@ export interface PoLine {
   packingPer:    number       // Packing & Forwarding %
   freightPer:    number       // Freight %
   insurancePer:  number       // Insurance %
-  cessPer:       number       // Cess %
+  otherCharges:      number       // Other Amount % — back-calculated from user-entered Other Amount in GST modal
   fcaFob:        number       // FCA / FOB charges (pass-through; not in net)
   // ── Additional Tax (GST-family; code reuses the GST tax-code master) ────────
   addTaxCode:    string       // Additional Tax code
@@ -154,7 +154,7 @@ export interface PoLine {
   // ── Applicability (per-line; seeded from header, editable in GST modal) ─────
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
-  cessTaxPos:       'BEFORE' | 'AFTER'
+  // cessTaxPos removed — Other Amount is always AFTER; it never affects the GST assessable base
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
@@ -228,8 +228,6 @@ export interface PoHeader {
   remarks:      string
 
   // Tax / Discount (header-level) — GST-based taxation only.
-  // Pre-GST AED / Surcharge / Cess columns (D-11) are NOT FOR SPINRISE and are
-  // intentionally absent; never re-add them.
   cgstPer:      number
   sgstPer:      number
   igstPer:      number
@@ -250,11 +248,9 @@ export interface PoHeader {
   packingAmt:           number
   insuranceAmt:         number
   addTaxAmt:            number
-  cessPer:              number
-  cessAmt:              number
   freightPosition:      'BEFORE' | 'AFTER'
   insurancePosition:    'BEFORE' | 'AFTER'
-  cessPosition:         'BEFORE' | 'AFTER'
+  // cessPer / cessAmt / cessPosition removed — cess is retired; SP receives 0/"AFTER" via backend hardcode
 
   // Payment
   payMode:          'DIRECT' | 'BANK'   // BR-15 when BANK
@@ -358,14 +354,14 @@ export interface SavePoLineRequest {
   packingPer:       number
   freightPer:       number
   insurancePer:     number
-  cessPer:          number
+  otherCharges:         number    // Other Amount % (back-calculated from GST modal; SP receives as cessPer)
   fcaFob:           number
   addTaxCode:       string
   addTaxPer:        number
   // Applicability flags
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
-  cessTaxPos:       'BEFORE' | 'AFTER'
+  // cessTaxPos removed — always 'AFTER'; SP receives hardcoded value
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'

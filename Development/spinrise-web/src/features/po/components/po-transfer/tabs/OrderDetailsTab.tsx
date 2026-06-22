@@ -193,8 +193,16 @@ export function OrderDetailsTab({
         </Col>
         <Col span={4}>
           <div style={lbl}>Round Off</div>
-          <Form.Item name="roundOff" style={fi}>
+          <Form.Item name="roundOff" style={fi}
+            validateTrigger={['onChange', 'onBlur']}
+            rules={[{
+              validator: (_, val) =>
+                val !== null && val !== undefined && val < 0
+                  ? Promise.reject('Round Off cannot be negative.')
+                  : Promise.resolve(),
+            }]}>
             <InputNumber
+              {...NON_NEGATIVE_INPUT_PROPS}
               precision={2} controls={false} disabled={disabled}
               style={{ ...full, fontFamily: 'monospace', textAlign: 'right' }}
             />

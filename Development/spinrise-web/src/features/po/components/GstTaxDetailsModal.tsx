@@ -7,13 +7,18 @@ import { NON_NEGATIVE_INPUT_PROPS, clampNonNegativeNumber } from '../utils/poTra
 
 // ── GST & Tax Details modal ──────────────────────────────────────────────────
 //
-// Layout (no business logic changes):
-//   A. Tax Config       — 3-col grid: HSN / Route / Code · TCS% / FCA-FOB  (AddTaxCode removed CR-011a)
-//   B. Charges + Applic — 2-col side-by-side: charge grid LEFT, applicability RIGHT
-//   D. Tax Breakdown    — compact right panel with collapsible detail
+// Layout:
+//   A. Tax Config       — 3-col grid: HSN / Route / Code · TCS% / FCA-FOB
+//   B. Charges + Applic — 2-col: charge grid LEFT (Discount/Packing/Insurance/Freight + Other amt-only),
+//                         applicability RIGHT (Cess Position removed)
+//   C. Tax Breakdown    — compact right panel
 //
+// Other Amount (otherAmt):
+//   - New lines start at 0
+//   - Saved lines load computed value from their stored otherCharges
+//   - No % field shown — amount entry only
+//   - Always AFTER, never affects GST base; back-calculated to otherCharges on apply
 // Applicability sync (§5 / §7): seeded from GstHeaderDefaults on every open.
-// taxSaved=true lines retain their own values (line-level override preserved).
 
 const fmt2 = (n: number) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -48,11 +53,10 @@ interface DraftTax {
   packingPer:       number
   freightPer:       number
   insurancePer:     number
-  cessPer:          number
+  // cessPer removed — Other Amount is amount-entry only; cessTaxPos fixed 'AFTER'
   fcaFob:           number
   freightPos:       'BEFORE' | 'AFTER'
   insuranceDuty:    'BEFORE' | 'AFTER'
-  cessTaxPos:       'BEFORE' | 'AFTER'
   freightType:      'PAID' | 'TOPAY'
   discApp:          'BEFORE' | 'AFTER'
   packApp:          'BEFORE' | 'AFTER'
@@ -64,7 +68,8 @@ interface DraftTax {
   packingAmt:       number
   freightAmt:       number
   insuranceAmt:     number
-  cessAmt:          number
+  // Other Amount — user-entered amount; 0 for new lines, computed from stored otherCharges for saved lines
+  otherAmt:         number
 }
 
 // ── Seed ─────────────────────────────────────────────────────────────────────
@@ -74,7 +79,6 @@ const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
   const packingPer   = useHeader ? hd.packingPer   : (line?.packingPer   ?? 0)
   const freightPer   = useHeader ? hd.freightPer   : (line?.freightPer   ?? 0)
   const insurancePer = useHeader ? hd.insurancePer : (line?.insurancePer ?? 0)
-  const cessPer      = useHeader ? hd.cessPer      : (line?.cessPer      ?? 0)
   const seedTaxable  = round2((line?.rate ?? 0) * (line?.qty ?? 0))
   const seedDiscAmt  = pctOf(seedTaxable, discPer)
   return {
@@ -91,24 +95,23 @@ const seed = (line: PoLine | null, hd: GstHeaderDefaults): DraftTax => {
     packingPer,
     freightPer,
     insurancePer,
-    cessPer,
     fcaFob:           useHeader ? hd.fcaFob       : (line?.fcaFob       ?? 0),
     // Applicability: saved lines use their stored value; unsaved lines use Header.
-    freightPos:       line?.taxSaved ? (line.freightPos       ?? hd.freightPos)       : hd.freightPos,
-    insuranceDuty:    line?.taxSaved ? (line.insuranceDuty    ?? hd.insuranceDuty)    : hd.insuranceDuty,
-    cessTaxPos:       line?.taxSaved ? (line.cessTaxPos       ?? hd.cessTaxPos)       : hd.cessTaxPos,
-    freightType:      line?.taxSaved ? (line.freightType      ?? hd.freightType)      : hd.freightType,
-    discApp:          line?.taxSaved ? (line.discApp          ?? hd.discApp)          : hd.discApp,
-    packApp:          line?.taxSaved ? (line.packApp          ?? hd.packApp)          : hd.packApp,
+    freightPos:       line?.taxSaved ? (line.freightPos       ?? hd.freightPos)    : hd.freightPos,
+    insuranceDuty:    line?.taxSaved ? (line.insuranceDuty    ?? hd.insuranceDuty) : hd.insuranceDuty,
+    freightType:      line?.taxSaved ? (line.freightType      ?? hd.freightType)   : hd.freightType,
+    discApp:          line?.taxSaved ? (line.discApp          ?? hd.discApp)       : hd.discApp,
+    packApp:          line?.taxSaved ? (line.packApp          ?? hd.packApp)       : hd.packApp,
     // CR-013: editable rate/qty
     localRate:        line?.rate ?? 0,
     localQty:         line?.qty  ?? 0,
     // CR-011: stored charge amounts seeded from computed values
     discAmt:          seedDiscAmt,
     packingAmt:       pctOf(seedTaxable - seedDiscAmt, packingPer),
-    freightAmt:       pctOf(seedTaxable, freightPer),
-    insuranceAmt:     pctOf(seedTaxable, insurancePer),
-    cessAmt:          pctOf(seedTaxable, cessPer),
+    freightAmt:       pctOf(seedTaxable - seedDiscAmt, freightPer),   // POT-TC-01
+    insuranceAmt:     pctOf(seedTaxable - seedDiscAmt, insurancePer), // POT-TC-01
+    // Other Amount: 0 for new lines; for saved lines, compute from stored otherCharges.
+    otherAmt:         line?.taxSaved ? pctOf(seedTaxable, line?.otherCharges ?? 0) : 0,
   }
 }
 
@@ -139,26 +142,21 @@ export function GstTaxDetailsModal({
   // CR-013: taxable uses editable localRate/localQty from DraftTax
   const taxable = round2((tax.localRate || 0) * (tax.localQty || 0))
 
-  // CR-012 / CR-010 / POT-TD-10: standard Indian GST assessable base formula.
+  // CR-012 / CR-010: standard Indian GST assessable base formula.
   // Charge amounts are stored in DraftTax (CR-011) — no snap-back on direct entry.
-  // All position-flag changes re-derive gstBase in the same render, so the Tax
-  // Breakdown panel updates instantly — no save-and-reopen required (CR-010).
+  // cessTaxPos removed from UI — Other Amount is always AFTER so it never affects gstBase.
   let gstBase = taxable
   if (tax.discApp       === 'BEFORE') gstBase = round2(gstBase - tax.discAmt)
   if (tax.freightPos    === 'BEFORE') gstBase = round2(gstBase + tax.freightAmt)
   if (tax.packApp       === 'BEFORE') gstBase = round2(gstBase + tax.packingAmt)
   if (tax.insuranceDuty === 'BEFORE') gstBase = round2(gstBase + tax.insuranceAmt)
-  // POT-TD-10: Cess Before/After duty toggle — when BEFORE, cess is part of the
-  // assessable base so GST is computed on (taxable + cess); when AFTER, cess is
-  // added to the total after GST (unchanged net amount, different GST base).
-  if (tax.cessTaxPos    === 'BEFORE') gstBase = round2(gstBase + tax.cessAmt)
 
   const cgstAmt   = isLocal ? pctOf(gstBase, tax.cgstPer) : 0
   const sgstAmt   = isLocal ? pctOf(gstBase, tax.sgstPer) : 0
   const igstAmt   = isLocal ? 0 : pctOf(gstBase, tax.igstPer)
   const tcsAmt    = pctOf(taxable, tax.tcsPer)
   const gstTotal  = round2(cgstAmt + sgstAmt + igstAmt)
-  const totalTax  = round2(gstTotal + tax.cessAmt + tcsAmt)
+  const totalTax  = round2(gstTotal + tax.otherAmt + tcsAmt)
   const netAmount = round2(
     taxable - tax.discAmt + tax.packingAmt + tax.freightAmt + tax.insuranceAmt + totalTax,
   )
@@ -181,34 +179,95 @@ export function GstTaxDetailsModal({
     }))
   }
 
-  // CR-011: % change → update per + re-derive stored amount (no snap-back)
+  // CR-011: % change → update per + re-derive stored amount (no snap-back).
+  // POT-TC-01 cascade: discount change shifts netAfterDisc → packing, freight, insurance recompute from stored %.
   const setDiscPer  = (v: number | null) => {
-    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, discPer: per, discAmt: pctOf(taxable, per) }))
+    const per = clampNonNegativeNumber(v)
+    setTax((p) => {
+      const discAmt = pctOf(taxable, per)
+      const net     = round2(taxable - discAmt)
+      return {
+        ...p,
+        discPer: per,
+        discAmt,
+        packingAmt:   pctOf(net, p.packingPer),
+        freightAmt:   pctOf(net, p.freightPer),
+        insuranceAmt: pctOf(net, p.insurancePer),
+      }
+    })
   }
   const setPackPer  = (v: number | null) => {
     const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, packingPer: per, packingAmt: pctOf(taxable - p.discAmt, per) }))
   }
   const setFrePer   = (v: number | null) => {
-    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, freightPer: per, freightAmt: pctOf(taxable, per) }))
+    const per = clampNonNegativeNumber(v)
+    setTax((p) => ({ ...p, freightPer: per, freightAmt: pctOf(round2(taxable - p.discAmt), per) }))  // POT-TC-01
   }
   const setInsurPer = (v: number | null) => {
-    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, insurancePer: per, insuranceAmt: pctOf(taxable, per) }))
-  }
-  const setCessPer  = (v: number | null) => {
-    const per = clampNonNegativeNumber(v); setTax((p) => ({ ...p, cessPer: per, cessAmt: pctOf(taxable, per) }))
+    const per = clampNonNegativeNumber(v)
+    setTax((p) => ({ ...p, insurancePer: per, insuranceAmt: pctOf(round2(taxable - p.discAmt), per) })) // POT-TC-01
   }
 
-  // Amount change → store directly + back-compute per only (amount stays as typed)
-  const onDiscAmt  = (v: number | null) =>
-    setTax((p) => ({ ...p, discAmt: clampNonNegativeNumber(v), discPer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
+  // Amount change → store directly + back-compute per; cascade net-base charges (POT-TC-01).
+  const onDiscAmt  = (v: number | null) => {
+    setTax((p) => {
+      const discAmt = clampNonNegativeNumber(v)
+      const net     = round2(taxable - discAmt)
+      return {
+        ...p,
+        discAmt,
+        discPer:      backCalcPer(discAmt, taxable),
+        packingAmt:   pctOf(net, p.packingPer),
+        freightAmt:   pctOf(net, p.freightPer),
+        insuranceAmt: pctOf(net, p.insurancePer),
+      }
+    })
+  }
   const onPackAmt  = (v: number | null) =>
     setTax((p) => ({ ...p, packingAmt: clampNonNegativeNumber(v), packingPer: backCalcPer(clampNonNegativeNumber(v), taxable - p.discAmt) }))
+  // POT-TC-01: back-calc % against net-after-discount so the stored % round-trips correctly
   const onFreAmt   = (v: number | null) =>
-    setTax((p) => ({ ...p, freightAmt: clampNonNegativeNumber(v), freightPer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
+    setTax((p) => ({ ...p, freightAmt: clampNonNegativeNumber(v), freightPer: backCalcPer(clampNonNegativeNumber(v), round2(taxable - p.discAmt)) }))
   const onInsurAmt = (v: number | null) =>
-    setTax((p) => ({ ...p, insuranceAmt: clampNonNegativeNumber(v), insurancePer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
-  const onCessAmt  = (v: number | null) =>
-    setTax((p) => ({ ...p, cessAmt: clampNonNegativeNumber(v), cessPer: backCalcPer(clampNonNegativeNumber(v), taxable) }))
+    setTax((p) => ({ ...p, insuranceAmt: clampNonNegativeNumber(v), insurancePer: backCalcPer(clampNonNegativeNumber(v), round2(taxable - p.discAmt)) }))
+  // Other Amount — direct entry only, no % field
+  const onOtherAmt = (v: number | null) =>
+    setTax((p) => ({ ...p, otherAmt: clampNonNegativeNumber(v) }))
+
+  // CR-013 + POT-TC-01: rate/qty change shifts taxable → cascade ALL percentage-based amounts.
+  // discAmt recomputes from discPer (not the other way around) so the % is always the source of truth.
+  const onLocalQty = (v: number | null) => {
+    const newQty = clampNonNegativeNumber(v)
+    setTax((p) => {
+      const newTaxable = round2((p.localRate || 0) * newQty)
+      const discAmt    = pctOf(newTaxable, p.discPer)
+      const net        = round2(newTaxable - discAmt)
+      return {
+        ...p,
+        localQty:     newQty,
+        discAmt,
+        packingAmt:   pctOf(net, p.packingPer),
+        freightAmt:   pctOf(net, p.freightPer),
+        insuranceAmt: pctOf(net, p.insurancePer),
+      }
+    })
+  }
+  const onLocalRate = (v: number | null) => {
+    const newRate = clampNonNegativeNumber(v)
+    setTax((p) => {
+      const newTaxable = round2(newRate * (p.localQty || 0))
+      const discAmt    = pctOf(newTaxable, p.discPer)
+      const net        = round2(newTaxable - discAmt)
+      return {
+        ...p,
+        localRate:    newRate,
+        discAmt,
+        packingAmt:   pctOf(net, p.packingPer),
+        freightAmt:   pctOf(net, p.freightPer),
+        insuranceAmt: pctOf(net, p.insurancePer),
+      }
+    })
+  }
 
   // ── Apply ─────────────────────────────────────────────────────────────────
   const handleApply = () => {
@@ -217,7 +276,7 @@ export function GstTaxDetailsModal({
       notificationService.warning('Delete Reason Required', 'A delete reason is mandatory.')
       return
     }
-    // CR-036: qty must be > 0 — same rule enforced in the PO Grid (status='error' on qty ≤ 0)
+    // CR-036: qty must be > 0
     if (!isDelete && tax.localQty <= 0) {
       notificationService.warning('Invalid Quantity', 'Quantity must be greater than zero.')
       return
@@ -240,13 +299,14 @@ export function GstTaxDetailsModal({
       packingPer:       tax.packingPer,
       freightPer:       tax.freightPer,
       insurancePer:     tax.insurancePer,
-      cessPer:          tax.cessPer,
+      // Back-calculate otherCharges from user-entered Other Amount for SP compatibility
+      // (SP receives otherCharges as the cessPer column; always AFTER so it never shifts GST base).
+      otherCharges:         backCalcPer(tax.otherAmt, taxable),
       fcaFob:           tax.fcaFob,
-      addTaxCode:       '',    // CR-011a: removed from modal; header-level addTaxPer still propagates via hook
+      addTaxCode:       '',    // CR-011a: removed from modal
       addTaxPer:        0,     // CR-011a: removed from modal
       freightPos:       tax.freightPos,
       insuranceDuty:    tax.insuranceDuty,
-      cessTaxPos:       tax.cessTaxPos,
       freightType:      tax.freightType,
       discApp:          tax.discApp,
       packApp:          tax.packApp,
@@ -292,7 +352,7 @@ export function GstTaxDetailsModal({
                 size="small" precision={3} controls={false} disabled={isDelete || isView}
                 value={tax.localQty}
                 style={{ width: 90, fontFamily: 'monospace', textAlign: 'right' }}
-                onChange={(v) => set('localQty', clampNonNegativeNumber(v))}
+                onChange={onLocalQty}
               />
               <label style={{ fontSize: 11, color: '#888', marginLeft: 4 }}>Rate</label>
               <InputNumber
@@ -300,7 +360,7 @@ export function GstTaxDetailsModal({
                 size="small" precision={4} controls={false} disabled={isDelete || isView}
                 value={tax.localRate}
                 style={{ width: 110, fontFamily: 'monospace', textAlign: 'right' }}
-                onChange={(v) => set('localRate', clampNonNegativeNumber(v))}
+                onChange={onLocalRate}
               />
             </span>
           </div>
@@ -378,19 +438,26 @@ export function GstTaxDetailsModal({
               <span style={{ ...colHdr, textAlign: 'right' }}>%</span>
               <span style={{ ...colHdr, textAlign: 'right' }}>Amount</span>
               {/* Rows — ChargeRow renders 3 naked cells each */}
-              <ChargeRow label="Discount"      per={tax.discPer}      amt={tax.discAmt}      disabled={isDelete || isView}
+              <ChargeRow label="Discount"  per={tax.discPer}      amt={tax.discAmt}      disabled={isDelete || isView}
                 onPer={setDiscPer}  onAmt={onDiscAmt}  />
-              <ChargeRow label="Packing"        per={tax.packingPer}   amt={tax.packingAmt}   disabled={isDelete || isView}
-                onPer={setPackPer}  onAmt={onPackAmt}  />              
-              <ChargeRow label="Insurance"      per={tax.insurancePer} amt={tax.insuranceAmt} disabled={isDelete || isView}
+              <ChargeRow label="Packing"   per={tax.packingPer}   amt={tax.packingAmt}   disabled={isDelete || isView}
+                onPer={setPackPer}  onAmt={onPackAmt}  />
+              <ChargeRow label="Insurance" per={tax.insurancePer} amt={tax.insuranceAmt} disabled={isDelete || isView}
                 onPer={setInsurPer} onAmt={onInsurAmt} />
-              <ChargeRow label="Other"           per={tax.cessPer}      amt={tax.cessAmt}      disabled={isDelete || isView}
-                onPer={setCessPer} onAmt={onCessAmt}  />
-                <ChargeRow label="Freight"        per={tax.freightPer}   amt={tax.freightAmt}   disabled={isDelete || isView}
+              <ChargeRow label="Freight"   per={tax.freightPer}   amt={tax.freightAmt}   disabled={isDelete || isView}
                 onPer={setFrePer}   onAmt={onFreAmt}   />
+              {/* Other — Amount entry only; no % field */}
+              <span style={{ fontSize: 11, color: '#444' }}>Other Charges</span>
+              <span />
+              <InputNumber
+                {...NON_NEGATIVE_INPUT_PROPS}
+                size="small" precision={2} controls={false}
+                style={{ width: '100%', fontFamily: 'monospace', textAlign: 'right' }}
+                value={tax.otherAmt} onChange={onOtherAmt} disabled={isDelete || isView}
+              />
             </div>
 
-            {/* Right: Applicability — compact Radio controls */}
+            {/* Right: Applicability — compact Radio controls (Cess Position removed) */}
             <div style={{
               borderLeft: '1px solid #f0f0f0',
               paddingLeft: 14,
@@ -398,23 +465,20 @@ export function GstTaxDetailsModal({
               flexDirection: 'column',
               gap: 5,
             }}>
-              <AppRadio label="Discount Application" value={tax.discApp}         disabled={isDelete || isView}
-                onChange={(v) => set('discApp',          v as 'BEFORE' | 'AFTER')}
+              <AppRadio label="Discount Application" value={tax.discApp}      disabled={isDelete || isView}
+                onChange={(v) => set('discApp',       v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Packing Application" value={tax.packApp}          disabled={isDelete || isView}
-                onChange={(v) => set('packApp',          v as 'BEFORE' | 'AFTER')}
+              <AppRadio label="Packing Application"  value={tax.packApp}      disabled={isDelete || isView}
+                onChange={(v) => set('packApp',       v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Insurance Position"  value={tax.insuranceDuty}    disabled={isDelete || isView}
-                onChange={(v) => set('insuranceDuty',    v as 'BEFORE' | 'AFTER')}
+              <AppRadio label="Insurance Position"   value={tax.insuranceDuty} disabled={isDelete || isView}
+                onChange={(v) => set('insuranceDuty', v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Duty' }, { value: 'AFTER', label: 'After Duty' }]} />
-              <AppRadio label="Cess Position"       value={tax.cessTaxPos}       disabled={isDelete || isView}
-                onChange={(v) => set('cessTaxPos',       v as 'BEFORE' | 'AFTER')}
+              <AppRadio label="Freight Position"     value={tax.freightPos}   disabled={isDelete || isView}
+                onChange={(v) => set('freightPos',    v as 'BEFORE' | 'AFTER')}
                 options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Freight Position"    value={tax.freightPos}       disabled={isDelete || isView}
-                onChange={(v) => set('freightPos',       v as 'BEFORE' | 'AFTER')}
-                options={[{ value: 'BEFORE', label: 'Before Tax' }, { value: 'AFTER', label: 'After Tax' }]} />
-              <AppRadio label="Freight Payment"     value={tax.freightType}      disabled={isDelete || isView}
-                onChange={(v) => set('freightType',      v as 'PAID' | 'TOPAY')}
+              <AppRadio label="Freight Payment"      value={tax.freightType}  disabled={isDelete || isView}
+                onChange={(v) => set('freightType',   v as 'PAID' | 'TOPAY')}
                 options={[{ value: 'PAID', label: 'Paid' }, { value: 'TOPAY', label: 'To Pay' }]} />
             </div>
 
@@ -451,12 +515,13 @@ export function GstTaxDetailsModal({
             display: 'flex',
             flexDirection: 'column',
           }}>
-            <SR label="Taxable Value"                      value={taxable}          strong />
+            <SR label="Value"      value={taxable}          strong />
             <div style={summaryDiv} />
-            <SR label="Discount"                           value={tax.discAmt}      muted />
-            <SR label="Packing"                            value={tax.packingAmt}   muted />
-            <SR label="Freight"                            value={tax.freightAmt}   muted />
-            <SR label="Insurance"                          value={tax.insuranceAmt} muted />
+            <SR label="Discount"   value={tax.discAmt}      muted />
+            <SR label="Packing"    value={tax.packingAmt}   muted />
+            <SR label="Freight"    value={tax.freightAmt}   muted />
+            <SR label="Insurance"  value={tax.insuranceAmt} muted />
+            <SR label="Other Charges"      value={tax.otherAmt}     muted />
             <div style={summaryDiv} />
             {isLocal ? (
               <>
@@ -466,7 +531,6 @@ export function GstTaxDetailsModal({
             ) : (
               <SR label={`IGST ${fmt2(tax.igstPer)}%`}    value={igstAmt} />
             )}
-            <SR label={`Other ${fmt2(tax.cessPer)}%`}      value={tax.cessAmt} />
             <SR label={`TCS ${fmt2(tax.tcsPer)}%`}         value={tcsAmt} />
             {/* Net Amount — last row of the card, always visible */}
             <div style={{ marginTop: 'auto' }}>

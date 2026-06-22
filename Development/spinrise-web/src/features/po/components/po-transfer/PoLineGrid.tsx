@@ -94,12 +94,13 @@ const Row = memo(function Row({
   const hsnBlank = !line.hsnCode.trim();
 
   // CR-008: charge amount columns computed from existing line fields
-  const taxable = line.value || round2((line.rate || 0) * (line.qty || 0));
-  const discAmt = pctOf(taxable, line.discPer);
-  const packAmt = pctOf(taxable - discAmt, line.packingPer);
-  const freightAmt = pctOf(taxable, line.freightPer);
-  const insurAmt = pctOf(taxable, line.insurancePer);
-  const otherAmt = pctOf(taxable, line.cessPer);
+  const taxable      = line.value || round2((line.rate || 0) * (line.qty || 0));
+  const discAmt      = pctOf(taxable, line.discPer);
+  const netAfterDisc = round2(taxable - discAmt);                          // POT-TC-01 base
+  const packAmt      = pctOf(netAfterDisc, line.packingPer);
+  const freightAmt   = pctOf(netAfterDisc, line.freightPer);               // POT-TC-01
+  const insurAmt     = pctOf(netAfterDisc, line.insurancePer);             // POT-TC-01
+  const otherAmt     = pctOf(taxable, line.otherCharges);
   const gstAmt = round2(
     (line.cgstAmt || 0) + (line.sgstAmt || 0) + (line.igstAmt || 0),
   );
