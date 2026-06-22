@@ -171,6 +171,11 @@ BEGIN
             ISNULL(j.FcaFob,       0)        AS FcaFob,
             RTRIM(ISNULL(j.AddTaxCode, ''))  AS AddTaxCode,
             ISNULL(j.AddTaxPer,    0)        AS AddTaxPer,
+            RTRIM(ISNULL(j.DiscApp,       'BEFORE')) AS DiscApp,
+            RTRIM(ISNULL(j.PackApp,       'BEFORE')) AS PackApp,
+            RTRIM(ISNULL(j.FreightPos,    'BEFORE')) AS FreightPos,
+            RTRIM(ISNULL(j.InsuranceDuty, 'BEFORE')) AS InsuranceDuty,
+            RTRIM(ISNULL(j.CessTaxPos,    'BEFORE')) AS CessTaxPos,
             j.SlotsJson
         INTO #Lines
         FROM OPENJSON(@LinesJson)
@@ -200,6 +205,11 @@ BEGIN
             FcaFob        NUMERIC(13,2)  '$.fcaFob',
             AddTaxCode    VARCHAR(10)    '$.addTaxCode',
             AddTaxPer     NUMERIC(10,2)  '$.addTaxPer',
+            DiscApp       VARCHAR(10)    '$.discApp',
+            PackApp       VARCHAR(10)    '$.packApp',
+            FreightPos    VARCHAR(10)    '$.freightPos',
+            InsuranceDuty VARCHAR(10)    '$.insuranceDuty',
+            CessTaxPos    VARCHAR(10)    '$.cessTaxPos',
             SlotsJson     NVARCHAR(MAX)  '$.slots' AS JSON
         ) j
         WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
@@ -449,7 +459,8 @@ BEGIN
             Ins_per,  Ins_amt,
             cess_per, cess_amt,
             ADDTAX_CODE, ADDTAXPER, ADDTAXAMT,
-            FCACharg
+            FCACharg,
+            DISFLG, PACK_FLG, FRT_FLG, Ins_Flg, Cess_Flg
         )
         SELECT
             @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
@@ -493,7 +504,12 @@ BEGIN
             NULLIF(l.AddTaxCode, ''),
             l.AddTaxPer,
             ROUND((l.Rate * l.Qty) * l.AddTaxPer    / 100.0, 2),
-            l.FcaFob
+            l.FcaFob,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.DiscApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.PackApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.FreightPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.InsuranceDuty, ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.CessTaxPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END
         FROM #Lines l
         INNER JOIN dbo.PO_PRL prl
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo

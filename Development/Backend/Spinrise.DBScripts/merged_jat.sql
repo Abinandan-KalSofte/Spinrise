@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- merged_jat.sql — M01 PO (PR → PO Transfer + PO Approval)
 -- Database: JAT (172.16.16.52\sql2016)
 -- Contains ALL ksp_PO_* stored procedures.
@@ -619,7 +619,7 @@ BEGIN
                NULL AS FreightAmt, NULL AS PackPer, NULL AS InsurPer,
                NULL AS SurchargePer, NULL AS AddTaxPer, NULL AS FileNo,
                NULL AS FcaFob, NULL AS FreightType, NULL AS DiscApp,
-               NULL AS PackApp, NULL AS CessApp, NULL AS PayMode,
+               NULL AS PackApp, NULL AS PayMode,
                NULL AS DirectInstr, NULL AS BankCode, NULL AS PaymentTerms,
                NULL AS AdvPer, NULL AS AdvAmt, NULL AS ModeOfPayment,
                NULL AS PayRef, NULL AS PayRefDate, NULL AS ChequeNo,
@@ -635,7 +635,6 @@ BEGIN
                NULL AS Conflg, NULL AS CreatedBy, NULL AS CreatedDt,
                NULL AS UserId, NULL AS Carrier,
                NULL AS FreightPosition, NULL AS InsurancePosition, NULL AS CessPosition,
-               NULL AS ExciseIncludePacking,
                NULL AS PackingAmt, NULL AS InsuranceAmt,
                NULL AS DiscountAmt, NULL AS CessAmt, NULL AS AddTaxAmt
         WHERE 1 = 0;
@@ -686,12 +685,10 @@ BEGIN
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
         CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
         CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
-        'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
         -- Applicability position flags (FRT_FLG/Ins_Flg/Cess_Flg: 'A'=AFTER, else BEFORE)
         CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
-        CASE WHEN UPPER(RTRIM(ISNULL(h.EXC_FLG, 'N'))) = 'Y' THEN 'Y' ELSE 'N' END           AS ExciseIncludePacking,
         -- Charge amounts: Pack_Amt and Ins_Amt stored in DB; others derived from stored %
         ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
         ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
@@ -813,6 +810,11 @@ BEGIN
         ISNULL(l.ADDTAXPER, 0)                                      AS AddTaxPer,
         ISNULL(l.ADDTAXAMT, 0)                                      AS AddTaxAmt,
         ISNULL(l.FCACharg,  0)                                      AS FcaFob,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.DISFLG,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPos,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsuranceDuty,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessTaxPos,
         -- POT-TC-04 / POT-TC-03: Net line total = taxable + charges - discount + GST + TCS
         -- Fix: cess_amt was missing from the sum, causing NetAmount to under-report by the cess charge.
         ISNULL(l.ORDVAL,0)
@@ -940,12 +942,10 @@ BEGIN
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
         CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
         CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
-        'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
         -- Applicability position flags (FRT_FLG/Ins_Flg/Cess_Flg: 'A'=AFTER, else BEFORE)
         CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
-        CASE WHEN UPPER(RTRIM(ISNULL(h.EXC_FLG, 'N'))) = 'Y' THEN 'Y' ELSE 'N' END           AS ExciseIncludePacking,
         -- Charge amounts: Pack_Amt and Ins_Amt stored in DB; others derived from stored %
         ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
         ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
@@ -1067,6 +1067,11 @@ BEGIN
         ISNULL(l.ADDTAXPER, 0)                                      AS AddTaxPer,
         ISNULL(l.ADDTAXAMT, 0)                                      AS AddTaxAmt,
         ISNULL(l.FCACharg,  0)                                      AS FcaFob,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.DISFLG,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPos,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsuranceDuty,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessTaxPos,
         -- POT-TC-04 / POT-TC-03: Net line total = taxable + charges - discount + GST + TCS
         -- Fix: cess_amt was missing from the sum, causing NetAmount to under-report by the cess charge.
         ISNULL(l.ORDVAL,0)
@@ -1177,7 +1182,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @DirectInstr      VARCHAR(200)   = NULL,
     @BankCode         VARCHAR(10)    = NULL,
     @PaymentTerms     VARCHAR(100)   = NULL,
-    @PayTermCode      VARCHAR(25)    = NULL,   -- CHANGED BY CLAUDE: paytermcode lookup code (Ig_PayTerm.PayTerm_Code)
+    @PayTermCode      VARCHAR(25)    = NULL,   -- paytermcode lookup code (Ig_PayTerm.PayTerm_Code)
     @AdvPer           NUMERIC(10,2)  = 0,
     @AdvAmt           NUMERIC(13,2)  = 0,
     @ModeOfPayment    VARCHAR(20)    = NULL,
@@ -1300,6 +1305,11 @@ BEGIN
             ISNULL(j.FcaFob,       0)        AS FcaFob,
             RTRIM(ISNULL(j.AddTaxCode, ''))  AS AddTaxCode,
             ISNULL(j.AddTaxPer,    0)        AS AddTaxPer,
+            RTRIM(ISNULL(j.DiscApp,       'BEFORE')) AS DiscApp,
+            RTRIM(ISNULL(j.PackApp,       'BEFORE')) AS PackApp,
+            RTRIM(ISNULL(j.FreightPos,    'BEFORE')) AS FreightPos,
+            RTRIM(ISNULL(j.InsuranceDuty, 'BEFORE')) AS InsuranceDuty,
+            RTRIM(ISNULL(j.CessTaxPos,    'BEFORE')) AS CessTaxPos,
             j.SlotsJson
         INTO #Lines
         FROM OPENJSON(@LinesJson)
@@ -1329,6 +1339,11 @@ BEGIN
             FcaFob        NUMERIC(13,2)  '$.fcaFob',
             AddTaxCode    VARCHAR(10)    '$.addTaxCode',
             AddTaxPer     NUMERIC(10,2)  '$.addTaxPer',
+            DiscApp       VARCHAR(10)    '$.discApp',
+            PackApp       VARCHAR(10)    '$.packApp',
+            FreightPos    VARCHAR(10)    '$.freightPos',
+            InsuranceDuty VARCHAR(10)    '$.insuranceDuty',
+            CessTaxPos    VARCHAR(10)    '$.cessTaxPos',
             SlotsJson     NVARCHAR(MAX)  '$.slots' AS JSON
         ) j
         WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
@@ -1446,7 +1461,7 @@ BEGIN
         IF @FreightPer > 0 AND @FreightAmt = 0
             SET @FreightAmt = ROUND(@OrdVal * @FreightPer / 100.0, 2);
 
-        -- CHANGED BY CLAUDE: Ins_Amt and Pack_Amt were never computed; ksp_PO_GetPrint reads
+        -- Ins_Amt and Pack_Amt were never computed; ksp_PO_GetPrint reads
         -- h.Ins_Amt and h.Pack_Amt from PO_ORDH — these must be stored or print always shows 0.
         DECLARE @InsAmt  NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@InsurPer,  0) / 100.0, 2);
         DECLARE @PackAmt NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@PackPer,   0) / 100.0, 2);
@@ -1496,14 +1511,14 @@ BEGIN
             ISNULL(@CessPer,      0),
             ISNULL(@FreightAmt,   0),
             ISNULL(@PackPer,      0),
-            ISNULL(@PackAmt,      0),   -- CHANGED BY CLAUDE: Pack_Amt — header packing amount derived from OrdVal × PackPer
+            ISNULL(@PackAmt,      0),   --  Pack_Amt — header packing amount derived from OrdVal × PackPer
             ISNULL(@InsurPer,     0),
-            ISNULL(@InsAmt,       0),   -- CHANGED BY CLAUDE: Ins_Amt  — header insurance amount derived from OrdVal × InsurPer
+            ISNULL(@InsAmt,       0),   --  Ins_Amt  — header insurance amount derived from OrdVal × InsurPer
             ISNULL(@SurchargePer, 0),
             ISNULL(@AddTaxPer,    0),
             NULLIF(RTRIM(ISNULL(@FileNo,'')),       ''),
             ISNULL(@FcaFob, 0),
-            CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE 'N' END,  -- CHANGED BY CLAUDE: '' → 'N'; legacy flag expects 'Y'/'N', not 'Y'/''
+            CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE 'N' END,  --  '' → 'N'; legacy flag expects 'Y'/'N', not 'Y'/''
             CASE WHEN UPPER(RTRIM(ISNULL(@DiscApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- disflg
             CASE WHEN UPPER(RTRIM(ISNULL(@PackApp,'')))          = 'AFTER' THEN 'A' ELSE 'B' END,  -- PACK_FLG
             CASE WHEN UPPER(RTRIM(ISNULL(@FreightPosition,'')))  = 'AFTER' THEN 'A' ELSE 'B' END,  -- FRT_FLG
@@ -1513,7 +1528,7 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@DirectInstr,'')),   ''),
             NULLIF(RTRIM(ISNULL(@BankCode,'')),      ''),
             NULLIF(RTRIM(ISNULL(@PaymentTerms,'')),  ''),
-            NULLIF(RTRIM(ISNULL(@PayTermCode,'')),   ''),   -- CHANGED BY CLAUDE: paytermcode — Ig_PayTerm lookup code; previously never stored, ksp_PO_GetPrint reads this column
+            NULLIF(RTRIM(ISNULL(@PayTermCode,'')),   ''),   --  paytermcode — Ig_PayTerm lookup code; previously never stored, ksp_PO_GetPrint reads this column
             ISNULL(@AdvPer, 0),
             ISNULL(@AdvAmt, 0),
             NULLIF(RTRIM(ISNULL(@ModeOfPayment,'')), ''),
@@ -1578,7 +1593,8 @@ BEGIN
             Ins_per,  Ins_amt,
             cess_per, cess_amt,
             ADDTAX_CODE, ADDTAXPER, ADDTAXAMT,
-            FCACharg
+            FCACharg,
+            DISFLG, PACK_FLG, FRT_FLG, Ins_Flg, Cess_Flg
         )
         SELECT
             @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
@@ -1622,7 +1638,12 @@ BEGIN
             NULLIF(l.AddTaxCode, ''),
             l.AddTaxPer,
             ROUND((l.Rate * l.Qty) * l.AddTaxPer    / 100.0, 2),
-            l.FcaFob
+            l.FcaFob,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.DiscApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.PackApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.FreightPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.InsuranceDuty, ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(l.CessTaxPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END
         FROM #Lines l
         INNER JOIN dbo.PO_PRL prl
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo

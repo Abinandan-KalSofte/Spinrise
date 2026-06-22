@@ -39,7 +39,7 @@ BEGIN
                NULL AS FreightAmt, NULL AS FreightPer, NULL AS PackPer, NULL AS InsurPer,
                NULL AS SurchargePer, NULL AS AddTaxPer, NULL AS FileNo,
                NULL AS FcaFob, NULL AS FreightType, NULL AS DiscApp,
-               NULL AS PackApp, NULL AS CessApp, NULL AS PayMode,
+               NULL AS PackApp, NULL AS PayMode,
                NULL AS DirectInstr, NULL AS BankCode, NULL AS PaymentTerms,
                NULL AS AdvPer, NULL AS AdvAmt, NULL AS ModeOfPayment,
                NULL AS PayRef, NULL AS PayRefDate, NULL AS ChequeNo,
@@ -55,7 +55,6 @@ BEGIN
                NULL AS Conflg, NULL AS CreatedBy, NULL AS CreatedDt,
                NULL AS UserId, NULL AS Carrier,
                NULL AS FreightPosition, NULL AS InsurancePosition, NULL AS CessPosition,
-               NULL AS ExciseIncludePacking,
                NULL AS PackingAmt, NULL AS InsuranceAmt,
                NULL AS DiscountAmt, NULL AS CessAmt, NULL AS AddTaxAmt
         WHERE 1 = 0;
@@ -106,12 +105,10 @@ BEGIN
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
         CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
         CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
-        'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
         -- Applicability position flags (FRT_FLG/Ins_Flg/Cess_Flg: 'A'=AFTER, else BEFORE)
         CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
-        CASE WHEN UPPER(RTRIM(ISNULL(h.EXC_FLG, 'N'))) = 'Y' THEN 'Y' ELSE 'N' END           AS ExciseIncludePacking,
         -- Charge amounts: Pack_Amt and Ins_Amt stored in DB; others derived from stored %
         ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
         ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
@@ -233,12 +230,18 @@ BEGIN
         ISNULL(l.ADDTAXPER, 0)                                      AS AddTaxPer,
         ISNULL(l.ADDTAXAMT, 0)                                      AS AddTaxAmt,
         ISNULL(l.FCACharg,  0)                                      AS FcaFob,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.DISFLG,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPos,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsuranceDuty,
+        CASE WHEN UPPER(RTRIM(ISNULL(l.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessTaxPos,
         -- POT-TC-04: Landing Cost (net per line = taxable + GST + TCS + charges - discount)
         ISNULL(l.ORDVAL,0)
           - ISNULL(l.disamt,0)
           + ISNULL(l.Packamt,0)
           + ISNULL(l.Frgt1Amt,0)
           + ISNULL(l.Ins_amt,0)
+          + ISNULL(l.cess_amt,0)
           + ISNULL(l.cgstamt,0)
           + ISNULL(l.sgstamt,0)
           + ISNULL(l.igstamt,0)

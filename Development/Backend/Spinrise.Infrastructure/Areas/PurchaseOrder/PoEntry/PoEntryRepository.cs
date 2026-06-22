@@ -212,6 +212,11 @@ public class PoEntryRepository : IPoEntryRepository
                 fcaFob        = l.FcaFob,
                 addTaxCode    = l.AddTaxCode,
                 addTaxPer     = l.AddTaxPer,
+                discApp       = l.DiscApp,
+                packApp       = l.PackApp,
+                freightPos    = l.FreightPos,
+                insuranceDuty = l.InsuranceDuty,
+                cessTaxPos    = l.CessTaxPos,
                 slots         = l.Slots.Select(s => new { shDate = s.ShDate, qty = s.Qty }),
             }),
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });

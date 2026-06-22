@@ -65,6 +65,11 @@ public class PoLineDto
     public decimal AddTaxPer     { get; set; }
     public decimal AddTaxAmt     { get; set; }
     public decimal FcaFob        { get; set; }
+    public string  DiscApp       { get; set; } = "BEFORE";
+    public string  PackApp       { get; set; } = "BEFORE";
+    public string  FreightPos    { get; set; } = "BEFORE";
+    public string  InsuranceDuty { get; set; } = "BEFORE";
+    public string  CessTaxPos    { get; set; } = "BEFORE";
     public decimal NetAmount     { get; set; }
 }
 
@@ -106,14 +111,12 @@ public class PoHeaderDto
     public string  FreightType          { get; set; } = "PAID";
     public string  DiscApp              { get; set; } = "BEFORE";
     public string  PackApp              { get; set; } = "BEFORE";
-    public string  CessApp              { get; set; } = "BEFORE";
     public string  FreightPosition      { get; set; } = "BEFORE";
     public string  InsurancePosition    { get; set; } = "BEFORE";
     public string  CessPosition         { get; set; } = "BEFORE";
     // Charge amounts: PackingAmt/InsuranceAmt stored in DB; others derived from % in SP
     public decimal PackingAmt          { get; set; }
     public decimal InsuranceAmt        { get; set; }
-    public string  ExciseIncludePacking { get; set; } = "N";
     public decimal DiscountAmt         { get; set; }
     public decimal CessAmt             { get; set; }
     public decimal AddTaxAmt           { get; set; }
