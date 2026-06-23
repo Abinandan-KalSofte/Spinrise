@@ -314,16 +314,13 @@ BEGIN
         DECLARE @Conflg        VARCHAR(1) = CASE WHEN @PoConf          = 'N' THEN 'Y' ELSE 'N' END;
 
         -- ── 7. Derived values ────────────────────────────────────────────────────
+        -- @CgstAmt/@SgstAmt/@IgstAmt are computed in step 9b after PO_ORDL INSERT,
+        -- from position-flag-adjusted per-line amounts matching the frontend formula.
         DECLARE @OrdVal  NUMERIC(18,2);
-        DECLARE @CgstAmt NUMERIC(18,2);
-        DECLARE @SgstAmt NUMERIC(18,2);
-        DECLARE @IgstAmt NUMERIC(18,2);
-        SELECT
-            @OrdVal  = SUM(ROUND(Rate * Qty, 2)),
-            @CgstAmt = SUM(ROUND((Rate * Qty) * CgstPer / 100.0, 2)),
-            @SgstAmt = SUM(ROUND((Rate * Qty) * SgstPer / 100.0, 2)),
-            @IgstAmt = SUM(ROUND((Rate * Qty) * IgstPer / 100.0, 2))
-        FROM #Lines;
+        DECLARE @CgstAmt NUMERIC(18,2) = 0;
+        DECLARE @SgstAmt NUMERIC(18,2) = 0;
+        DECLARE @IgstAmt NUMERIC(18,2) = 0;
+        SELECT @OrdVal = SUM(ROUND(Rate * Qty, 2)) FROM #Lines;
 
         -- CR-009: Derive FreightAmt from FreightPer when FreightAmt not supplied.
         IF @FreightPer > 0 AND @FreightAmt = 0
@@ -399,7 +396,7 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@PayTermCode,'')),   ''),   -- CHANGED BY CLAUDE: paytermcode — Ig_PayTerm lookup code; previously never stored, ksp_PO_GetPrint reads this column
             ISNULL(@AdvPer, 0),
             ISNULL(@AdvAmt, 0),
-            NULLIF(RTRIM(ISNULL(@ModeOfPayment,'')), ''),
+            NULLIF(LEFT(RTRIM(ISNULL(@ModeOfPayment,'')), 5), ''),   -- advpaymenttype VARCHAR(5) — confirmed 2026-06-22
             COALESCE(NULLIF(RTRIM(ISNULL(@ChequeNo, '')), ''), NULLIF(RTRIM(ISNULL(@PayRef, '')), '')),   -- CHQNO: bank cheque no. (primary) else payment ref
             COALESCE(@ChequeDate, @PayRefDate),                                                            -- CHQDT: bank cheque date (primary) else payment ref date
             ISNULL(@CreditDays, 0),
@@ -440,9 +437,46 @@ BEGIN
         DECLARE @ActualPoDt DATETIME;
         SELECT @ActualPoDt = PORDDT FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
 
-        -- ── 9. INSERT PO_ORDL (one row per line) ─────────────────────────────────
-        --    taxper = CgstPer + SgstPer + IgstPer (total GST %)
-        --    Amounts computed from Rate × Qty × per% / 100
+        -- ── 9. INSERT PO_ORDL via CTE — per-line derived amounts ─────────────────
+        -- POT-TC-01 / CR-012: Packing base = net-of-discount (matches frontend).
+        -- GST base adjusts per per-line position flags (BEFORE/AFTER).
+        -- OTHCHGS is a direct ₹ amount, not a percentage — stored as-is.
+        ;WITH LineCalc AS (
+            SELECT
+                l.*,
+                prl.prdate                                                                                AS PrlPrDate,
+                ROUND(l.Rate * l.Qty, 2)                                                                 AS GrossVal,
+                ROUND(l.Rate * l.Qty * l.DiscPer / 100.0, 2)                                            AS DiscAmt,
+                -- POT-TD-07/08/09/10: fall back to header % when per-line value is 0
+                COALESCE(NULLIF(l.PackingPer,   0), @PackPer)                                            AS EffPackPer,
+                COALESCE(NULLIF(l.FreightPer,   0), @FreightPer)                                         AS EffFrgtPer,
+                COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer)                                           AS EffInsPer,
+                COALESCE(NULLIF(l.CessPer,      0), @CessPer)                                            AS EffCessPer,
+                -- Packing / Freight / Insurance all use netAfterDisc as base (POT-TC-01)
+                ROUND(((l.Rate * l.Qty) - ROUND(l.Rate * l.Qty * l.DiscPer / 100.0, 2))
+                      * COALESCE(NULLIF(l.PackingPer,   0), @PackPer)   / 100.0, 2)                      AS PackAmt,
+                ROUND(((l.Rate * l.Qty) - ROUND(l.Rate * l.Qty * l.DiscPer / 100.0, 2))
+                      * COALESCE(NULLIF(l.FreightPer,   0), @FreightPer) / 100.0, 2)                     AS FrgtAmt,
+                ROUND(((l.Rate * l.Qty) - ROUND(l.Rate * l.Qty * l.DiscPer / 100.0, 2))
+                      * COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer)   / 100.0, 2)                     AS InsAmt
+            FROM #Lines l
+            INNER JOIN dbo.PO_PRL prl
+                ON prl.divcode = @DivCode AND prl.prno = l.PrNo
+               AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno
+        ),
+        LineCalcGst AS (
+            SELECT
+                c.*,
+                -- GST assessable base: gross ± position-flag adjustments (CR-012 / POT-TD-10)
+                ROUND(
+                    c.GrossVal
+                    - CASE WHEN UPPER(RTRIM(c.DiscApp))       = 'BEFORE' THEN c.DiscAmt ELSE 0 END
+                    + CASE WHEN UPPER(RTRIM(c.FreightPos))    = 'BEFORE' THEN c.FrgtAmt ELSE 0 END
+                    + CASE WHEN UPPER(RTRIM(c.PackApp))       = 'BEFORE' THEN c.PackAmt ELSE 0 END
+                    + CASE WHEN UPPER(RTRIM(c.InsuranceDuty)) = 'BEFORE' THEN c.InsAmt  ELSE 0 END
+                , 2)                                                                                      AS GstBase
+            FROM LineCalc c
+        )
         INSERT INTO dbo.PO_ORDL
         (
             DIVCODE,  PORDNO,  PORDDT, PORDSNO, POGRP,
@@ -466,58 +500,52 @@ BEGIN
             DISFLG, PACK_FLG, FRT_FLG, Ins_Flg, Cess_Flg
         )
         SELECT
-            @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
-            l.ItemCode,
-            l.PrNo,
-            prl.prdate,
-            l.PrSno,
-            l.Rate,
-            l.Qty,
-            ROUND(l.Rate * l.Qty, 2),
-            LEFT(l.TaxCode,  5),  -- PO_ORDL.TAX_CODE is varchar(5)
-            l.CgstPer + l.SgstPer + l.IgstPer,
-            ROUND((l.Rate * l.Qty) * (l.CgstPer + l.SgstPer + l.IgstPer) / 100.0, 2),
-            LEFT(l.HsnCode,  8),  -- PO_ORDL.hsncode is varchar(8)
-            l.CgstPer,
-            ROUND((l.Rate * l.Qty) * l.CgstPer / 100.0, 2),
-            LEFT(l.CgstCode, 5),  -- PO_ORDL.cgst_tax_code is varchar(5)
-            l.SgstPer,
-            ROUND((l.Rate * l.Qty) * l.SgstPer / 100.0, 2),
-            LEFT(l.SgstCode, 5),  -- PO_ORDL.sgst_tax_code is varchar(5)
-            l.IgstPer,
-            ROUND((l.Rate * l.Qty) * l.IgstPer / 100.0, 2),
-            LEFT(l.IgstCode, 5),  -- PO_ORDL.igst_tax_code is varchar(5)
-            l.TcsPer,
-            ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2),
-            NULLIF(l.RequesterId, ''),
-            NULLIF(l.RequesterName, ''),
-            l.DiscPer,
-            ROUND((l.Rate * l.Qty) * l.DiscPer      / 100.0, 2),
-            -- POT-TD-07/08/09/10: fall back to header % when per-line value is 0
-            -- (header charges set in TaxDiscountTab; per-line values arrive as 0)
-            COALESCE(NULLIF(l.PackingPer,   0), @PackPer),
-            ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.PackingPer,   0), @PackPer)   / 100.0, 2),
-            COALESCE(NULLIF(l.FreightPer,   0), @FreightPer),
-            -- POT-TC-01: Freight and Insurance base = item value net of discount (not gross)
-            ROUND(((l.Rate * l.Qty) - ROUND((l.Rate * l.Qty) * l.DiscPer / 100.0, 2)) * COALESCE(NULLIF(l.FreightPer,   0), @FreightPer)   / 100.0, 2),
-            COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer),
-            ROUND(((l.Rate * l.Qty) - ROUND((l.Rate * l.Qty) * l.DiscPer / 100.0, 2)) * COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer) / 100.0, 2),
-            l.OtherCharges,
-            COALESCE(NULLIF(l.CessPer,      0), @CessPer),
-            ROUND((l.Rate * l.Qty) * COALESCE(NULLIF(l.CessPer,      0), @CessPer)      / 100.0, 2),
-            NULLIF(l.AddTaxCode, ''),
-            l.AddTaxPer,
-            ROUND((l.Rate * l.Qty) * l.AddTaxPer    / 100.0, 2),
-            l.FcaFob,
-            CASE WHEN UPPER(RTRIM(ISNULL(l.DiscApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
-            CASE WHEN UPPER(RTRIM(ISNULL(l.PackApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
-            CASE WHEN UPPER(RTRIM(ISNULL(l.FreightPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
-            CASE WHEN UPPER(RTRIM(ISNULL(l.InsuranceDuty, ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
-            CASE WHEN UPPER(RTRIM(ISNULL(l.CessTaxPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END
-        FROM #Lines l
-        INNER JOIN dbo.PO_PRL prl
-            ON prl.divcode = @DivCode AND prl.prno = l.PrNo
-           AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno;
+            @DivCode, @PoNo, @ActualPoDt, c.PORDSNO, @OrderType,
+            c.ItemCode,
+            c.PrNo,
+            c.PrlPrDate,
+            c.PrSno,
+            c.Rate,
+            c.Qty,
+            c.GrossVal,
+            LEFT(c.TaxCode,  5),
+            c.CgstPer + c.SgstPer + c.IgstPer,
+            ROUND(c.GstBase * (c.CgstPer + c.SgstPer + c.IgstPer) / 100.0, 2),
+            LEFT(c.HsnCode,  8),
+            c.CgstPer,
+            ROUND(c.GstBase * c.CgstPer / 100.0, 2),
+            LEFT(c.CgstCode, 5),
+            c.SgstPer,
+            ROUND(c.GstBase * c.SgstPer / 100.0, 2),
+            LEFT(c.SgstCode, 5),
+            c.IgstPer,
+            ROUND(c.GstBase * c.IgstPer / 100.0, 2),
+            LEFT(c.IgstCode, 5),
+            c.TcsPer,
+            ROUND(c.GrossVal * c.TcsPer    / 100.0, 2),
+            NULLIF(c.RequesterId,   ''),   -- reqidpo   VARCHAR(50) — no cap needed
+            NULLIF(c.RequesterName, ''),   -- reqnamepo VARCHAR(100) — no cap needed
+            c.DiscPer,
+            c.DiscAmt,
+            c.EffPackPer,
+            c.PackAmt,
+            c.EffFrgtPer,
+            c.FrgtAmt,
+            c.EffInsPer,
+            c.InsAmt,
+            c.OtherCharges,                              -- direct ₹ amount (not a %)
+            c.EffCessPer,
+            ROUND(c.GrossVal * c.EffCessPer / 100.0, 2),
+            NULLIF(c.AddTaxCode, ''),
+            c.AddTaxPer,
+            ROUND(c.GrossVal * c.AddTaxPer  / 100.0, 2),
+            c.FcaFob,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.DiscApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.PackApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.FreightPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.InsuranceDuty, ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.CessTaxPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END
+        FROM LineCalcGst c;
 
         -- Guard: every line in #Lines must have produced an insert row.
         -- A mismatch means the PO_PRL join found no match (divcode/prdate mismatch).
@@ -525,6 +553,22 @@ BEGIN
         DECLARE @LinesExpected INT = (SELECT COUNT(*) FROM #Lines);
         IF @LinesInserted <> @LinesExpected
             RAISERROR('PO line save incomplete: %d of %d PR lines were matched in PO_PRL. Refresh the PR picker and retry.', 16, 1, @LinesInserted, @LinesExpected);
+
+        -- ── 9b. Back-fill PO_ORDH GST totals from the inserted per-line amounts ──
+        -- Position-flag-adjusted cgstamt/sgstamt/igstamt are now in PO_ORDL.
+        -- Sum them here and update PO_ORDH so CGSTAMT/SGSTAMT/IGSTAMT are correct.
+        SELECT
+            @CgstAmt = SUM(cgstamt),
+            @SgstAmt = SUM(sgstamt),
+            @IgstAmt = SUM(igstamt)
+        FROM dbo.PO_ORDL
+        WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
+
+        UPDATE dbo.PO_ORDH
+        SET CGSTAMT = ISNULL(@CgstAmt, 0),
+            SGSTAMT = ISNULL(@SgstAmt, 0),
+            IGSTAMT = ISNULL(@IgstAmt, 0)
+        WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
 
         -- ── 10. INSERT PO_ORDL_DETL (delivery slots, up to 4 per line) ────────────
         --     OPENJSON(NULL) safely returns 0 rows, so no extra NULL guard needed.

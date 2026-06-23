@@ -4,7 +4,7 @@
 -- Source: PO_ORDL_DETL joined to PO_ORDL + IN_ITEM.
 -- Delivery Schedule field order (CEO-confirmed Option B):
 --   LineNo | ItemCode | ItemName | Uom | PrNo | PoQty |
---   SlotNo | ShDate | Qty | BalanceQty | Remarks
+--   SlotNo | ShDate | Qty | BalanceQty
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetDeliverySchedule
 (
@@ -33,8 +33,7 @@ BEGIN
              WHERE d2.divcode = d.divcode
                AND d2.pordno  = d.pordno
                AND CAST(d2.porddt AS DATE) = CAST(d.porddt AS DATE)
-               AND d2.PORDSNO = d.PORDSNO), 0)                      AS BalanceQty,
-        ''                                                          AS Remarks
+               AND d2.PORDSNO = d.PORDSNO), 0)                      AS BalanceQty
     FROM dbo.PO_ORDL_DETL d
     INNER JOIN dbo.PO_ORDL l
         ON l.DIVCODE = d.divcode AND l.PORDNO = d.pordno

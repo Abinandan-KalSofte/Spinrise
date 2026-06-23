@@ -130,7 +130,7 @@ const recalcLine = (line: PoLine): PoLine => {
   const packingAmt   = pctOf(netAfterDisc, line.packingPer)
   const freightAmt   = pctOf(netAfterDisc, line.freightPer)   // POT-TC-01
   const insuranceAmt = pctOf(netAfterDisc, line.insurancePer) // POT-TC-01
-  const otherChargeAmt = pctOf(taxable, line.otherCharges ?? 0)
+  const otherChargeAmt = round2(line.otherCharges ?? 0)
   const addTaxAmt      = pctOf(taxable, line.addTaxPer)
   const tcsAmt         = pctOf(taxable, line.tcsPer)
 
@@ -164,16 +164,13 @@ const recalcLine = (line: PoLine): PoLine => {
 }
 
 // Hydrates a DB-loaded PO line without running client-side recalc.
-// Position flags live only in PO_ORDH (not PO_ORDL) so they propagate from header.
-// NetAmount and all charge amounts are DB-stored — preserved verbatim.
-const hydrateLineFromDb = (line: PoLine, po: PoHeader): PoLine => ({
+// Per-line flags (discApp/packApp/freightPos/insuranceDuty) are returned directly
+// from PO_ORDL by ksp_PO_GetPOHeader / ksp_PO_GetLastPO — the ...line spread carries
+// them verbatim. DB-stored charge amounts are preserved.
+const hydrateLineFromDb = (line: PoLine, _po: PoHeader): PoLine => ({
   ...line,
-  freightPos:    (po.freightPosition  ?? 'BEFORE') as PoLine['freightPos'],
-  insuranceDuty: (po.insurancePosition ?? 'BEFORE') as PoLine['insuranceDuty'],
-  discApp:       (po.discApp          ?? 'BEFORE') as PoLine['discApp'],
-  packApp:       (po.packApp          ?? 'BEFORE') as PoLine['packApp'],
-  taxableValue:  line.value,
-  taxSaved:      true,
+  taxableValue: line.value,
+  taxSaved:     true,
 })
 
 // ── Header form values (AntD Form; dates as Dayjs) ───────────────────────────
@@ -586,7 +583,7 @@ export function usePoTransferForm() {
     uom:      line.uom,
     prNo:     line.prNo,
     poQty:    line.qty,
-    slots:    [{ slotNo: 1, shDate: getCurrentSystemDateIso(), qty: line.qty, remarks: '' }],
+    slots:    [{ slotNo: 1, shDate: getCurrentSystemDateIso(), qty: line.qty }],
   })
 
   const addPrLines = (selected: EligiblePrLine[]) => {
@@ -950,7 +947,7 @@ export function usePoTransferForm() {
     { key: 'packingPer', label: 'Packing %' },
     { key: 'freightPer', label: 'Freight %' },
     { key: 'insurancePer', label: 'Insurance %' },
-    { key: 'otherCharges', label: 'Other %' },
+    { key: 'otherCharges', label: 'Other Charges (₹)' },
     { key: 'cgstPer', label: 'CGST %' },
     { key: 'cgstAmt', label: 'CGST Amount' },
     { key: 'sgstPer', label: 'SGST %' },

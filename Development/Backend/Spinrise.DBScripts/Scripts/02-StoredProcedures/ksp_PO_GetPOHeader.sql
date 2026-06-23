@@ -239,8 +239,7 @@ BEGIN
         ROW_NUMBER() OVER (PARTITION BY d.PORDSNO ORDER BY d.shdate) AS SlotNo,
         CASE WHEN d.shdate IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(d.shdate AS DATE), 120) END AS ShDate,
-        ISNULL(d.Quantity, 0)                                       AS Qty,
-        ''                                                          AS Remarks
+        ISNULL(d.Quantity, 0)                                       AS Qty
     FROM dbo.PO_ORDL_DETL d
     INNER JOIN dbo.PO_ORDL l
         ON l.DIVCODE = d.divcode AND l.PORDNO = d.pordno

@@ -178,7 +178,6 @@ export interface DeliverySlot {
   slotNo:  number             // 1..n row sequence within the item (open grid)
   shDate:  string | null      // PO_ORDL_DETL.shdate
   qty:     number             // PO_ORDL_DETL.Quantity (3dp)
-  remarks: string
 }
 
 /** Delivery rows grouped per PO line (keyed by lineNo). Unlimited rows per item. */

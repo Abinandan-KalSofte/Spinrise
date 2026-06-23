@@ -1,4 +1,4 @@
-import { Button, ConfigProvider, DatePicker, Input, InputNumber } from 'antd'
+import { Button, ConfigProvider, DatePicker, InputNumber } from 'antd'
 import { PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { erpTh, ERP_TD as TD } from '@/shared/styles/erpTable'
@@ -13,14 +13,14 @@ import { notificationService } from '@/shared/lib/notification'
 // Editable in ADD; read-only in VIEW/DELETE.
 //
 // Columns (10):
-//   # | Item Id | Item Name | PR No. | UOM | PO Qty | [Action] | Scheduled Qty | Balance Qty | Delivery Date | Remarks
+//   # | Item Id | Item Name | PR No. | UOM | PO Qty | [Action] | Scheduled Qty | Balance Qty | Delivery Date
 //   PO Qty      = d.poQty (total PO line quantity, rowspan)
 //   Scheduled Qty = slot.qty (quantity for this specific delivery slot, editable)
 //   Balance Qty = PO Qty − Σ Scheduled Qty across all slots (rowspan, colour-coded)
 
 // AntD 5 disabled fields use the colorTextDisabled design token — inline styles
 // cannot override it. Override the token here so disabled cells remain readable
-// in VIEW mode and after Save (delivery date, remarks, scheduled qty).
+// in VIEW mode and after Save (delivery date, scheduled qty).
 const readableDisabled = {
   token: { colorTextDisabled: '#262626', colorBgContainerDisabled: '#f5f5f5' },
 }
@@ -36,7 +36,7 @@ interface DeliveryScheduleGridProps {
   mode:          ScreenMode
   deliveryLines: DeliveryScheduleLine[]
   onAddSlot:     (lineNo: number) => void
-  onUpdateSlot:  (lineNo: number, slotNo: number, patch: { shDate?: string | null; qty?: number; remarks?: string }) => void
+  onUpdateSlot:  (lineNo: number, slotNo: number, patch: { shDate?: string | null; qty?: number }) => void
   onRemoveSlot:  (lineNo: number, slotNo: number) => void
 }
 
@@ -85,7 +85,6 @@ export function DeliveryScheduleGrid({
               <th style={{ ...TH, width: 120, textAlign: 'right'  }}>Scheduled Qty</th>
               <th style={{ ...TH, width: 100, textAlign: 'right'  }}>Balance Qty</th>
               <th style={{ ...TH, width: 150 }}>Delivery Date</th>
-              <th style={{ ...TH }}>Remarks</th>
             </tr>
           </thead>
           <tbody>
@@ -160,14 +159,6 @@ export function DeliveryScheduleGrid({
                       />
                     </td>
 
-                    {/* Column 11: Remarks */}
-                    <td style={TD}>
-                      <Input
-                        size="small" disabled={ro} value={slot.remarks} placeholder="Remarks"
-                        style={{ fontSize: 11 }}
-                        onChange={(e) => onUpdateSlot(d.lineNo, slot.slotNo, { remarks: e.target.value })}
-                      />
-                    </td>
                   </tr>
                 )).concat(
                   !ro ? [(
@@ -201,8 +192,8 @@ export function DeliveryScheduleGrid({
                 <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>
                   {fmt3(schedTotal)}
                 </td>
-                {/* Cols 9–11: reconciliation indicator */}
-                <td colSpan={3} style={{ ...TD, fontSize: 11 }}>
+                {/* Cols 9–10: reconciliation indicator */}
+                <td colSpan={2} style={{ ...TD, fontSize: 11 }}>
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
                     background: matched ? '#EAF3DE' : '#FAEEDA',
