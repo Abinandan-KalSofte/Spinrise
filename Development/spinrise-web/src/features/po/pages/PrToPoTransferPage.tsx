@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { HeaderTabKey } from '../hooks/usePoTransferForm'
-import { Alert, ConfigProvider, Form, Modal, Skeleton } from 'antd'
+import { Alert, ConfigProvider, Form, Skeleton } from 'antd'
 import { useNavigationGuardStore } from '@/shared/store/useNavigationGuardStore'
 import { PageLoader, ApiLoader } from '@/components/common/loading'
 import { SearchOutlined } from '@ant-design/icons'
@@ -146,12 +146,13 @@ export default function PrToPoTransferPage() {
     })
   }
 
-  const executePrint = async () => {
+  const handlePrint = async () => {
+    if (!f.currentPo?.poNo) return
     setPrintOpen(true)
     setPrintLoading(true)
     setPrintBlobUrl(null)
     try {
-      const { blobUrl, filename } = await poApi.getPrintV2BlobUrl(f.divCode, f.currentPo!.poNo, f.currentPo!.poDate)
+      const { blobUrl, filename } = await poApi.getPrintV2BlobUrl(f.divCode, f.currentPo.poNo, f.currentPo.poDate)
       setPrintBlobUrl(blobUrl)
       setPrintFilename(filename)
     } catch (err) {
@@ -160,21 +161,6 @@ export default function PrToPoTransferPage() {
     } finally {
       setPrintLoading(false)
     }
-  }
-
-  const handlePrint = () => {
-    if (!f.currentPo?.poNo) return
-    if (f.currentPo.printStatus !== 'N') {
-      Modal.confirm({
-        title: 'Purchase Order Already Printed',
-        content: 'A copy of this Purchase Order has already been printed. Do you want to print another copy?',
-        okText: 'Print Again',
-        cancelText: 'Cancel',
-        onOk: () => void executePrint(),
-      })
-      return
-    }
-    void executePrint()
   }
 
   const closePrint = () => {
@@ -496,6 +482,7 @@ export default function PrToPoTransferPage() {
         filename={printFilename}
         loading={printLoading}
         onClose={closePrint}
+        alreadyPrinted={f.currentPo?.printStatus !== 'N'}
       />
     </div>
   )

@@ -8,9 +8,10 @@ interface Props {
   filename: string
   loading: boolean
   onClose: () => void
+  alreadyPrinted?: boolean
 }
 
-export function PrPrintPreviewModal({ open, blobUrl, filename, loading, onClose }: Props) {
+export function PrPrintPreviewModal({ open, blobUrl, filename, loading, onClose, alreadyPrinted }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeReady, setIframeReady] = useState(false)
 
@@ -18,7 +19,7 @@ export function PrPrintPreviewModal({ open, blobUrl, filename, loading, onClose 
     if (!open) setIframeReady(false)
   }, [open])
 
-  const handleDownload = () => {
+  const doDownload = () => {
     if (!blobUrl) return
     const a = document.createElement('a')
     a.href = blobUrl
@@ -26,8 +27,37 @@ export function PrPrintPreviewModal({ open, blobUrl, filename, loading, onClose 
     a.click()
   }
 
-  const handlePrint = () => {
+  const doPrint = () => {
     iframeRef.current?.contentWindow?.print()
+  }
+
+  const handleDownload = () => {
+    if (!blobUrl) return
+    if (alreadyPrinted) {
+      Modal.confirm({
+        title: 'Already Printed',
+        content: 'A copy of this document has already been printed. Do you want to download another copy?',
+        okText: 'Download Again',
+        cancelText: 'Cancel',
+        onOk: doDownload,
+      })
+      return
+    }
+    doDownload()
+  }
+
+  const handlePrint = () => {
+    if (alreadyPrinted) {
+      Modal.confirm({
+        title: 'Already Printed',
+        content: 'A copy of this document has already been printed. Do you want to print another copy?',
+        okText: 'Print Again',
+        cancelText: 'Cancel',
+        onOk: doPrint,
+      })
+      return
+    }
+    doPrint()
   }
 
   return (
