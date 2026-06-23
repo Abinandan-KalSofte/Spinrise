@@ -3,7 +3,7 @@
 -- Records LPO rate history in PO_LPORATEAPP after every Add save.
 -- Always active — no activation flag (FSD §8.4 / §1368).
 -- Called once per PO line from PoEntryRepository after ksp_PO_SaveEntry.
--- CDOCNO = MAX+1 per division (D-14: non-atomic; medium impact).
+-- CR-009: UPDLOCK+HOLDLOCK on MAX(CDOCNO) SELECT prevents concurrent duplicate allocation.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveLPORateHistory
 (
@@ -28,43 +28,55 @@ BEGIN
     DECLARE @LSlCode     VARCHAR(10);
     DECLARE @LRate       NUMERIC(13,4);
 
-    -- CDOCNO = MAX+1 for this division (D-14: use SEQUENCE in future sprint)
-    SELECT @NewCDocNo = ISNULL(MAX(CDOCNO), 0) + 1
-    FROM dbo.PO_LPORATEAPP
-    WHERE RTRIM(ISNULL(DIVCODE, '')) = RTRIM(@DivCode);
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        -- CDOCNO = MAX+1; UPDLOCK+HOLDLOCK prevents concurrent duplicate allocation (CR-009)
+        SELECT @NewCDocNo = ISNULL(MAX(CDOCNO), 0) + 1
+        FROM dbo.PO_LPORATEAPP WITH (UPDLOCK, HOLDLOCK)
+        WHERE RTRIM(ISNULL(DIVCODE, '')) = RTRIM(@DivCode);
 
-    -- Previous most-recent PO for the same item in this division (excluding current PO)
-    SELECT TOP 1
-        @LPoRdNo = h.PORDNO,
-        @LPoRdDt = CAST(h.PORDDT AS DATE),
-        @LPoGrp  = RTRIM(ISNULL(h.POGRP, '')),
-        @LSlCode = RTRIM(ISNULL(h.SLCODE,  '')),
-        @LRate   = l.RATE
-    FROM dbo.PO_ORDL l
-    INNER JOIN dbo.PO_ORDH h
-        ON  h.PORDNO  = l.PORDNO
-        AND h.PORDDT  = l.PORDDT
-        AND h.DIVCODE = l.DIVCODE
-    WHERE RTRIM(ISNULL(l.ITEMCODE, '')) = RTRIM(@ItemCode)
-      AND RTRIM(ISNULL(h.DIVCODE,  '')) = RTRIM(@DivCode)
-      AND h.PORDNO <> @PoNo
-    ORDER BY h.PORDDT DESC, h.PORDNO DESC;
+        -- Previous most-recent PO for the same item in this division (excluding current PO)
+        SELECT TOP 1
+            @LPoRdNo = h.PORDNO,
+            @LPoRdDt = CAST(h.PORDDT AS DATE),
+            @LPoGrp  = RTRIM(ISNULL(h.POGRP, '')),
+            @LSlCode = RTRIM(ISNULL(h.SLCODE,  '')),
+            @LRate   = l.RATE
+        FROM dbo.PO_ORDL l
+        INNER JOIN dbo.PO_ORDH h
+            ON  h.PORDNO  = l.PORDNO
+            AND h.PORDDT  = l.PORDDT
+            AND h.DIVCODE = l.DIVCODE
+        WHERE RTRIM(ISNULL(l.ITEMCODE, '')) = RTRIM(@ItemCode)
+          AND RTRIM(ISNULL(h.DIVCODE,  '')) = RTRIM(@DivCode)
+          AND h.PORDNO <> @PoNo
+        ORDER BY h.PORDDT DESC, h.PORDNO DESC;
 
-    INSERT INTO dbo.PO_LPORATEAPP
-    (
-        DIVCODE,    CDOCNO,
-        LPORDNO,    LPORDDT,   LPOGRP,    LSLCODE,
-        ITEMCODE,   CQUANTITY, LRATE,
-        CDATE,      CSLCODE,   CPOGRP,    CRATE,
-        CREATEDBY,  CREATEDDATE
-    )
-    VALUES
-    (
-        RTRIM(@DivCode),    @NewCDocNo,
-        @LPoRdNo,           @LPoRdDt,   @LPoGrp,          @LSlCode,
-        RTRIM(@ItemCode),   @Qty,        @LRate,
-        GETDATE(),          RTRIM(@Supplier), RTRIM(@OrderType), @Rate,
-        RTRIM(@UserId),     GETDATE()
-    );
+        INSERT INTO dbo.PO_LPORATEAPP
+        (
+            DIVCODE,    CDOCNO,
+            LPORDNO,    LPORDDT,   LPOGRP,    LSLCODE,
+            ITEMCODE,   CQUANTITY, LRATE,
+            CDATE,      CSLCODE,   CPOGRP,    CRATE,
+            CREATEDBY,  CREATEDDATE
+        )
+        VALUES
+        (
+            RTRIM(@DivCode),    @NewCDocNo,
+            @LPoRdNo,           @LPoRdDt,   @LPoGrp,          @LSlCode,
+            RTRIM(@ItemCode),   @Qty,        @LRate,
+            GETDATE(),          RTRIM(@Supplier), RTRIM(@OrderType), @Rate,
+            RTRIM(@UserId),     GETDATE()
+        );
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        DECLARE @ErrSev INT            = ERROR_SEVERITY();
+        RAISERROR(@ErrMsg, @ErrSev, 1);
+    END CATCH
 END;
 GO
