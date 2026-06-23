@@ -427,10 +427,9 @@ public class PoEntryRepository : IPoEntryRepository
             PoQty    = kvp.Value.First().PoQty,
             Slots    = kvp.Value.Select(s => new DeliverySlotDto
             {
-                SlotNo  = (int)s.SlotNo,
-                ShDate  = s.ShDate,
-                Qty     = s.Qty,
-                Remarks = s.Remarks
+                SlotNo = (int)s.SlotNo,
+                ShDate = s.ShDate,
+                Qty    = s.Qty,
             }).ToList()
         }).ToList();
     }
@@ -444,6 +443,5 @@ public class PoEntryRepository : IPoEntryRepository
         decimal PoQty,
         long    SlotNo,   // ROW_NUMBER() always returns BIGINT — must be long
         string? ShDate,
-        decimal Qty,
-        string  Remarks);
+        decimal Qty);
 }
