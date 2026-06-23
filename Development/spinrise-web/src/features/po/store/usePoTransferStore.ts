@@ -116,7 +116,7 @@ export const usePoTransferStore = create<PoTransferState>()((set) => ({
           slotNo:  d.slots.length + 1,
           shDate:  getCurrentSystemDateIso(),
           qty:     balance > 0 ? balance : 0,
-          remarks: '',
+          
         }
         return { ...d, slots: [...d.slots, next] }
       }),

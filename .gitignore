@@ -22,7 +22,7 @@ Development/spinrise-web/node_modules/
 Development/spinrise-web/dist/
 Development/spinrise-web/.env.local
 Development/spinrise-web/.env.production
-
+Development/spinrise-web/.env.development
 # Logs
 logs/
 *.log
@@ -63,3 +63,6 @@ build_output.txt
 # Test run output
 Development/spinrise-web/playwright-report/
 Development/spinrise-web/test-results/
+.gitignore
+Development/spinrise-web/.env.development
+Development/spinrise-web/.gitignore

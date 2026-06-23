@@ -36,6 +36,7 @@ using Dapper;
 using Spinrise.Infrastructure.Data;
 
 SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
+SqlMapper.Settings.CommandTimeout = 120;
 QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
