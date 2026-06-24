@@ -60,6 +60,7 @@ public class JwtTokenService : IJwtTokenService
                 Role     = principal.FindFirstValue(ClaimTypes.Role)               ?? string.Empty,
                 DivCode  = principal.FindFirstValue(SpinriseClaims.DivCode)        ?? string.Empty,
                 DbName   = principal.FindFirstValue(SpinriseClaims.DbName)         ?? string.Empty,
+                Modules  = principal.FindFirstValue(SpinriseClaims.ModuleFlags)    ?? string.Empty,
             };
 
             return new RefreshTokenValidationResult
@@ -84,6 +85,7 @@ public class JwtTokenService : IJwtTokenService
         new(SpinriseClaims.UserId, user.UserId),
         new(SpinriseClaims.UserName, user.UserName),
         new(SpinriseClaims.DbName, user.DbName),
+        new(SpinriseClaims.ModuleFlags, user.Modules),
         new(SpinriseClaims.TokenType, tokenType),
         new(JwtRegisteredClaimNames.Iat,
             DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),

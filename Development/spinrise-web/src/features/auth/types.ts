@@ -32,6 +32,7 @@ export interface AuthUser {
   compCode: string
   compName: string
   dbName:   string
+  modules:  string   // comma-separated module numbers e.g. "1,3,4"
 }
 
 export interface ActiveCompanyDto {

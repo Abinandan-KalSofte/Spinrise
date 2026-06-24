@@ -12,7 +12,8 @@ function mapAuthUser(user: AuthResponse['user']): AuthUser {
     divName:  user.divName  ?? '',
     compCode: '',
     compName: '',
-    dbName:   user.dbName ?? '',
+    dbName:   user.dbName  ?? '',
+    modules:  user.modules ?? '',
   }
 }
 

@@ -83,9 +83,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization(o =>
+{
     o.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .Build());
+        .Build();
+
+    o.AddPolicy("PoAccess", policy =>
+        policy.RequireAssertion(ctx =>
+        {
+            var raw = ctx.User.FindFirst(Spinrise.Shared.Constants.SpinriseClaims.ModuleFlags)?.Value ?? "";
+            return raw.Split(',').Contains("4");
+        }));
+});
 
 // ── MVC / Controllers ──────────────────────────────────────────────────────
 builder.Services.AddControllers();

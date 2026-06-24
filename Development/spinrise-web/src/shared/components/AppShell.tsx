@@ -9,13 +9,13 @@ import {
   LogoutOutlined,
   UserOutlined,
   DownOutlined,
-  LayoutOutlined,        // or AppstoreOutlined for Dashboard
-  FileDoneOutlined,      // PR sub-group
-  FormOutlined,          // PR Amendment
-  LockOutlined,          // PR Foreclosure
-  CloseCircleOutlined,   // PR Cancellation
-  CheckCircleOutlined,   // PR First Level Approval
-  SafetyCertificateOutlined, // PR Final Level Approval
+  LayoutOutlined,
+  FileDoneOutlined,
+  FormOutlined,
+  LockOutlined,
+  CloseCircleOutlined,
+  CheckCircleOutlined,
+  SafetyCertificateOutlined,
   RetweetOutlined,
   FilePdfOutlined,
   FileExclamationOutlined,
@@ -43,7 +43,6 @@ function wrapLabel(text: string) {
   return <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1, display: 'inline-block' }}>{text}</span>
 }
 
-// Paths that live under the "Purchase Requisition (PR)" sub-group.
 const PR_PATHS = [
   '/purchase-requisition',
   '/pr-amendment',
@@ -54,28 +53,39 @@ const PR_PATHS = [
   '/pr-report',
 ]
 
-const NAV_ITEMS: MenuItem[] = [
-  mk('/dashboard', 'Dashboard', <LayoutOutlined />),
-  { type: 'divider', style: { borderColor: 'rgba(255,255,255,0.08)', margin: '8px 16px' } } as MenuItem,
-  mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined  />, [
-    mk('grp-pr', wrapLabel('Purchase Requisition (PR)'), '', [
-      mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)'), <FileDoneOutlined />),
-      mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment'),    <FormOutlined />),
-      mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure'),  <LockOutlined />),
-      mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'), <CloseCircleOutlined />),
-      mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval'),           <CheckCircleOutlined />),
-      mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval'),           <SafetyCertificateOutlined />),
+// PP_PASSWD.module is a plain number; users can have multiple rows (one per module).
+// The SP aggregates them into a comma-separated string e.g. "1,3,4".
+// Module 4 = Purchase Order Management System.
+function buildNavItems(hasM3: boolean): MenuItem[] {
+  const base: MenuItem[] = [
+    mk('/dashboard', 'Dashboard', <LayoutOutlined />),
+    { type: 'divider', style: { borderColor: 'rgba(255,255,255,0.08)', margin: '8px 16px' } } as MenuItem,
+  ]
+
+  if (!hasM3) return base
+
+  return [
+    ...base,
+    mk('grp-purchase', 'Purchase Order', <ShoppingCartOutlined />, [
+      mk('grp-pr', wrapLabel('Purchase Requisition (PR)'), '', [
+        mk('/purchase-requisition', wrapLabel('Purchase Requisition (PR)'),                          <FileDoneOutlined />),
+        mk('/pr-amendment',         wrapLabel('Purchase Requisition Amendment'),                     <FormOutlined />),
+        mk('/pr-foreclosure',       wrapLabel('Purchase Requisition Foreclosure'),                   <LockOutlined />),
+        mk('/pr-cancellation',      wrapLabel('Purchase Requisition Cancellation'),                  <CloseCircleOutlined />),
+        mk('/pr-first-approval',    wrapLabel('Purchase Requisition First Level Approval'),          <CheckCircleOutlined />),
+        mk('/pr-final-approval',    wrapLabel('Purchase Requisition Final Level Approval'),          <SafetyCertificateOutlined />),
+      ]),
+      mk('grp-transfer', wrapLabel('PR to PO Transfer'), '', [
+        mk('/po-transfer', wrapLabel('PR to PO Transfer'), <RetweetOutlined />),
+      ]),
     ]),
-    mk('grp-transfer', wrapLabel('PR to PO Transfer'), '', [
-      mk('/po-transfer', wrapLabel('PR to PO Transfer'), <RetweetOutlined />),
+    mk('grp-reports', 'Reports', <FileExclamationOutlined />, [
+      mk('grp-reports-pr', wrapLabel('Periodic Reports'), '', [
+        mk('/pr-report', wrapLabel('Purchase Requisition List'), <FilePdfOutlined />),
+      ]),
     ]),
-  ]),
-   mk('grp-reports', 'Reports', <FileExclamationOutlined  />, [
-    mk('grp-reports-pr', wrapLabel('Periodic Reports'), '', [
-      mk('/pr-report',            wrapLabel('Purchase Requisition List'),                         <FilePdfOutlined />),
-    ]),
-  ]),
-]
+  ]
+}
 
 function getOpenKeys(path: string): string[] {
   if (PR_PATHS.some((p) => path.startsWith(p))) return ['grp-purchase', 'grp-pr']
@@ -97,7 +107,8 @@ export default function AppShell() {
   const isDirty          = useNavigationGuardStore((s) => s.isDirty)
   const onConfirmDiscard = useNavigationGuardStore((s) => s.onConfirmDiscard)
 
-  // Guard-aware navigate: shows confirm dialog when page has unsaved changes.
+  const hasM3 = (user?.modules ?? '').split(',').includes('4')
+
   const guardedNavigate = (to: string, replace?: boolean) => {
     if (isDirty) {
       Modal.confirm({
@@ -129,13 +140,14 @@ export default function AppShell() {
   }
 
   const selectedKeys = [location.pathname]
+  const navItems     = buildNavItems(hasM3)
 
   const userMenuItems: MenuProps['items'] = [
     {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: 'Sign Out',
-      danger: true,
+      key:     'logout',
+      icon:    <LogoutOutlined />,
+      label:   'Sign Out',
+      danger:  true,
       onClick: () => { void handleLogout() },
     },
   ]
@@ -222,7 +234,7 @@ export default function AppShell() {
               inlineIndent={12}
               selectedKeys={selectedKeys}
               defaultOpenKeys={getOpenKeys(location.pathname)}
-              items={NAV_ITEMS}
+              items={navItems}
               style={{ background: 'transparent', borderRight: 'none' }}
               onClick={({ key }) => { if (key.startsWith('/')) guardedNavigate(key) }}
             />
