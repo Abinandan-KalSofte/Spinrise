@@ -740,8 +740,12 @@ BEGIN
         TRY_CAST(NULLIF(RTRIM(h.REFORDNO), '') AS DECIMAL(10,0))   AS AmdRefNo,
         CASE WHEN h.REFORDDT IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(h.REFORDDT AS DATE), 120) END AS AmdRefDate,
-        -- Approval / print
-        CASE WHEN ISNULL(h.Conflg, 'N') = 'Y' THEN 'CONFIRMED' ELSE 'PENDING' END AS ApprovalStatus,
+        -- Approval / print — TC-07: reflect L1 approval state, not just final Conflg
+        CASE
+            WHEN ISNULL(h.Conflg,        'N') = 'Y' THEN 'CONFIRMED'
+            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y' THEN 'PENDING L1'
+            ELSE                                          'PENDING'
+        END AS ApprovalStatus,
         RTRIM(ISNULL(h.poprintflg, 'N'))                            AS PrintStatus,
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
@@ -998,8 +1002,12 @@ BEGIN
         TRY_CAST(NULLIF(RTRIM(h.REFORDNO), '') AS DECIMAL(10,0))   AS AmdRefNo,
         CASE WHEN h.REFORDDT IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(h.REFORDDT AS DATE), 120) END AS AmdRefDate,
-        -- Approval / print
-        CASE WHEN ISNULL(h.Conflg, 'N') = 'Y' THEN 'CONFIRMED' ELSE 'PENDING' END AS ApprovalStatus,
+        -- Approval / print — TC-07: reflect L1 approval state, not just final Conflg
+        CASE
+            WHEN ISNULL(h.Conflg,        'N') = 'Y' THEN 'CONFIRMED'
+            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y' THEN 'PENDING L1'
+            ELSE                                          'PENDING'
+        END AS ApprovalStatus,
         RTRIM(ISNULL(h.poprintflg, 'N'))                            AS PrintStatus,
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
@@ -1164,6 +1172,21 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- TC-06: block deletion if PO has been approved at any level (L1 / L2 / Final)
+    IF EXISTS (
+        SELECT 1 FROM dbo.PO_ORDH
+        WHERE DIVCODE = @DivCode
+          AND PORDNO  = @PoNo
+          AND CAST(PORDDT AS DATE) = @PoDate
+          AND (   RTRIM(ISNULL(FirstlevelApp,  'N')) = 'Y'
+               OR RTRIM(ISNULL(SecondlevelApp, 'N')) = 'Y'
+               OR RTRIM(ISNULL(Conflg,         'N')) = 'Y')
+    )
+    BEGIN
+        RAISERROR('Cannot delete an approved Purchase Order.', 16, 1);
+        RETURN;
+    END
+
     -- BR-03: GRN guard — "GRN" in message triggers HTTP 409 in C#
     IF EXISTS (
         SELECT 1 FROM dbo.IN_TRNTAIL
@@ -1319,7 +1342,12 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS Supplier,
         RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
-        CASE WHEN ISNULL(h.Conflg, 'N') = 'Y' THEN 'CONFIRMED' ELSE 'PENDING' END AS ApprovalStatus,
+        -- TC-07: reflect L1 approval state in list view too
+        CASE
+            WHEN ISNULL(h.Conflg,        'N') = 'Y' THEN 'CONFIRMED'
+            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y' THEN 'PENDING L1'
+            ELSE                                          'PENDING'
+        END AS ApprovalStatus,
         (
             SELECT COUNT(*) FROM dbo.PO_ORDL l
             WHERE l.DIVCODE = h.DIVCODE

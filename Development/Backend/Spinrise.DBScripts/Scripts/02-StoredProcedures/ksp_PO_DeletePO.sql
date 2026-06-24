@@ -27,6 +27,21 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- TC-06: block deletion if PO has been approved at any level (L1 / L2 / Final)
+    IF EXISTS (
+        SELECT 1 FROM dbo.PO_ORDH
+        WHERE DIVCODE = @DivCode
+          AND PORDNO  = @PoNo
+          AND CAST(PORDDT AS DATE) = @PoDate
+          AND (   RTRIM(ISNULL(FirstlevelApp,  'N')) = 'Y'
+               OR RTRIM(ISNULL(SecondlevelApp, 'N')) = 'Y'
+               OR RTRIM(ISNULL(Conflg,         'N')) = 'Y')
+    )
+    BEGIN
+        RAISERROR('Cannot delete an approved Purchase Order.', 16, 1);
+        RETURN;
+    END
+
     -- BR-03: GRN guard — "GRN" in message triggers HTTP 409 in C#
     IF EXISTS (
         SELECT 1 FROM dbo.IN_TRNTAIL

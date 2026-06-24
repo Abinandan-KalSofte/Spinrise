@@ -67,6 +67,8 @@ export default function PrToPoTransferPage() {
   useEffect(() => { setBodyTab('lines') }, [f.bodyTabResetKey])
 
   // Print preview (modal — mirrors the PR module; no new browser tab).
+  const [newLoading,    setNewLoading]    = useState(false)
+
   const [printOpen,     setPrintOpen]     = useState(false)
   const [printLoading,  setPrintLoading]  = useState(false)
   const [printBlobUrl,  setPrintBlobUrl]  = useState<string | null>(null)
@@ -93,7 +95,15 @@ export default function PrToPoTransferPage() {
   const activeBodyTab = showDelivery ? bodyTab : 'lines'
 
   // ── Toolbar actions ────────────────────────────────────────────────────────
-  const handleNew    = () => { setBodyTab('lines'); setHeaderTab('order'); void f.enterAddMode().then((ok) => { if (ok) setPrPickerOpen(true) }) }
+  const handleNew    = () => {
+    setBodyTab('lines')
+    setHeaderTab('order')
+    setNewLoading(true)
+    void f.enterAddMode().then((ok) => {
+      setNewLoading(false)
+      if (ok) setPrPickerOpen(true)
+    }).catch(() => setNewLoading(false))
+  }
   const handleFind   = () => setFindOpen(true)
   // Delete flow: always open the Find PO modal first so the user picks which PO
   // to delete — prevents accidental deletion of whichever PO happens to be loaded.
@@ -103,6 +113,13 @@ export default function PrToPoTransferPage() {
       notificationService.warning(
         'Amendment Not Allowed',
         'Amendment not allowed for cancelled Purchase Orders.',
+      )
+      return
+    }
+    if (f.currentPo?.firstLevelApp === 'Y') {
+      notificationService.warning(
+        'Deletion Not Allowed',
+        'Cannot delete an approved Purchase Order.',
       )
       return
     }
@@ -139,6 +156,13 @@ export default function PrToPoTransferPage() {
         notificationService.warning(
           'Amendment Not Allowed',
           'Amendment not allowed for cancelled Purchase Orders.',
+        )
+        return
+      }
+      if (loaded.firstLevelApp === 'Y') {
+        notificationService.warning(
+          'Deletion Not Allowed',
+          'Cannot delete an approved Purchase Order.',
         )
         return
       }
@@ -235,7 +259,7 @@ export default function PrToPoTransferPage() {
 
       <PoToolbar
         mode={f.mode}
-        busy={f.pageBusy || printLoading}
+        busy={f.pageBusy || printLoading || newLoading}
         hasRecord={!!f.currentPo?.poNo}
         canPrev={f.canPrev}
         canNext={f.canNext}
@@ -252,6 +276,7 @@ export default function PrToPoTransferPage() {
       />
 
       {/* Status / mode banners */}
+      {newLoading    && <ApiLoader message="Checking eligible PR lines…" />}
       {f.navLoading && <ApiLoader message="Loading record…" />}
       {f.lookupsError && (
         <Alert type="error" showIcon banner message={f.lookupsError}

@@ -125,8 +125,12 @@ BEGIN
         TRY_CAST(NULLIF(RTRIM(h.REFORDNO), '') AS DECIMAL(10,0))   AS AmdRefNo,
         CASE WHEN h.REFORDDT IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(h.REFORDDT AS DATE), 120) END AS AmdRefDate,
-        -- Approval / print
-        CASE WHEN ISNULL(h.Conflg, 'N') = 'Y' THEN 'CONFIRMED' ELSE 'PENDING' END AS ApprovalStatus,
+        -- Approval / print — TC-07: reflect L1 approval state, not just final Conflg
+        CASE
+            WHEN ISNULL(h.Conflg,        'N') = 'Y' THEN 'CONFIRMED'
+            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y' THEN 'PENDING L1'
+            ELSE                                          'PENDING'
+        END AS ApprovalStatus,
         RTRIM(ISNULL(h.poprintflg, 'N'))                            AS PrintStatus,
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,

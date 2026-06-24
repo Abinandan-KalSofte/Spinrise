@@ -27,7 +27,12 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS Supplier,
         RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
-        CASE WHEN ISNULL(h.Conflg, 'N') = 'Y' THEN 'CONFIRMED' ELSE 'PENDING' END AS ApprovalStatus,
+        -- TC-07: reflect L1 approval state in list view too
+        CASE
+            WHEN ISNULL(h.Conflg,        'N') = 'Y' THEN 'CONFIRMED'
+            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y' THEN 'PENDING L1'
+            ELSE                                          'PENDING'
+        END AS ApprovalStatus,
         (
             SELECT COUNT(*) FROM dbo.PO_ORDL l
             WHERE l.DIVCODE = h.DIVCODE
