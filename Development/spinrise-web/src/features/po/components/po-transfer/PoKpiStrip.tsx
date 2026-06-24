@@ -71,9 +71,12 @@ function Card({ label, value, sub, accent, valColor, valSmall, warning }: {
 }
 
 function Pipeline({ status }: { status?: string }) {
-  const s = (status ?? '').toUpperCase()
-  const l1Active = s.includes('L1') || !status
-  const l2Active = s.includes('L2')
+  const s           = (status ?? '').toUpperCase().trim()
+  const isConfirmed = s === 'CONFIRMED'
+  const l2Active    = !isConfirmed && s.includes('L2')
+  const l1Done      = isConfirmed || s.includes('L1') || l2Active
+  const l1Active    = !l1Done && s === 'PENDING'
+
   const node = (label: string, state: 'done' | 'active' | 'wait') => (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
       <div style={{
@@ -94,9 +97,9 @@ function Pipeline({ status }: { status?: string }) {
     <div style={{ display: 'flex', alignItems: 'flex-start', marginTop: 6 }}>
       {node('Requested', 'done')}
       {line(true)}
-      {node('L1', l1Active ? 'active' : l2Active ? 'done' : 'wait')}
-      {line(l2Active)}
-      {node('L2', l2Active ? 'active' : 'wait')}
+      {node('L1', l1Done ? 'done' : l1Active ? 'active' : 'wait')}
+      {line(l1Done)}
+      {node('L2', isConfirmed ? 'done' : l2Active ? 'active' : 'wait')}
     </div>
   )
 }
