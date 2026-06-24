@@ -1190,13 +1190,20 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- TC-06: block deletion if PO has been approved at any level (L1 / L2 / Final)
+    -- TC-06: block deletion if PO has been approved at any configured level.
+    -- L1 check is skipped when PO_PARA.PoFirstLevelApp = 'N' for this division.
+    -- SecondlevelApp and Conflg are always enforced regardless of PO_PARA setting.
+    DECLARE @UseL1 CHAR(1) = 'N';
+    SELECT @UseL1 = ISNULL(PoFirstLevelApp, 'N')
+    FROM dbo.PO_PARA
+    WHERE divcode = @DivCode;
+
     IF EXISTS (
         SELECT 1 FROM dbo.PO_ORDH
         WHERE DIVCODE = @DivCode
           AND PORDNO  = @PoNo
           AND CAST(PORDDT AS DATE) = @PoDate
-          AND (   RTRIM(ISNULL(FirstlevelApp,  'N')) = 'Y'
+          AND (   (@UseL1 = 'Y' AND RTRIM(ISNULL(FirstlevelApp,  'N')) = 'Y')
                OR RTRIM(ISNULL(SecondlevelApp, 'N')) = 'Y'
                OR RTRIM(ISNULL(Conflg,         'N')) = 'Y')
     )
