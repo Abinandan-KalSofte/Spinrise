@@ -673,9 +673,11 @@ BEGIN
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
         ISNULL(h.FREIGHT, 0)                                        AS FreightAmt,
-        CASE WHEN ISNULL(h.ORDVAL, 0) > 0
-             THEN ROUND(ISNULL(h.FREIGHT, 0) * 100.0 / h.ORDVAL, 2)
-             ELSE 0 END                                             AS FreightPer,
+        -- FreightPer not stored in PO_ORDH; read from first PO_ORDL line (Frgt1per stored per-line)
+        ISNULL((SELECT TOP 1 l.Frgt1per FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)
+                ORDER BY l.PORDSNO), 0)                             AS FreightPer,
         ISNULL(h.PCKPER, 0)                                         AS PackPer,
         ISNULL(h.INSPER, 0)                                         AS InsurPer,
         ISNULL(h.SURPER, 0)                                         AS SurchargePer,
@@ -689,12 +691,19 @@ BEGIN
         CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
-        -- Charge amounts: Pack_Amt and Ins_Amt stored in DB; others derived from stored %
+        -- Charge amounts: Pack_Amt/Ins_Amt stored in DB; Disc/Cess/AddTax aggregated from PO_ORDL
+        -- (using ORDVAL × % was wrong after T-0025 changed ORDVAL to grand total, not item value)
         ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
         ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.DISPER,0)    / 100.0, 2)                        AS DiscountAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.Cessper,0)   / 100.0, 2)                        AS CessAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.ADDTAXPER,0) / 100.0, 2)                        AS AddTaxAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.disamt,    0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS DiscountAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.cess_amt,  0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS CessAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.ADDTAXAMT, 0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS AddTaxAmt,
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
@@ -935,9 +944,11 @@ BEGIN
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
         ISNULL(h.FREIGHT, 0)                                        AS FreightAmt,
-        CASE WHEN ISNULL(h.ORDVAL, 0) > 0
-             THEN ROUND(ISNULL(h.FREIGHT, 0) * 100.0 / h.ORDVAL, 2)
-             ELSE 0 END                                             AS FreightPer,
+        -- FreightPer not stored in PO_ORDH; read from first PO_ORDL line (Frgt1per stored per-line)
+        ISNULL((SELECT TOP 1 l.Frgt1per FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)
+                ORDER BY l.PORDSNO), 0)                             AS FreightPer,
         ISNULL(h.PCKPER, 0)                                         AS PackPer,
         ISNULL(h.INSPER, 0)                                         AS InsurPer,
         ISNULL(h.SURPER, 0)                                         AS SurchargePer,
@@ -951,12 +962,19 @@ BEGIN
         CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
-        -- Charge amounts: Pack_Amt and Ins_Amt stored in DB; others derived from stored %
+        -- Charge amounts: Pack_Amt/Ins_Amt stored in DB; Disc/Cess/AddTax aggregated from PO_ORDL
+        -- (using ORDVAL × % was wrong after T-0025 changed ORDVAL to grand total, not item value)
         ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
         ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.DISPER,0)    / 100.0, 2)                        AS DiscountAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.Cessper,0)   / 100.0, 2)                        AS CessAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.ADDTAXPER,0) / 100.0, 2)                        AS AddTaxAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.disamt,    0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS DiscountAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.cess_amt,  0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS CessAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.ADDTAXAMT, 0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS AddTaxAmt,
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
@@ -2438,14 +2456,19 @@ BEGIN
         DECLARE @IgstAmt NUMERIC(18,2) = 0;
         SELECT @OrdVal = SUM(ROUND(Rate * Qty, 2)) FROM #Lines;
 
-        -- CR-009: Derive FreightAmt from FreightPer when FreightAmt not supplied.
-        IF @FreightPer > 0 AND @FreightAmt = 0
-            SET @FreightAmt = ROUND(@OrdVal * @FreightPer / 100.0, 2);
+        -- Net after per-line discount — correct base for header Pack/Ins/Freight derivation (matches frontend)
+        DECLARE @NetAfterLineDisc NUMERIC(18,2);
+        SELECT @NetAfterLineDisc = SUM(
+            ROUND(Rate * Qty, 2) - ROUND(Rate * Qty * DiscPer / 100.0, 2)
+        ) FROM #Lines;
 
-        -- Ins_Amt and Pack_Amt: derived from OrdVal × respective percentage;
-        -- ksp_PO_GetPrint reads h.Ins_Amt and h.Pack_Amt from PO_ORDH — must be stored or print shows 0.
-        DECLARE @InsAmt  NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@InsurPer,  0) / 100.0, 2);
-        DECLARE @PackAmt NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@PackPer,   0) / 100.0, 2);
+        -- Derive FreightAmt from FreightPer when FreightAmt not supplied (uses net-after-disc base)
+        IF @FreightPer > 0 AND @FreightAmt = 0
+            SET @FreightAmt = ROUND(@NetAfterLineDisc * @FreightPer / 100.0, 2);
+
+        -- Ins_Amt and Pack_Amt stored in PO_ORDH for ksp_PO_GetPrint; base = net-after-disc (matches frontend)
+        DECLARE @InsAmt  NUMERIC(13,2) = ROUND(ISNULL(@NetAfterLineDisc, 0) * ISNULL(@InsurPer, 0) / 100.0, 2);
+        DECLARE @PackAmt NUMERIC(13,2) = ROUND(ISNULL(@NetAfterLineDisc, 0) * ISNULL(@PackPer,  0) / 100.0, 2);
 
         -- Supplier GSTIN + state code (authoritative from master, not client-sent)
         DECLARE @SupGstin    VARCHAR(50)   = NULL;

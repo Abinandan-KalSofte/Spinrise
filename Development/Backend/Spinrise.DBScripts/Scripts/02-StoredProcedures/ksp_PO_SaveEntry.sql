@@ -323,14 +323,19 @@ BEGIN
         DECLARE @IgstAmt NUMERIC(18,2) = 0;
         SELECT @OrdVal = SUM(ROUND(Rate * Qty, 2)) FROM #Lines;
 
-        -- CR-009: Derive FreightAmt from FreightPer when FreightAmt not supplied.
-        IF @FreightPer > 0 AND @FreightAmt = 0
-            SET @FreightAmt = ROUND(@OrdVal * @FreightPer / 100.0, 2);
+        -- Net after per-line discount — correct base for header Pack/Ins/Freight derivation (matches frontend)
+        DECLARE @NetAfterLineDisc NUMERIC(18,2);
+        SELECT @NetAfterLineDisc = SUM(
+            ROUND(Rate * Qty, 2) - ROUND(Rate * Qty * DiscPer / 100.0, 2)
+        ) FROM #Lines;
 
-        -- CHANGED BY CLAUDE: Ins_Amt and Pack_Amt were never computed; ksp_PO_GetPrint reads
-        -- h.Ins_Amt and h.Pack_Amt from PO_ORDH — these must be stored or print always shows 0.
-        DECLARE @InsAmt  NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@InsurPer,  0) / 100.0, 2);
-        DECLARE @PackAmt NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@PackPer,   0) / 100.0, 2);
+        -- Derive FreightAmt from FreightPer when FreightAmt not supplied (uses net-after-disc base)
+        IF @FreightPer > 0 AND @FreightAmt = 0
+            SET @FreightAmt = ROUND(@NetAfterLineDisc * @FreightPer / 100.0, 2);
+
+        -- Ins_Amt and Pack_Amt stored in PO_ORDH for ksp_PO_GetPrint; base = net-after-disc (matches frontend)
+        DECLARE @InsAmt  NUMERIC(13,2) = ROUND(ISNULL(@NetAfterLineDisc, 0) * ISNULL(@InsurPer, 0) / 100.0, 2);
+        DECLARE @PackAmt NUMERIC(13,2) = ROUND(ISNULL(@NetAfterLineDisc, 0) * ISNULL(@PackPer,  0) / 100.0, 2);
 
         -- Supplier GSTIN + state code (authoritative from master, not client-sent)
         DECLARE @SupGstin    VARCHAR(50)   = NULL;

@@ -93,9 +93,11 @@ BEGIN
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
         ISNULL(h.FREIGHT, 0)                                        AS FreightAmt,
-        CASE WHEN ISNULL(h.ORDVAL, 0) > 0
-             THEN ROUND(ISNULL(h.FREIGHT, 0) * 100.0 / h.ORDVAL, 2)
-             ELSE 0 END                                             AS FreightPer,
+        -- FreightPer not stored in PO_ORDH; read from first PO_ORDL line (Frgt1per stored per-line)
+        ISNULL((SELECT TOP 1 l.Frgt1per FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)
+                ORDER BY l.PORDSNO), 0)                             AS FreightPer,
         ISNULL(h.PCKPER, 0)                                         AS PackPer,
         ISNULL(h.INSPER, 0)                                         AS InsurPer,
         ISNULL(h.SURPER, 0)                                         AS SurchargePer,
@@ -109,12 +111,19 @@ BEGIN
         CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
-        -- Charge amounts: Pack_Amt and Ins_Amt stored in DB; others derived from stored %
+        -- Charge amounts: Pack_Amt/Ins_Amt stored in DB; Disc/Cess/AddTax aggregated from PO_ORDL
+        -- (using ORDVAL × % was wrong after T-0025 changed ORDVAL to grand total, not item value)
         ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
         ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.DISPER,0)    / 100.0, 2)                        AS DiscountAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.Cessper,0)   / 100.0, 2)                        AS CessAmt,
-        ROUND(ISNULL(h.ORDVAL,0) * ISNULL(h.ADDTAXPER,0) / 100.0, 2)                        AS AddTaxAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.disamt,    0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS DiscountAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.cess_amt,  0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS CessAmt,
+        ISNULL((SELECT ROUND(SUM(ISNULL(l.ADDTAXAMT, 0)), 2) FROM dbo.PO_ORDL l
+                WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
+                  AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS AddTaxAmt,
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
