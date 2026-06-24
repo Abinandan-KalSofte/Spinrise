@@ -2150,6 +2150,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @SurchargePer     NUMERIC(10,2)  = 0,
     @AddTaxPer        NUMERIC(10,2)  = 0,
     @RoundOff         NUMERIC(13,2)  = 0,
+    @TotalOrdVal      NUMERIC(18,2)  = 0,   -- FD-01: grand total (incl. charges + GST + TCS + roundoff) supplied by frontend
     @FileNo           VARCHAR(20)    = NULL,
     @FcaFob           NUMERIC(13,2)  = 0,
     @FreightType      VARCHAR(10)    = 'PAID',
@@ -2526,7 +2527,8 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@PackForwarding,'')),   ''),
             NULLIF(RTRIM(ISNULL(@Insurance,'')),        ''),
             NULLIF(RTRIM(ISNULL(@Freight,'')),          ''),
-            ISNULL(@OrdVal, 0),
+            -- FD-01: use client-supplied grand total; fall back to SUM(Rate×Qty) only if not provided
+            CASE WHEN @TotalOrdVal > 0 THEN @TotalOrdVal ELSE ISNULL(@OrdVal, 0) END,
             ISNULL(@RoundOff, 0),     -- roff: client-supplied round-off
             ISNULL(@CgstAmt, 0),
             ISNULL(@SgstAmt, 0),

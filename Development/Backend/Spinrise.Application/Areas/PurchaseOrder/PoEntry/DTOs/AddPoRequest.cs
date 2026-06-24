@@ -49,6 +49,7 @@ public class AddPoHeaderRequest
     public decimal SurchargePer { get; init; }
     public decimal AddTaxPer    { get; init; }
     public decimal RoundOff     { get; init; }
+    public decimal OrderValue   { get; init; }   // FD-01: grand total incl. GST + charges + roundoff → stored as PO_ORDH.ORDVAL
     public string  FileNo       { get; init; } = "";
     public decimal FcaFob       { get; init; }
     public string  FreightType          { get; init; } = "PAID";

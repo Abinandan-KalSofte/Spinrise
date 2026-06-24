@@ -287,6 +287,7 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("IpAddress",       ipAddress);
         p.Add("LinesJson",       linesJson);
         p.Add("RoundOff",        request.Header.RoundOff);
+        p.Add("TotalOrdVal",     request.Header.OrderValue);   // FD-01: grand total for PO_ORDH.ORDVAL
         p.Add("PoNo", dbType: DbType.Decimal, direction: ParameterDirection.Output);
 
         await _uow.Connection.ExecuteAsync(
