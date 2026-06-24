@@ -71,6 +71,9 @@ public class PoEntryService : IPoEntryService
     public Task<PoHeaderDto?> GetLastRecordAsync(string divCode, DateOnly fDate, DateOnly lDate) =>
         _repo.GetLastRecordAsync(divCode, fDate, lDate);
 
+    public Task<PoHeaderDto?> GetFirstRecordAsync(string divCode, DateOnly fDate, DateOnly lDate) =>
+        _repo.GetFirstRecordAsync(divCode, fDate, lDate);
+
     public async Task<PoSaveResultDto> AddAsync(string divCode, AddPoRequest request,
         string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate)
     {
@@ -104,6 +107,9 @@ public class PoEntryService : IPoEntryService
 
     public Task<PoPrintDto?> GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate) =>
         _repo.GetPrintDataAsync(divCode, poNo, poDate);
+
+    public Task<PoPrintDto?> GetPrintDataGstAsync(string divCode, decimal poNo, DateOnly poDate) =>
+        _repo.GetPrintDataGstAsync(divCode, poNo, poDate);
 
     public Task UpdatePrintFlagAsync(string divCode, decimal poNo, DateOnly poDate) =>
         _repo.UpdatePrintFlagAsync(divCode, poNo, poDate);

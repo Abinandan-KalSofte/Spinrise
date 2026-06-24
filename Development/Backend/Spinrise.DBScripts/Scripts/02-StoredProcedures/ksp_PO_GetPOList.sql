@@ -27,11 +27,18 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS Supplier,
         RTRIM(ISNULL(sl.slname, ''))                                AS SupplierName,
         ISNULL(h.ORDVAL, 0)                                         AS OrderValue,
-        -- TC-07: reflect L1 approval state in list view too
+        -- Effective approval status: checks PO_ORDH flags first, then derives from PO_PARA
+        -- settings so POs created before auto-confirm SaveEntry was deployed show correctly.
         CASE
-            WHEN ISNULL(h.Conflg,        'N') = 'Y' THEN 'CONFIRMED'
-            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y' THEN 'PENDING L1'
-            ELSE                                          'PENDING'
+            WHEN ISNULL(h.Conflg, 'N') = 'Y'
+              THEN 'CONFIRMED'
+            WHEN ISNULL(para.Po_Confirm, 'N') = 'N'
+                 AND (ISNULL(para.PoFirstLevelApp,  'N') = 'N' OR ISNULL(h.FirstlevelApp,  'N') = 'Y')
+                 AND (ISNULL(para.PoSecondLevelApp, 'N') = 'N' OR ISNULL(h.SecondlevelApp, 'N') = 'Y')
+              THEN 'CONFIRMED'
+            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y'
+              THEN 'First Level Approved'
+            ELSE 'PENDING'
         END AS ApprovalStatus,
         (
             SELECT COUNT(*) FROM dbo.PO_ORDL l
@@ -41,6 +48,7 @@ BEGIN
         )                                                           AS TotalLines
     FROM dbo.PO_ORDH h
     LEFT JOIN dbo.FA_SLMAS sl ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    LEFT JOIN dbo.PO_PARA para ON para.divcode = h.DIVCODE
     WHERE h.DIVCODE = @DivCode
       AND CAST(h.PORDDT AS DATE) BETWEEN @FDate AND @LDate
       AND ISNULL(h.CANFLG, '') = ''

@@ -132,11 +132,18 @@ BEGIN
         TRY_CAST(NULLIF(RTRIM(h.REFORDNO), '') AS DECIMAL(10,0))   AS AmdRefNo,
         CASE WHEN h.REFORDDT IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(h.REFORDDT AS DATE), 120) END AS AmdRefDate,
-        -- Approval / print — TC-07: reflect L1 approval state, not just final Conflg
+        -- Effective approval status: checks PO_ORDH flags first, then derives from PO_PARA
+        -- settings so POs created before auto-confirm SaveEntry was deployed show correctly.
         CASE
-            WHEN ISNULL(h.Conflg,        'N') = 'Y' THEN 'CONFIRMED'
-            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y' THEN 'PENDING L1'
-            ELSE                                          'PENDING'
+            WHEN ISNULL(h.Conflg, 'N') = 'Y'
+              THEN 'CONFIRMED'
+            WHEN ISNULL(para.Po_Confirm, 'N') = 'N'
+                 AND (ISNULL(para.PoFirstLevelApp,  'N') = 'N' OR ISNULL(h.FirstlevelApp,  'N') = 'Y')
+                 AND (ISNULL(para.PoSecondLevelApp, 'N') = 'N' OR ISNULL(h.SecondlevelApp, 'N') = 'Y')
+              THEN 'CONFIRMED'
+            WHEN ISNULL(h.FirstlevelApp, 'N') = 'Y'
+              THEN 'First Level Approved'
+            ELSE 'PENDING'
         END AS ApprovalStatus,
         RTRIM(ISNULL(h.poprintflg, 'N'))                            AS PrintStatus,
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
@@ -150,6 +157,7 @@ BEGIN
         ON RTRIM(t.TYPE_CODE) = RTRIM(h.POGRP)
     LEFT JOIN dbo.FA_SLMAS sl
         ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    LEFT JOIN dbo.PO_PARA para ON para.divcode = h.DIVCODE
     OUTER APPLY (
         SELECT TOP 1 u.user_name
         FROM dbo.PP_PASSWD u

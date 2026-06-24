@@ -26,7 +26,7 @@ const PAGE_SIZE = 50
 const fmt2 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 function StatusBadge({ status }: { status: string }) {
-  const badge = PO_APPROVAL_BADGE[status] ?? { color: '#4A4A4A', bg: '#F5F5F3' }
+  const badge = PO_APPROVAL_BADGE[status.toUpperCase()] ?? { color: '#4A4A4A', bg: '#F5F5F3' }
   return (
     <span style={{
       fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,

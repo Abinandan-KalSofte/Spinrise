@@ -57,7 +57,11 @@ public record PoPrintDto(
     string   DivStateCode,
     string   SlStateCode,
     // Lines
-    IReadOnlyList<PoPrintLineDto> Lines
+    IReadOnlyList<PoPrintLineDto> Lines,
+    // Appended (defaulted) — populated by the KSP_PR_PO_GST path; legacy ksp_PO_GetPrint omits it
+    decimal  OtherCharges = 0m,
+    // Authorised-signatory signature image (PO_ParaPOApproval.SIGNATURE via FinalAppSign)
+    byte[]?  AuthorisedSign = null
 );
 
 public record PoPrintLineDto(

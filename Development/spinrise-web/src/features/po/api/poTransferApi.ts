@@ -124,6 +124,9 @@ export const applyHeaderTax = async (divCode: string, poNo: number, poDate: stri
 export const getLastRecord = (divCode: string, fDate: string, lDate: string) =>
   apiHelpers.get<PoHeader | null>(`${BASE}/last?divCode=${divCode}&fDate=${fDate}&lDate=${lDate}`)
 
+export const getFirstRecord = (divCode: string, fDate: string, lDate: string) =>
+  apiHelpers.get<PoHeader | null>(`${BASE}/first?divCode=${divCode}&fDate=${fDate}&lDate=${lDate}`)
+
 export const getById = (divCode: string, poNo: number, poDate: string) =>
   apiHelpers.get<PoHeader>(`${BASE}/${poNo}?divCode=${divCode}&poDate=${poDate}`)
 

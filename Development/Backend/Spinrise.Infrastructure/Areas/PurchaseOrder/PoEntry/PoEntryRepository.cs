@@ -180,6 +180,21 @@ public class PoEntryRepository : IPoEntryRepository
         return header;
     }
 
+    public async Task<PoHeaderDto?> GetFirstRecordAsync(string divCode, DateOnly fDate, DateOnly lDate)
+    {
+        using var multi = await _uow.Connection.QueryMultipleAsync(
+            StoredProcedures.Po.GetFirstRecord,
+            new { DivCode = divCode, FDate = fDate, LDate = lDate },
+            commandType: CommandType.StoredProcedure);
+
+        var header = await multi.ReadFirstOrDefaultAsync<PoHeaderDto>();
+        if (header is null) return null;
+
+        header.Lines    = (await multi.ReadAsync<PoLineDto>()).ToList();
+        header.Delivery = await ReadDeliveryAsync(multi);
+        return header;
+    }
+
     public async Task<PoSaveResultDto> SaveAsync(string divCode, AddPoRequest request,
         string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate)
     {
@@ -410,6 +425,77 @@ public class PoEntryRepository : IPoEntryRepository
             header.PayTerms, header.InsAmt, header.PackAmt,
             header.DivStateCode, header.SlStateCode,
             lines
+        );
+    }
+
+    // Legacy Crystal print path (KSP_PR_PO_gst): single flat result set, range params.
+    // For a single PO we pass FPONO=TPONO and FPODATE=TPODATE; the header is lifted from
+    // the first row and the lines come from every row. Maps into the shared PoPrintDto so
+    // PurchaseOrderDocumentV2 renders it unchanged. Multi-line addresses are pre-composed
+    // with '\n' (QuestPDF renders newlines as line breaks).
+    public async Task<PoPrintDto?> GetPrintDataGstAsync(string divCode, decimal poNo, DateOnly poDate)
+    {
+        var rows = (await _uow.Connection.QueryAsync<PoPrintGstRow>(
+            StoredProcedures.Po.GetPrintDataGst,
+            new
+            {
+                DIVCODE = divCode,
+                FPONO   = ((long)poNo).ToString(),
+                TPONO   = ((long)poNo).ToString(),
+                FPODATE = poDate.ToString("yyyy-MM-dd"),
+                TPODATE = poDate.ToString("yyyy-MM-dd")
+            },
+            commandType: CommandType.StoredProcedure)).ToList();
+
+        if (rows.Count == 0) return null;
+        var h = rows[0];
+
+        static string Join(string sep, params string[] parts) =>
+            string.Join(sep, parts.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim()));
+
+        static string Fmt(DateTime? d, string f) => d.HasValue ? d.Value.ToString(f) : "";
+
+        // Supplier "To" address — add1 / add2 / add3 / city - pin / state, country
+        var slAddress = Join("\n",
+            h.add1, h.add2, h.add3,
+            Join(" - ", h.city, h.pin),
+            Join(", ", h.state, h.country));
+
+        // Division pincode slot folds "city - pin" + state so the letterhead/delivery
+        // address show the full block within the existing four address slots.
+        var divPinLine = Join("\n", Join(" - ", h.DCITY, h.DPINCODE), h.DSTATENAME);
+
+        var lines = rows.Select((r, i) => new PoPrintLineDto(
+            i + 1,
+            r.ITEMCODE,
+            Join(" ", r.ITEMNAME, r.ITEMSPEC1, r.ITEMSPEC2, r.ITEMSPEC3),
+            r.UOM,
+            r.itemHsn,
+            0m, 0m,
+            r.ORDQTY, r.RATE, r.LORDVAL,
+            "", 0m, 0m,
+            r.cgstper, r.cgstamt, r.sgstper, r.sgstamt,
+            r.igstper, r.igstamt, r.tcs_per, r.tcs_amt,
+            r.DISPER, r.disamt
+        )).ToList();
+
+        return new PoPrintDto(
+            h.DIV_LOGO, h.DIV_PRINTNAME, h.DIV_PRINTNAME, h.DIV_UNITNAME,
+            h.DADD1, h.DADD2, h.DADD3,
+            divPinLine, h.DPHONE1, h.DEMAIL, h.div_gstinno, h.DPAN, h.DWEBADDR,
+            h.DIVCODE, h.PORDNO, DateOnly.FromDateTime(h.PORDDT),
+            "", h.slname, slAddress, h.sup_gstinno, h.sup_phone1, h.sup_email,
+            "", h.CARNAME, h.CurrCode, 1m,
+            0, "", h.hremarks,
+            0m, 0m, 0m, 0m,
+            0m, rows.Sum(r => r.FREIGHT), h.roff, 0m,
+            "N", "N", h.createdby, Fmt(h.createddt, "dd/MM/yyyy  hh:mm:sstt"),
+            h.refno, Fmt(h.RefDate, "dd/MM/yyyy"), Fmt(h.duedate, "dd/MM/yyyy"), h.NOTE,
+            h.PAYTERMS, rows.Sum(r => r.INS_AMT), rows.Sum(r => r.PACKAMT),
+            h.div_GSTstateCode, h.sup_gststatecode,
+            lines,
+            rows.Sum(r => r.OTHCHGS),
+            h.FinalAppSign
         );
     }
 

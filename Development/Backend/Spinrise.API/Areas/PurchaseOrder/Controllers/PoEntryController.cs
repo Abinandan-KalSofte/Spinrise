@@ -166,6 +166,16 @@ public class PoEntryController : BaseApiController
         return OkResponse(result);
     }
 
+    [HttpGet("first")]
+    public async Task<IActionResult> GetFirstRecord(
+        [FromQuery] string  divCode,
+        [FromQuery] DateOnly fDate,
+        [FromQuery] DateOnly lDate)
+    {
+        var result = await _service.GetFirstRecordAsync(divCode, fDate, lDate);
+        return OkResponse(result);
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetList(
         [FromQuery] string   divCode,
@@ -208,7 +218,7 @@ public class PoEntryController : BaseApiController
         catch (Exception ex) { _logger.LogWarning(ex, "Print: GetParameters failed — treating as no parameters"); }
 
         _logger.LogInformation("Print: GetPrintData PO={PoNo}", poNo);
-        var po = await _service.GetPrintDataAsync(divCode, poNo, poDate);
+        var po = await _service.GetPrintDataGstAsync(divCode, poNo, poDate);
         if (po is null)
             return NotFoundResponse("No records to print.");
 

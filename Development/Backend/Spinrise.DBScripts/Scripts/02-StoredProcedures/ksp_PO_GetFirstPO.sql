@@ -1,11 +1,10 @@
 -- ============================================================
--- ksp_PO_GetLastPO
--- Loads most recent PO for the division in the FY window.
+-- ksp_PO_GetFirstPO
+-- Loads the FIRST (oldest) PO for the division in the FY window.
 -- Returns 3 result sets: (1) header, (2) lines, (3) delivery slots.
--- Called on screen load (View mode initial state).
--- Column mapping confirmed against live JAT PO_ORDH schema.
+-- Symmetric with ksp_PO_GetLastPO — only ORDER BY direction differs.
 -- ============================================================
-CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetLastPO
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetFirstPO
 (
     @DivCode VARCHAR(2),
     @FDate   DATE,
@@ -25,7 +24,7 @@ BEGIN
     WHERE DIVCODE = @DivCode
       AND CAST(PORDDT AS DATE) BETWEEN @FDate AND @LDate
       AND ISNULL(CANFLG, '') = ''
-    ORDER BY PORDDT DESC, PORDNO DESC;
+    ORDER BY PORDDT ASC, PORDNO ASC;
 
     IF @PoNo IS NULL
     BEGIN
@@ -84,7 +83,6 @@ BEGIN
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         RTRIM(ISNULL(h.REMARKS, ''))                                AS Remarks,
-        -- Header GST: PO_ORDH stores amounts only (CGSTAMT/SGSTAMT/IGSTAMT), not percentages
         CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
         CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
         CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
@@ -93,7 +91,6 @@ BEGIN
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
         ISNULL(h.FREIGHT, 0)                                        AS FreightAmt,
-        -- FreightPer not stored in PO_ORDH; read from first PO_ORDL line (Frgt1per stored per-line)
         ISNULL((SELECT TOP 1 l.Frgt1per FROM dbo.PO_ORDL l
                 WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
                   AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)
@@ -107,12 +104,9 @@ BEGIN
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
         CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
         CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
-        -- Applicability position flags (FRT_FLG/Ins_Flg/Cess_Flg: 'A'=AFTER, else BEFORE)
         CASE WHEN UPPER(RTRIM(ISNULL(h.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurancePosition,
         CASE WHEN UPPER(RTRIM(ISNULL(h.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessPosition,
-        -- Charge amounts: Pack_Amt/Ins_Amt stored in DB; Disc/Cess/AddTax aggregated from PO_ORDL
-        -- (using ORDVAL × % was wrong after T-0025 changed ORDVAL to grand total, not item value)
         ISNULL(h.Pack_Amt, 0)                                                                 AS PackingAmt,
         ISNULL(h.Ins_Amt,  0)                                                                 AS InsuranceAmt,
         ISNULL((SELECT ROUND(SUM(ISNULL(l.disamt,    0)), 2) FROM dbo.PO_ORDL l
@@ -124,7 +118,6 @@ BEGIN
         ISNULL((SELECT ROUND(SUM(ISNULL(l.ADDTAXAMT, 0)), 2) FROM dbo.PO_ORDL l
                 WHERE l.DIVCODE = h.DIVCODE AND l.PORDNO = h.PORDNO
                   AND CAST(l.PORDDT AS DATE) = CAST(h.PORDDT AS DATE)), 0)                   AS AddTaxAmt,
-        -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
         RTRIM(ISNULL(h.BANK_CODE, ''))                              AS BankCode,
@@ -133,14 +126,13 @@ BEGIN
         ISNULL(h.ADV_PER, 0)                                        AS AdvPer,
         ISNULL(h.ADV_AMT, 0)                                        AS AdvAmt,
         RTRIM(ISNULL(h.advpaymenttype, ''))                         AS ModeOfPayment,
-        RTRIM(ISNULL(h.chqno, ''))                                  AS PayRef,    -- FIX: CHQNO stores PayRef (DIRECT) or ChequeNo (BANK) via COALESCE; return same value
+        RTRIM(ISNULL(h.chqno, ''))                                  AS PayRef,
         CASE WHEN h.chqdt IS NULL THEN NULL
-             ELSE CONVERT(varchar(10), CAST(h.chqdt AS DATE), 120) END AS PayRefDate, -- FIX: CHQDT stores PayRefDate (DIRECT) or ChequeDate (BANK) via COALESCE
+             ELSE CONVERT(varchar(10), CAST(h.chqdt AS DATE), 120) END AS PayRefDate,
         RTRIM(ISNULL(h.chqno, ''))                                  AS ChequeNo,
         CASE WHEN h.chqdt IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(h.chqdt AS DATE), 120) END AS ChequeDate,
         ISNULL(h.CRDDAYS, 0)                                        AS CreditDays,
-        -- Instructions
         CASE WHEN h.Duedate IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(h.Duedate AS DATE), 120) END AS DeliveryDate,
         RTRIM(ISNULL(h.DEL_INS1, ''))                               AS DeliveryLocation,
@@ -148,12 +140,11 @@ BEGIN
         RTRIM(ISNULL(h.SPL_INS, ''))                                AS SpecialInstr,
         RTRIM(ISNULL(h.DEL_INS2, ''))                               AS Despatch,
         RTRIM(ISNULL(h.Note, ''))                                   AS Purpose,
-        RTRIM(ISNULL(h.Note2, ''))                                  AS OtherLevies, -- FIX: was hardcoded ''; @OtherLevies maps to Note2 per SaveEntry comment
+        RTRIM(ISNULL(h.Note2, ''))                                  AS OtherLevies,
         RTRIM(ISNULL(h.PriceTerm, ''))                              AS PricingTerms,
         RTRIM(ISNULL(h.RemarksPF, ''))                              AS PackForwarding,
         RTRIM(ISNULL(h.RemarksIns, ''))                             AS Insurance,
         RTRIM(ISNULL(h.RemarksFrt, ''))                             AS Freight,
-        -- Cancel / status
         RTRIM(ISNULL(h.REMINDER, ''))                               AS Reminder,
         ''                                                          AS Status,
         CAST(CASE WHEN ISNULL(h.CANFLG, '') <> '' THEN 1 ELSE 0 END AS BIT) AS Cancelled,
@@ -162,7 +153,6 @@ BEGIN
         RTRIM(ISNULL(h.REASON, ''))                                 AS CancelReason,
         RTRIM(ISNULL(h.APPROVED, 'N'))                              AS Approved,
         RTRIM(ISNULL(h.APPBY, ''))                                  AS ApprovedBy,
-        -- Amendment
         TRY_CAST(NULLIF(RTRIM(h.AMDORDNO), '') AS DECIMAL(10,0))   AS AmdOrderNo,
         CASE WHEN h.AMDORDDT IS NULL THEN NULL
              ELSE CONVERT(varchar(10), CAST(h.AMDORDDT AS DATE), 120) END AS AmdDate,
@@ -257,7 +247,6 @@ BEGIN
         CASE WHEN UPPER(RTRIM(ISNULL(l.FRT_FLG,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightPos,
         CASE WHEN UPPER(RTRIM(ISNULL(l.Ins_Flg,  ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsuranceDuty,
         CASE WHEN UPPER(RTRIM(ISNULL(l.Cess_Flg, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS CessTaxPos,
-        -- POT-TC-04: Landing Cost (net per line = taxable + GST + TCS + charges - discount)
         ISNULL(l.ORDVAL,0)
           - ISNULL(l.disamt,0)
           + ISNULL(l.Packamt,0)

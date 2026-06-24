@@ -79,6 +79,7 @@ public static class StoredProcedures
         public const string GetDeliverySchedule= "ksp_PO_GetDeliverySchedule";
         public const string GetList            = "ksp_PO_GetPOList";
         public const string GetLastRecord      = "ksp_PO_GetLastPO";
+        public const string GetFirstRecord     = "ksp_PO_GetFirstPO";
         public const string SaveEntry          = "ksp_PO_SaveEntry";
         public const string DeletePo           = "ksp_PO_DeletePO";
         public const string GetAddresses       = "ksp_PO_GetAddresses";
@@ -86,6 +87,7 @@ public static class StoredProcedures
         public const string GetPricingTerms    = "ksp_PO_GetPricingTerms";
         public const string GetPayTerms        = "ksp_PO_GetPayTerms";
         public const string GetPrintData       = "ksp_PO_GetPrint";
+        public const string GetPrintDataGst    = "KSP_PR_PO_gst";   // legacy Crystal print SP — flat result set, range params
         public const string SetPrintFlag       = "ksp_PO_SetPrintFlag";
         public const string UpdateBudget        = "ksp_PO_UpdateBudget";
         public const string UpdateBudgetQty     = "ksp_PO_UpdateBudgetQty";

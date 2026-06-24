@@ -26,12 +26,12 @@ export const PO_ROUTE_BADGE: Record<string, { color: string; bg: string }> = {
 
 export const PO_APPROVAL_BADGE: Record<string, { color: string; bg: string }> = {
   // GET /api/v1/po returns approvalStatus as 'CONFIRMED' | 'PENDING' (handover §1).
-  'CONFIRMED':  { color: '#3B6D11', bg: '#EAF3DE' },   // green
-  'PENDING':    { color: '#BA7517', bg: '#FAEEDA' },   // amber
-  'PENDING L1': { color: '#BA7517', bg: '#FAEEDA' },
-  'PENDING L2': { color: '#BA7517', bg: '#FAEEDA' },
-  'PENDING CEO':{ color: '#BA7517', bg: '#FAEEDA' },
-  'APPROVED':   { color: '#3B6D11', bg: '#EAF3DE' },
+  'CONFIRMED':            { color: '#3B6D11', bg: '#EAF3DE' },   // green
+  'APPROVED':             { color: '#3B6D11', bg: '#EAF3DE' },
+  'FIRST LEVEL APPROVED': { color: '#185FA5', bg: '#EBF3FC' },   // blue — L1 done, awaiting final
+  'PENDING':              { color: '#BA7517', bg: '#FAEEDA' },   // amber
+  'PENDING L2':           { color: '#BA7517', bg: '#FAEEDA' },
+  'PENDING CEO':          { color: '#BA7517', bg: '#FAEEDA' },
   'REJECTED':   { color: '#A32D2D', bg: '#FCEBEB' },
   'NOT PRINTED':{ color: '#4A4A4A', bg: '#F5F5F3' },
 }

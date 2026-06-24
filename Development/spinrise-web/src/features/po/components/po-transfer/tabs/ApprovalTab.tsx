@@ -14,18 +14,18 @@ import { PO_APPROVAL_BADGE, type PoHeader } from '../../../types'
 
 interface ApprovalTabProps { currentPo: PoHeader | null }
 
-// Map raw approvalStatus to a user-friendly display label.
-// Only CONFIRMED/APPROVED get the "Final Level Approved" label;
-// all other states (PENDING*, REJECTED, NOT PRINTED) keep their own label.
+// Maps approvalStatus to what the Final Approval field should display.
+// 'First Level Approved' means L1 is done but final approval is still pending.
 const finalApprovalLabel = (status: string): string => {
   const up = status.toUpperCase()
   if (up === 'CONFIRMED' || up === 'APPROVED') return 'Final Level Approved'
+  if (up === 'FIRST LEVEL APPROVED') return 'Pending'
   return status
 }
 
 export function ApprovalTab({ currentPo }: ApprovalTabProps) {
-  const status = currentPo?.approvalStatus || 'Pending L1'
-  const badge  = PO_APPROVAL_BADGE[status.toUpperCase()] ?? PO_APPROVAL_BADGE['PENDING L1']
+  const status = currentPo?.approvalStatus || 'Pending'
+  const badge  = PO_APPROVAL_BADGE[status.toUpperCase()] ?? PO_APPROVAL_BADGE['PENDING']
   const printStatus = currentPo?.printStatus || 'Not Printed'
 
   return (

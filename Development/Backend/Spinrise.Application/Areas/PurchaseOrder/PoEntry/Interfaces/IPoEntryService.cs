@@ -22,8 +22,10 @@ public interface IPoEntryService
     Task<IEnumerable<PoSummaryDto>>       GetListAsync(string divCode, DateOnly fDate, DateOnly lDate, string? search, string? supplier, int page, int pageSize);
     Task<PoHeaderDto?>                    GetByIdAsync(string divCode, decimal poNo, DateOnly poDate);
     Task<PoHeaderDto?>                    GetLastRecordAsync(string divCode, DateOnly fDate, DateOnly lDate);
+    Task<PoHeaderDto?>                    GetFirstRecordAsync(string divCode, DateOnly fDate, DateOnly lDate);
     Task<PoSaveResultDto>                 AddAsync(string divCode, AddPoRequest request, string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate);
     Task                                  DeleteAsync(string divCode, DeletePoRequest request, string userId, string? hostName, string? ipAddress);
     Task<PoPrintDto?>                     GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate);
+    Task<PoPrintDto?>                     GetPrintDataGstAsync(string divCode, decimal poNo, DateOnly poDate);
     Task                                  UpdatePrintFlagAsync(string divCode, decimal poNo, DateOnly poDate);
 }

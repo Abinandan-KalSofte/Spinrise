@@ -83,7 +83,6 @@ export default function PrToPoTransferPage() {
     didInitRef.current = true
     usePoTransferStore.getState().resetToView()
     void f.loadLastRecord()
-    void f.loadNavList()
     return () => usePoTransferStore.getState().resetToView()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -176,7 +175,7 @@ export default function PrToPoTransferPage() {
     setPrintLoading(true)
     setPrintBlobUrl(null)
     try {
-      const { blobUrl, filename } = await poApi.getPrintV2BlobUrl(f.divCode, f.currentPo.poNo, f.currentPo.poDate)
+      const { blobUrl, filename } = await poApi.getPrintBlobUrl(f.divCode, f.currentPo.poNo, f.currentPo.poDate)
       setPrintBlobUrl(blobUrl)
       setPrintFilename(filename)
     } catch (err) {

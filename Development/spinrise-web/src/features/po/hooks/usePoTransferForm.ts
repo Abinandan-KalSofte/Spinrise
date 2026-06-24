@@ -297,9 +297,6 @@ export function usePoTransferForm() {
 
   const [parameters,  setParameters]  = useState<PoParameters | null>(null)
   const [preChecks,   setPreChecks]   = useState<PoPreAddChecks | null>(null)
-  // Record-navigation index — every PO number in the active FY, ascending.
-  const [navList, setNavList] = useState<{ poNo: number; poDate: string }[]>([])
-
   const [orderTypes,         setOrderTypes]         = useState<OrderTypeOption[]>([])
   const [carriers,           setCarriers]           = useState<CarrierOption[]>([])
   const [formTypes,          setFormTypes]          = useState<FormTypeOption[]>([])
@@ -909,18 +906,75 @@ export function usePoTransferForm() {
     finally { setNavLoading(false) }
   }, [divCode, normalizePoForGstState, processingDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build the navigation index (all PO numbers in the FY, ascending) for the
-  // First / Prev / Next / Last toolbar buttons. Refreshed after Save/Delete.
-  const loadNavList = useCallback(async () => {
+  const loadFirstRecord = useCallback(async () => {
     if (!divCode) return
     const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
+    setNavLoading(true)
     try {
-      const list = await poApi.getList(divCode, yfDate, ylDate, { pageSize: 50 })
-      setNavList(
-        [...list].sort((a, b) => a.poNo - b.poNo).map((s) => ({ poNo: s.poNo, poDate: s.poDate })),
-      )
-    } catch { setNavList([]) }
-  }, [divCode, processingDate])
+      const po = await poApi.getFirstRecord(divCode, yfDate, ylDate)
+      if (po) {
+        const normalizedPo = normalizePoForGstState(po)
+        setSuppliers((prev) =>
+          prev.some((s) => s.slCode === normalizedPo.supplier) ? prev : [
+            { slCode: normalizedPo.supplier, slName: normalizedPo.supplierName, gstinNo: normalizedPo.gstin, gstStateCode: '', gstStateName: normalizedPo.gstState, city: '' },
+            ...prev,
+          ],
+        )
+        setCurrentPo(normalizedPo)
+        fillHeaderFromPo(normalizedPo)
+        setDeliveryLines(normalizedPo.delivery ?? [])
+        resetToHeaderTab()
+      }
+    } catch { /* empty list is fine */ }
+    finally { setNavLoading(false) }
+  }, [divCode, normalizePoForGstState, processingDate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Navigate FIRST / PREV / NEXT / LAST across the full FY.
+  // FIRST/LAST use dedicated SPs (single-row, fast).
+  // PREV/NEXT fetch the full FY list (pageSize 1000) on demand and find the
+  // current record's position — same pattern as the PR module.
+  const navigateRecord = useCallback(async (direction: 'FIRST' | 'PREV' | 'NEXT' | 'LAST') => {
+    if (!divCode) return
+    const { yfDate, ylDate } = getFYBounds(processingDate ? new Date(processingDate) : undefined)
+
+    if (direction === 'FIRST') { void loadFirstRecord(); return }
+    if (direction === 'LAST')  { void loadLastRecord();  return }
+
+    setNavLoading(true)
+    try {
+      // getList returns DESC (newest first); reverse → ASC (oldest = index 0)
+      const all = (await poApi.getList(divCode, yfDate, ylDate, { pageSize: 1000 }))
+        .sort((a, b) => a.poNo - b.poNo)
+      if (all.length === 0) { setNavLoading(false); return }
+
+      const currIdx = currentPo?.poNo
+        ? all.findIndex((r) => r.poNo === currentPo.poNo)
+        : -1
+
+      let targetIdx: number
+      if (direction === 'PREV') {
+        if (currIdx <= 0) {
+          notificationService.info('Navigation', 'Already at the first record.')
+          setNavLoading(false)
+          return
+        }
+        targetIdx = currIdx - 1
+      } else {
+        if (currIdx < 0 || currIdx >= all.length - 1) {
+          notificationService.info('Navigation', 'Already at the last record.')
+          setNavLoading(false)
+          return
+        }
+        targetIdx = currIdx + 1
+      }
+
+      const target = all[targetIdx]
+      await loadRecord(target.poNo, target.poDate)
+    } catch {
+      notificationService.error('Navigation Failed', 'Could not load the record. Please try again.')
+      setNavLoading(false)
+    }
+  }, [divCode, processingDate, currentPo, loadFirstRecord, loadLastRecord]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const headerNegativeFields: { key: keyof PoHeaderFormValues; label: string }[] = [
     { key: 'currRate', label: 'Currency Rate' },
@@ -1302,7 +1356,7 @@ export function usePoTransferForm() {
       // Must come AFTER resetToView — resetToView sets deliveryLines:[] in the store.
       setDeliveryLines(saved.delivery ?? [])
       resetToHeaderTab()
-      void loadNavList()   // new PO joins the navigation index
+      // navigation index rebuilt on demand (navigateRecord fetches full list each time)
       notificationService.success('Purchase Order Saved Successfully', `Purchase Order ${formatPoNo(result.poNo)} was created.`)
       resetBodyTab()   // navigate page body back to Item Details tab (Task 1)
     } catch (err) {
@@ -1342,7 +1396,7 @@ export function usePoTransferForm() {
       notificationService.success('Purchase Order Deleted', `${formatPoNo(currentPo.poNo)} deleted. PR quantities reversed.`)
       resetToView()
       await loadLastRecord()
-      void loadNavList()   // drop the deleted PO from the navigation index
+      // navigation index rebuilt on demand (navigateRecord fetches full list each time)
       return true
     } catch (err) {
       // BR-03: GRN raised → HTTP 409. Surface the (server) guard message.
@@ -1403,23 +1457,14 @@ export function usePoTransferForm() {
   const pageBusy = saving || deleting || navLoading
 
   // ── Record navigation (First / Prev / Next / Last) ─────────────────────────
-  // Position within the FY index; -1 when the current PO isn't in the list yet.
-  const currentIndex = useMemo(
-    () => (currentPo?.poNo ? navList.findIndex((r) => r.poNo === currentPo.poNo) : -1),
-    [navList, currentPo],
-  )
-  const hasRecords = navList.length > 0
-  const canPrev = currentIndex > 0
-  const canNext = currentIndex >= 0 && currentIndex < navList.length - 1
+  const hasRecords = !!currentPo
+  const canPrev    = !!currentPo
+  const canNext    = !!currentPo
 
-  const goToIndex = async (idx: number) => {
-    const rec = navList[idx]
-    if (rec) await loadRecord(rec.poNo, rec.poDate)
-  }
-  const goFirst = () => { if (hasRecords) void goToIndex(0) }
-  const goPrev  = () => { if (canPrev)    void goToIndex(currentIndex - 1) }
-  const goNext  = () => { if (canNext)    void goToIndex(currentIndex + 1) }
-  const goLast  = () => { if (hasRecords) void goToIndex(navList.length - 1) }
+  const goFirst = () => { void navigateRecord('FIRST') }
+  const goPrev  = () => { void navigateRecord('PREV')  }
+  const goNext  = () => { void navigateRecord('NEXT')  }
+  const goLast  = () => { void navigateRecord('LAST')  }
 
   // ── Ctrl+S save shortcut (ADD only) ────────────────────────────────────────
   const doSaveRef = useRef(doSave)
@@ -1462,7 +1507,7 @@ export function usePoTransferForm() {
     // mode transitions
     enterAddMode, enterDeleteMode, cancelMode,
     // record nav
-    loadRecord, loadLastRecord, loadNavList,
+    loadRecord, loadLastRecord, loadFirstRecord, navigateRecord,
     goFirst, goPrev, goNext, goLast, canPrev, canNext, hasRecords,
     // actions
     doSave, handleDeleteClick, handleDeleteConfirm,

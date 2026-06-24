@@ -72,10 +72,9 @@ function Card({ label, value, sub, accent, valColor, valSmall, warning }: {
 
 function Pipeline({ status }: { status?: string }) {
   const s           = (status ?? '').toUpperCase().trim()
-  const isConfirmed = s === 'CONFIRMED'
-  const l2Active    = !isConfirmed && s.includes('L2')
-  const l1Done      = isConfirmed || s.includes('L1') || l2Active
-  const l1Active    = !l1Done && s === 'PENDING'
+  const isConfirmed = s === 'CONFIRMED' || s === 'APPROVED'
+  const isL1Done    = s === 'FIRST LEVEL APPROVED' || isConfirmed
+  const l1Active    = s === 'PENDING'
 
   const node = (label: string, state: 'done' | 'active' | 'wait') => (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
@@ -97,9 +96,9 @@ function Pipeline({ status }: { status?: string }) {
     <div style={{ display: 'flex', alignItems: 'flex-start', marginTop: 6 }}>
       {node('Requested', 'done')}
       {line(true)}
-      {node('L1', l1Done ? 'done' : l1Active ? 'active' : 'wait')}
-      {line(l1Done)}
-      {node('L2', isConfirmed ? 'done' : l2Active ? 'active' : 'wait')}
+      {node('L1', isL1Done ? 'done' : l1Active ? 'active' : 'wait')}
+      {line(isL1Done)}
+      {node('L2', isConfirmed ? 'done' : isL1Done && !isConfirmed ? 'active' : 'wait')}
     </div>
   )
 }
