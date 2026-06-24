@@ -435,14 +435,18 @@ public class PoEntryRepository : IPoEntryRepository
         }).ToList();
     }
 
-    private sealed record DeliverySlotRow(
-        decimal LineNo,   // PORDSNO is NUMERIC in SQL — must be decimal
-        string  ItemCode,
-        string  ItemName,
-        string  Uom,
-        decimal PrNo,
-        decimal PoQty,
-        long    SlotNo,   // ROW_NUMBER() always returns BIGINT — must be long
-        string? ShDate,
-        decimal Qty);
+    // Class (not record) so Dapper uses property-binding — silently ignores extra
+    // columns the deployed SP may return (e.g. Remarks in old JAT SP version).
+    private sealed class DeliverySlotRow
+    {
+        public decimal LineNo   { get; set; }          // PORDSNO — NUMERIC → decimal
+        public string  ItemCode { get; set; } = "";
+        public string  ItemName { get; set; } = "";
+        public string  Uom      { get; set; } = "";
+        public decimal PrNo     { get; set; }
+        public decimal PoQty    { get; set; }
+        public long    SlotNo   { get; set; }          // ROW_NUMBER() → BIGINT → long
+        public string? ShDate   { get; set; }
+        public decimal Qty      { get; set; }
+    }
 }
