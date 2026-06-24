@@ -32,6 +32,8 @@ set DB_NAME=SpinRiseSaranya
 set DB_NAME_JAT=JAT
 set API_PORT=5001
 set WEB_PORT=3000
+set API_DEPLOY_PATH=D:\Kalsofte\Exe\SpinriseV2\Spinrise.API
+set WEB_DEPLOY_PATH=D:\Kalsofte\Exe\SpinriseV2\spinrise-web
 
 :: -- Timestamp via PowerShell (locale-safe) -----------------------
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmm"') do set TS=%%i
@@ -148,13 +150,16 @@ echo [3/3] Copying database scripts...
 copy "%DB_DIR%\merged.sql" "%DB_OUT%\merged.sql" >nul
 echo         merged.sql       (M01 - SpinRiseSaranya)
 
-:: M02 -- JAT (copy only if file exists; M02 may not be built yet)
-if exist "%DB_DIR%\merged_jat.sql" (
-    copy "%DB_DIR%\merged_jat.sql" "%DB_OUT%\merged_jat.sql" >nul
-    echo         merged_jat.sql   (M02 - JAT)
-) else (
-    echo         merged_jat.sql   [SKIPPED - M02 not yet built]
+:: M01 PO + M02 -- JAT (required - all PO Entry fixes live here)
+if not exist "%DB_DIR%\merged_jat.sql" (
+    echo [ERROR] merged_jat.sql not found:
+    echo         %DB_DIR%\merged_jat.sql
+    rd /s /q "%PACKAGE_DIR%" >nul 2>&1
+    pause
+    exit /b 1
 )
+copy "%DB_DIR%\merged_jat.sql" "%DB_OUT%\merged_jat.sql" >nul
+echo         merged_jat.sql   (M01 PO + M02 RMI PO - JAT)
 
 echo [3/3] Database done.
 echo.
@@ -177,7 +182,7 @@ echo   Spinrise.API\       .NET 8 publish output ^(backend^)
 echo   spinrise-web\       Vite production build ^(frontend^)
 echo   Database\           SQL scripts for all stored procedures
 echo     merged.sql        M01 PR -- database: %DB_NAME%
-echo     merged_jat.sql    M02 RMI PO -- database: %DB_NAME_JAT% ^(if present^)
+echo     merged_jat.sql    M01 PO + M02 RMI PO -- database: %DB_NAME_JAT%
 echo   DEPLOY_STEPS.txt    This file
 echo.
 echo SERVER DETAILS
@@ -209,7 +214,7 @@ echo       Select database: %DB_NAME%
 echo       Open: Database\merged.sql from this package
 echo       Press F5 ^> Confirm "Commands completed successfully"
 echo.
-echo   1b. M02 -- JAT  ^(skip if merged_jat.sql is not in this package^)
+echo   1b. M01 PO + M02 -- JAT
 echo       Select database: %DB_NAME_JAT%
 echo       Open: Database\merged_jat.sql from this package
 echo       Press F5 ^> Confirm "Commands completed successfully"
@@ -221,8 +226,7 @@ echo ================================================================
 echo  STEP 2 -- BACKEND  ^(Spinrise.API -- port %API_PORT%^)
 echo ================================================================
 echo.
-echo   IIS site path example: E:\SpinriseV2\Server\Spinrise.API\
-echo   ^(Adjust to the actual site path configured in IIS^)
+echo   IIS site path: %API_DEPLOY_PATH%
 echo.
 echo   1. Open IIS Manager on the target server
 echo   2. Application Pools ^> SpinriseAPI ^> Stop
@@ -230,15 +234,13 @@ echo      OR from Administrator cmd:
 echo      %%windir%%\system32\inetsrv\appcmd stop apppool /apppool.name:"SpinriseAPI"
 echo.
 echo   3. BACKUP current files ^(recommended^):
-echo      xcopy "E:\SpinriseV2\Server\Spinrise.API"
-echo            "E:\SpinriseV2\Server\Spinrise.API_bak_%TS%" /E /I /Q
+echo      xcopy "%API_DEPLOY_PATH%" "%API_DEPLOY_PATH%_bak_%TS%" /E /I /Q
 echo.
 echo   4. CHECK appsettings.json before copying:
-echo      Verify ConnectionStrings DefaultConnection points to %DB_SERVER%
-echo      Database: %DB_NAME%
+echo      Verify ConnectionStrings:ServerConnection points to %DB_SERVER%
 echo.
 echo   5. Copy new backend files:
-echo      robocopy "Spinrise.API" "E:\SpinriseV2\Server\Spinrise.API" /E /PURGE
+echo      robocopy "Spinrise.API" "%API_DEPLOY_PATH%" /E /PURGE
 echo.
 echo   6. Start the app pool:
 echo      %%windir%%\system32\inetsrv\appcmd start apppool /apppool.name:"SpinriseAPI"
@@ -249,14 +251,13 @@ echo ================================================================
 echo  STEP 3 -- FRONTEND  ^(spinrise-web -- port %WEB_PORT%^)
 echo ================================================================
 echo.
-echo   IIS site path example: E:\SpinriseV2\Server\spinrise-web\
-echo   ^(Adjust to the actual site path configured in IIS^)
+echo   IIS site path: %WEB_DEPLOY_PATH%
 echo.
 echo   1. Stop app pool:
 echo      %%windir%%\system32\inetsrv\appcmd stop apppool /apppool.name:"SpinriseWeb"
 echo.
 echo   2. Copy new frontend files:
-echo      robocopy "spinrise-web" "E:\SpinriseV2\Server\spinrise-web" /E /PURGE
+echo      robocopy "spinrise-web" "%WEB_DEPLOY_PATH%" /E /PURGE
 echo.
 echo   3. Start app pool:
 echo      %%windir%%\system32\inetsrv\appcmd start apppool /apppool.name:"SpinriseWeb"
@@ -280,12 +281,12 @@ echo ================================================================
 echo.
 echo   Backend:
 echo   1. Stop SpinriseAPI app pool
-echo   2. Restore the _bak_%TS% folder created in Step 2.3
+echo   2. robocopy "%API_DEPLOY_PATH%_bak_%TS%" "%API_DEPLOY_PATH%" /E /PURGE
 echo   3. Start SpinriseAPI app pool
 echo.
 echo   Frontend:
 echo   1. Stop SpinriseWeb app pool
-echo   2. Restore previous spinrise-web folder contents
+echo   2. robocopy "%WEB_DEPLOY_PATH%_bak_%TS%" "%WEB_DEPLOY_PATH%" /E /PURGE  [if backup was taken]
 echo   3. Start SpinriseWeb app pool
 echo.
 echo   Database:

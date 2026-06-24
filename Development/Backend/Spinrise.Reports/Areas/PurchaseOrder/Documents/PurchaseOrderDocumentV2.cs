@@ -11,33 +11,29 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
 {
     private readonly PoPrintDto _po;
 
-    // ── Page ──────────────────────────────────────────────────────────────────────
     private const float Margin = 6.3f;
-
-    // ── Font ──────────────────────────────────────────────────────────────────────
-    private const string Font     = "Calibri";
+    private const string Font = "Calibri";
     private const float FsCompany = 14f;
-    private const float FsInfo    = 10f;
-    private const float FsData    = 9f;
-    private const float FsSmall   = 8f;
-
-    // ── Colours ───────────────────────────────────────────────────────────────────
-    private const string Navy  = "#185FA5";
+    private const float FsInfo = 10f;
+    private const float FsData = 9f;
+    private const float FsSmall = 8f;
+    private const string Navy = "#185FA5";
     private const string Black = "#000000";
-
-    // ── Borders ───────────────────────────────────────────────────────────────────
-    private const float BdBox  = 1.0f;
+    private const float BdBox = 1.0f;
     private const float BdCell = 0.5f;
 
-    // ── Column widths (mm) — 11 cols ─────────────────────────────────────────────
-    // OA-02: Rate/Unit widened 19→23 to fit "5,00,000.0000" without wrapping; ItemName compensated 54→50
+    // Item-table column widths (mm proportions; switched to RelativeColumn so the
+    // table fills full container width). Order: S.No | Item Name | HSN | Order Qty
+    // | Unit | Rate/Unit | Disc% | CGST | SGST | IGST | Value.
+    // OA-02: Rate/Unit widened 19→23 to fit 12-char values like "5,00,000.0000"
+    // without wrapping into the Disc column; Item Name compensated 54→50 so the
+    // total (193) is unchanged.
     private static readonly float[] Cols = { 8f, 50f, 17f, 16f, 11f, 23f, 11f, 13f, 13f, 13f, 18f };
 
-    // ── Indian number format ──────────────────────────────────────────────────────
     private static readonly NumberFormatInfo InFmt = new()
     {
-        NumberGroupSizes       = new[] { 3, 2 },
-        NumberGroupSeparator   = ",",
+        NumberGroupSizes = new[] { 3, 2 },
+        NumberGroupSeparator = ",",
         NumberDecimalSeparator = "."
     };
 
@@ -55,11 +51,11 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
     public void Compose(IDocumentContainer container)
     {
         var totalLineValue = _po.Lines.Sum(l => l.Value);
-        var totalDiscount  = _po.Lines.Sum(l => l.LineDisAmt);
-        var totalCgst      = _po.Lines.Sum(l => l.CgstAmt);
-        var totalSgst      = _po.Lines.Sum(l => l.SgstAmt);
-        var totalIgst      = _po.Lines.Sum(l => l.IgstAmt);
-        var totalTcs       = _po.Lines.Sum(l => l.TcsAmt);
+        var totalDiscount = _po.Lines.Sum(l => l.LineDisAmt);
+        var totalCgst = _po.Lines.Sum(l => l.CgstAmt);
+        var totalSgst = _po.Lines.Sum(l => l.SgstAmt);
+        var totalIgst = _po.Lines.Sum(l => l.IgstAmt);
+        var totalTcs = _po.Lines.Sum(l => l.TcsAmt);
 
         var isIntraState = !string.IsNullOrWhiteSpace(_po.DivStateCode)
                            && _po.DivStateCode == _po.SlStateCode;
@@ -83,11 +79,9 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
             {
                 col.Spacing(0);
 
-                // Vendor + PO details
                 col.Item().Border(BdCell).BorderColor(Black)
                    .Element(c => ComposeVendorAndPoDetails(c));
 
-                // D-01: updated instruction line text
                 col.Item()
                    .Border(BdCell).BorderColor(Black).BorderTop(0)
                    .Padding(2)
@@ -98,14 +92,11 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                         .FontSize(FsSmall).Italic();
                    });
 
-                // Items table
                 col.Item().Element(c => ComposeItemsTable(c));
 
-                // Footer (terms left + amounts right)
                 col.Item().Border(BdCell).BorderColor(Black).BorderTop(0)
                    .Element(c => ComposeFooter(c, totalLineValue, totalDiscount, totalCgst, totalSgst, totalIgst, totalTcs, grandTotal, isIntraState));
 
-                // H-01: "Total PO Value(In Words)"
                 col.Item()
                    .Border(BdCell).BorderColor(Black).BorderTop(0)
                    .PaddingVertical(3).PaddingHorizontal(4)
@@ -116,12 +107,8 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                        t.Span(AmountToWords.Convert(grandTotal)).FontSize(FsData);
                    });
 
-                // I-01: GSTIN strip REMOVED — GSTIN now in footer left (G-03)
-
-                // Signature block
                 col.Item().Element(c => ComposeSignature(c, companyName));
 
-                // K-01: tagline with quotes, Black colour
                 col.Item()
                    .PaddingTop(3).PaddingBottom(1)
                    .Text(t =>
@@ -134,16 +121,12 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
         });
     }
 
-    // ── Letterhead ────────────────────────────────────────────────────────────────
-
     private void ComposeLetterhead(IContainer c, string companyName)
     {
         c.Border(BdBox).BorderColor(Black)
-         .Background(Colors.Grey.Lighten3)           // A-01: gray header background
          .PaddingVertical(4).PaddingHorizontal(6)
          .Row(row =>
          {
-             // Logo
              row.ConstantItem(45, Unit.Millimetre)
                 .AlignMiddle()
                 .Element(logoC =>
@@ -154,7 +137,6 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                         logoC.Height(28, Unit.Millimetre);
                 });
 
-             // Company name + address (centre column)
              row.RelativeItem()
                 .PaddingHorizontal(4)
                 .AlignMiddle()
@@ -162,116 +144,137 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                 {
                     col.Item().Text(t =>
                     {
-                        t.AlignCenter();
-                        // A-02: Black (not Navy)
-                        t.Span(companyName).Bold().FontSize(FsCompany).FontColor(Black);
+                        t.AlignLeft();
+                        t.Span(companyName).Bold().FontSize(FsCompany).FontColor(Navy);
                     });
 
-                    // A-03: Unit name subtitle
                     if (!string.IsNullOrWhiteSpace(_po.DivUnitName))
+                    {
+                        var unit = _po.DivUnitName.Trim();
+                        var unitText = unit.StartsWith("(", StringComparison.Ordinal) ? unit : $"(Unit - {unit})";
                         col.Item().Text(t =>
                         {
-                            t.AlignCenter();
-                            t.Span($"(Unit - {_po.DivUnitName})").Bold().FontSize(FsInfo).FontColor(Black);
+                            t.AlignLeft();
+                            t.Span(unitText).Bold().FontSize(FsInfo).FontColor(Navy);
                         });
+                    }
 
-                    var addr = string.Join(", ", new[]
-                    {
-                        _po.DivAddress1, _po.DivAddress2, _po.DivAddress3
-                    }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                    if (!string.IsNullOrWhiteSpace(_po.DivAddress1))
+                        col.Item().Text(t => { t.AlignLeft(); t.Span(_po.DivAddress1).FontSize(FsSmall); });
 
-                    if (!string.IsNullOrWhiteSpace(addr))
-                        col.Item().Text(t => { t.AlignCenter(); t.Span(addr).FontSize(FsSmall); });
+                    if (!string.IsNullOrWhiteSpace(_po.DivAddress2))
+                        col.Item().Text(t => { t.AlignLeft(); t.Span(_po.DivAddress2).FontSize(FsSmall); });
+
+                    if (!string.IsNullOrWhiteSpace(_po.DivAddress3))
+                        col.Item().Text(t => { t.AlignLeft(); t.Span(_po.DivAddress3).FontSize(FsSmall); });
 
                     if (!string.IsNullOrWhiteSpace(_po.DivPinCode))
-                        col.Item().Text(t => { t.AlignCenter(); t.Span($"Pin: {_po.DivPinCode}").FontSize(FsSmall); });
+                        col.Item().Text(t => { t.AlignLeft(); t.Span(_po.DivPinCode).FontSize(FsSmall); });
                 });
 
-             // Right panel: GSTIN / Phone / Email
-             row.ConstantItem(52, Unit.Millimetre)
+             row.ConstantItem(58, Unit.Millimetre)
                 .AlignMiddle()
                 .Column(col =>
                 {
                     void RightLine(string label, string val)
                     {
                         if (string.IsNullOrWhiteSpace(val)) return;
-                        col.Item().Text(t =>
+                        col.Item().Row(r =>
                         {
-                            t.AlignRight();
-                            t.Span($"{label}: ").Bold().FontSize(FsSmall);
-                            t.Span(val).FontSize(FsSmall);
+                            r.ConstantItem(13, Unit.Millimetre)
+                             .Text(t => { t.AlignLeft(); t.Span(label).Bold().FontSize(FsSmall); });
+                            r.ConstantItem(3, Unit.Millimetre)
+                             .Text(t => { t.AlignLeft(); t.Span(":").Bold().FontSize(FsSmall); });
+                            r.RelativeItem()
+                             .Text(t => { t.AlignLeft(); t.Span(val).FontSize(FsSmall); });
                         });
                     }
 
                     RightLine("GSTIN", _po.DivGstin);
-                    RightLine("PAN",   _po.DivPan);
-                    RightLine("E-mail",_po.DivEmail);
-                    RightLine("Web",   _po.DivWeb);
+                    RightLine("PAN", _po.DivPan);
+                    RightLine("E-mail", _po.DivEmail);
+                    RightLine("Web", _po.DivWeb);
                     RightLine("Phone", _po.DivPhone);
                 });
          });
     }
 
-    // ── Vendor + PO details ───────────────────────────────────────────────────────
-
     private void ComposeVendorAndPoDetails(IContainer c)
     {
         c.Row(row =>
         {
-            // "To:" vendor block
             row.RelativeItem()
                .BorderRight(BdCell).BorderColor(Black)
                .Padding(4)
-               .Column(col =>
+               // Layers: PrimaryLayer holds "To :", supplier name, address at the
+               // top (and sets the layer's natural size). The overlaid Layer with
+               // AlignBottom pins GSTIN/State Code + Phone/Email to the bottom of
+               // the row's height (driven by the taller PO-details column on the
+               // right). Unlike ExtendVertical, this does not bleed into the page.
+               .Layers(layers =>
                {
-                   // B-01: "To :" not "To,"
-                   col.Item().Text(t => { t.Span("To :").Bold().FontSize(FsData); });
-
-                   col.Item().Text(t => { t.Span(_po.SlName).Bold().FontSize(FsInfo); });
-
-                   if (!string.IsNullOrWhiteSpace(_po.SlAddress))
-                       col.Item().Text(t => { t.Span(_po.SlAddress).FontSize(FsData); });
-
-                   // GSTIN + State Code on same row — always shown
-                   col.Item().PaddingTop(2).Row(r =>
+                   layers.PrimaryLayer().Column(top =>
                    {
-                       r.RelativeItem()
-                        .Text(t =>
-                        {
-                            t.Span("GSTIN : ").Bold().FontSize(FsData);
-                            t.Span(_po.SlGstin ?? "").FontSize(FsData);
-                        });
-                       r.ConstantItem(30, Unit.Millimetre)
-                        .Text(t =>
-                        {
-                            t.Span("State Code : ").Bold().FontSize(FsData);
-                            t.Span(_po.SlStateCode ?? "").FontSize(FsData);
-                        });
+                       top.Item().Text(t => { t.Span("To :").Bold().FontSize(FsData); });
+                       top.Item().Text(t => { t.Span(_po.SlName).Bold().FontSize(FsInfo); });
+                       if (!string.IsNullOrWhiteSpace(_po.SlAddress))
+                           top.Item().Text(t => { t.Span(_po.SlAddress).FontSize(FsData); });
                    });
 
-                   // Phone + Email on same row — always shown
-                   col.Item().PaddingTop(1).Row(r =>
+                   layers.Layer().AlignBottom().Column(bottom =>
                    {
-                       r.RelativeItem()
-                        .Text(t =>
-                        {
-                            t.Span("Phone : ").Bold().FontSize(FsSmall);
-                            t.Span(_po.SlPhone ?? "").FontSize(FsSmall);
-                        });
-                       r.RelativeItem()
-                        .Text(t =>
-                        {
-                            t.Span("Email : ").Bold().FontSize(FsSmall);
-                            t.Span(_po.SlEmail ?? "").FontSize(FsSmall);
-                        });
+                       // Contact rows — each field is a single left-aligned label+value
+                       // text anchored to the left edge of its column. So "Phone"/"GSTIN"
+                       // start at the same X (left column), and "Email"/"State Code" start
+                       // at the same X (right column) — i.e. Email begins exactly where
+                       // State Code begins. Label and value are suppressed together when
+                       // the value is blank, leaving the column empty (positions stay
+                       // fixed; nothing slides into a hidden slot).
+                       void ContactPair(IContainer half, string label, string? value)
+                       {
+                           half.Text(t =>
+                           {
+                               t.AlignLeft();
+                               if (!string.IsNullOrWhiteSpace(value))
+                               {
+                                   t.Span(label + " ").Bold().FontSize(FsSmall);
+                                   t.Span(value).FontSize(FsSmall);
+                               }
+                           });
+                       }
+
+                       void ContactRow(string leftLabel, string? leftValue,
+                                       string rightLabel, string? rightValue,
+                                       bool padTop)
+                       {
+                           var hasLeft  = !string.IsNullOrWhiteSpace(leftValue);
+                           var hasRight = !string.IsNullOrWhiteSpace(rightValue);
+                           if (!hasLeft && !hasRight) return;
+
+                           var item = padTop ? bottom.Item().PaddingTop(1) : bottom.Item();
+
+                           // Fixed two-column layout: the left field sits in a fixed
+                           // 38 mm column, the right field takes all remaining width.
+                           // Left fields (Phone/GSTIN) are short; the right side holds
+                           // the long values (emails ~30+ chars), so giving it the rest
+                           // of the row keeps emails on one line. A blank field leaves
+                           // its column empty — the populated field never slides over
+                           // to fill the gap or jump into the hidden slot.
+                           item.Row(r =>
+                           {
+                               ContactPair(r.ConstantItem(38, Unit.Millimetre), leftLabel,  leftValue);
+                               ContactPair(r.RelativeItem(),                    rightLabel, rightValue);
+                           });
+                       }
+
+                       ContactRow("Phone :", _po.SlPhone, "Email :",      _po.SlEmail,     padTop: false);
+                       ContactRow("GSTIN :", _po.SlGstin, "State Code :", _po.SlStateCode, padTop: true);
                    });
                });
 
-            // PO details (right panel)
             row.ConstantItem(88, Unit.Millimetre)
                .Column(col =>
                {
-                   // C-01: "PURCHASE ORDER" in Black (not Navy)
                    col.Item()
                       .BorderBottom(BdCell).BorderColor(Black)
                       .PaddingVertical(4)
@@ -293,25 +296,44 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                        });
                    }
 
-                   // C-03: "PO.NO."  C-02+C-04: date dd/MM/yy (short year, slash separator)
-                   DetailRow("PO.NO.",          ((long)_po.PoNo).ToString());
-                   DetailRow("PO.Date",         _po.PoDate.ToString("dd/MM/yy", CultureInfo.InvariantCulture));
-                   DetailRow("Currency",        _po.Currency == "INR" || string.IsNullOrWhiteSpace(_po.Currency)
-                                                    ? "INR"
-                                                    : $"{_po.Currency} @ {F4(_po.CurrRate)}");
+                   // PO.NO. — rendered larger than the other detail rows so the
+                   // order number is the most prominent value in this panel.
+                   const float FsPoNo = 12f;
+                   col.Item().PaddingHorizontal(4).PaddingTop(2).Row(r =>
+                   {
+                       r.ConstantItem(36, Unit.Millimetre)
+                        .Text(t => { t.Span("PO.NO.").Bold().FontSize(FsPoNo); });
+                       r.RelativeItem()
+                        .Text(t => { t.Span(": " + ((long)_po.PoNo).ToString()).Bold().FontSize(FsPoNo); });
+                   });
+                   DetailRow("PO.Date", _po.PoDate.ToString("dd/MM/yy", CultureInfo.InvariantCulture));
+                   DetailRow("Currency",
+                       _po.Currency == "INR" || string.IsNullOrWhiteSpace(_po.Currency)
+                           ? "INR"
+                           : _po.CurrRate > 0m
+                               ? $"{_po.Currency} @ {F4(_po.CurrRate)}"
+                               : _po.Currency);
 
-                   // C-05: Ref No. & Date combined on one row
-                   if (!string.IsNullOrWhiteSpace(_po.RefNo) || !string.IsNullOrWhiteSpace(_po.RefDate))
-                       DetailRow("Ref. No. & Date", $"{_po.RefNo} & {_po.RefDate}");
+                   // Always render Ref. No. & Date — print empty value when both fields are blank
+                   // rather than hiding the row (DetailRow itself short-circuits on empty value).
+                   var refValue =
+                       string.IsNullOrWhiteSpace(_po.RefNo) && string.IsNullOrWhiteSpace(_po.RefDate)
+                           ? ""
+                           : !string.IsNullOrWhiteSpace(_po.RefNo) && !string.IsNullOrWhiteSpace(_po.RefDate)
+                               ? $"{_po.RefNo} & {_po.RefDate}"
+                               : (_po.RefNo ?? "") + (_po.RefDate ?? "");
+                   col.Item().PaddingHorizontal(4).PaddingTop(2).Row(r =>
+                   {
+                       r.ConstantItem(36, Unit.Millimetre)
+                        .Text(t => { t.Span("Ref. No. & Date").Bold().FontSize(FsData); });
+                       r.RelativeItem()
+                        .Text(t => { t.Span(": " + refValue).FontSize(FsData); });
+                   });
 
-                   DetailRow("Order Type",   _po.OrderType);
-                   DetailRow("Pay Mode",     _po.PayMode);
-                   if (_po.CreditDays > 0)
-                       DetailRow("Credit Days", _po.CreditDays.ToString());
-
-                   // C-07: italic note below detail rows
                    col.Item()
-                      .PaddingHorizontal(4).PaddingTop(3)
+                      .PaddingTop(3)
+                      .BorderTop(BdCell).BorderColor(Black)
+                      .PaddingHorizontal(4).PaddingVertical(2)
                       .Text(t =>
                       {
                           t.AlignCenter();
@@ -322,8 +344,6 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
         });
     }
 
-    // ── Items table ───────────────────────────────────────────────────────────────
-
     private void ComposeItemsTable(IContainer c)
     {
         c.Border(BdCell).BorderColor(Black).BorderTop(0)
@@ -331,8 +351,9 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
          {
              table.ColumnsDefinition(cols =>
              {
-                 // OA-01: RelativeColumn fills full container width — ConstantColumn left a stray
-                 // vertical border past the last "Value" column.
+                 // RelativeColumn (not ConstantColumn) so the table fills the full
+                 // container width — otherwise the outer Border draws past the last
+                 // column, leaving a stray vertical line after "Value (Rs.)".
                  foreach (var w in Cols)
                      cols.RelativeColumn(w);
              });
@@ -340,8 +361,8 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
              table.Header(h =>
              {
                  static IContainer ThStyle(IContainer cell) =>
-                     cell.Border(BdCell).BorderColor(Black)
-                         .Background(Colors.Grey.Lighten3)
+                     cell.Background(Colors.Grey.Lighten3)
+                         .Border(BdCell).BorderColor(Black)
                          .PaddingVertical(2).PaddingHorizontal(2);
 
                  void ThText(string text, bool center = true) =>
@@ -352,9 +373,9 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                      });
 
                  ThText("S.No");
-                 ThText("Item Name",       center: false);  // E-01
+                 ThText("Item Name", center: false);
                  ThText("HSN Code");
-                 ThText("Order\nQuantity");                  // E-02
+                 ThText("Order\nQuantity");
                  ThText("Unit");
                  ThText("Rate/Unit\n(Rs.)");
                  ThText("Disc\n(%)");
@@ -364,18 +385,17 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                  ThText("Value\n(Rs.)");
              });
 
-             // Data rows
              for (var i = 0; i < _po.Lines.Count; i++)
              {
                  var line = _po.Lines[i];
 
-                 static IContainer CellStyle(IContainer cell) =>
-                     cell.BorderBottom(BdCell).BorderColor(Black)
+                 static IContainer CellStyle(IContainer cell, bool last) =>
+                     (last ? cell : cell.BorderRight(BdCell).BorderColor(Black))
                          .PaddingVertical(1).PaddingHorizontal(2);
 
-                 void DataCell(string text, bool right = false, bool mono = false)
+                 void DataCell(string text, bool right = false, bool mono = false, bool last = false)
                  {
-                     table.Cell().Element(CellStyle).Text(t =>
+                     table.Cell().Element(cell => CellStyle(cell, last)).Text(t =>
                      {
                          if (right) t.AlignRight(); else t.AlignCenter();
                          var span = t.Span(text).FontSize(FsData);
@@ -385,43 +405,41 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
 
                  DataCell((i + 1).ToString());
 
-                 table.Cell().Element(CellStyle).Column(col =>
+                 table.Cell().Element(cell => CellStyle(cell, false)).Text(t =>
                  {
-                     col.Item().Text(t =>
-                     {
-                         t.AlignLeft();
-                         t.Span(line.ItemCode).FontFamily("Courier New").FontSize(FsData);
-                     });
-                     col.Item().Text(t =>
-                     {
-                         t.AlignLeft();
-                         t.Span(line.ItemName).FontSize(FsData);
-                     });
+                     t.AlignLeft();
+                     t.Span(line.ItemName ?? "").FontSize(FsData);
                  });
 
                  DataCell(line.HsnCode);
-                 DataCell(line.Qty  == 0m ? "" : F3(line.Qty),  right: true);
+                 DataCell(line.Qty == 0m ? "" : F3(line.Qty), right: true);
                  DataCell(line.Uom);
                  DataCell(line.Rate == 0m ? "" : F4(line.Rate), right: true);
-                 DataCell(F2(line.LineDis), right: true);              // E-03: always show Disc
-                 DataCell(line.CgstPer == 0m ? "" : F2(line.CgstPer), right: true);
-                 DataCell(line.SgstPer == 0m ? "" : F2(line.SgstPer), right: true);
-                 DataCell(line.IgstPer == 0m ? "" : F2(line.IgstPer), right: true);
-                 DataCell(line.Value   == 0m ? "" : F2(line.Value),    right: true);
+                 DataCell(F2(line.LineDis), right: true);
+                 // OA-01 (line columns): tax-rate cells always print 0.00 when zero
+                 // to match the footer's amount-summary rule — never blank.
+                 DataCell(F2(line.CgstPer), right: true);
+                 DataCell(F2(line.SgstPer), right: true);
+                 DataCell(F2(line.IgstPer), right: true);
+                 DataCell(line.Value == 0m ? "" : F2(line.Value), right: true, last: true);
              }
 
-             // L-04: pad with empty rows so table always fills ~60% of page body
-             const int MinRows = 8;
-             for (var pad = _po.Lines.Count; pad < MinRows; pad++)
+             // Pad up to MinRows so short POs (1-3 lines) don't leave a visible column-rule gap
+             // between the last data row and the in-table Total band. The final padding row uses
+             // a taller vertical padding to absorb residual page space, so the column rules read
+             // as a single continuous box rather than ending short of the Total band.
+             const int MinRows = 15;
+             var padCount = MinRows - _po.Lines.Count;
+             for (var pad = 0; pad < padCount; pad++)
              {
-                 static IContainer PadStyle(IContainer cell) =>
-                     cell.BorderBottom(BdCell).BorderColor(Black)
-                         .PaddingVertical(3).PaddingHorizontal(2);
+                 var isFiller = pad == padCount - 1;
+                 static IContainer PadStyle(IContainer cell, bool last, bool filler) =>
+                     (last ? cell : cell.BorderRight(BdCell).BorderColor(Black))
+                         .PaddingVertical(filler ? 6 : 3).PaddingHorizontal(2);
                  for (var j = 0; j < Cols.Length; j++)
-                     table.Cell().Element(PadStyle).Text("");
+                     table.Cell().Element(cell => PadStyle(cell, j == Cols.Length - 1, isFiller)).Text("");
              }
 
-             // Totals row
              static IContainer TotStyle(IContainer cell) =>
                  cell.BorderTop(BdCell).BorderBottom(BdCell).BorderColor(Black)
                      .Background(Colors.Grey.Lighten4)
@@ -433,16 +451,14 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
              table.Cell().Element(TotStyle)
                   .Text(t => { t.AlignRight(); t.Span(F3(_po.Lines.Sum(l => l.Qty))).Bold().FontSize(FsData); });
 
-             table.Cell().ColumnSpan(2).Element(TotStyle);  // Unit + Rate blank
-             table.Cell().Element(TotStyle);                 // Disc% blank
-             table.Cell().ColumnSpan(3).Element(TotStyle);  // GST% blank
+             table.Cell().ColumnSpan(2).Element(TotStyle);
+             table.Cell().Element(TotStyle);
+             table.Cell().ColumnSpan(3).Element(TotStyle);
 
              table.Cell().Element(TotStyle)
-                  .Text(t => { t.AlignRight(); t.Span(F2(_po.Lines.Sum(l => l.Value))).Bold().FontSize(FsData).FontColor(Navy); });
+                  .Text(t => { t.AlignRight(); t.Span(F2(_po.Lines.Sum(l => l.Value))).Bold().FontSize(FsData).FontColor(Black); });
          });
     }
-
-    // ── Two-column footer ─────────────────────────────────────────────────────────
 
     private void ComposeFooter(
         IContainer c,
@@ -452,7 +468,6 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
     {
         c.Row(row =>
         {
-            // Left: Terms + address + GSTIN
             row.RelativeItem()
                .BorderRight(BdCell).BorderColor(Black)
                .Padding(4)
@@ -470,7 +485,6 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                        });
                    }
 
-                   // G-01: Payment Terms always shown even when blank
                    col.Item().PaddingBottom(1).Row(r =>
                    {
                        r.ConstantItem(34, Unit.Millimetre)
@@ -480,9 +494,9 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                    });
 
                    TermRow("Delivery Date", _po.DeliveryDate);
-                   TermRow("Transport",     _po.Carrier);
-                   TermRow("Purpose",       _po.Purpose);
-                   // Remarks always shown even when blank
+                   TermRow("Transport", _po.Carrier);
+                   TermRow("Purpose", _po.Purpose);
+
                    col.Item().PaddingBottom(1).Row(r =>
                    {
                        r.ConstantItem(34, Unit.Millimetre)
@@ -491,7 +505,6 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                         .Text(t => { t.Span(": " + (_po.Remarks ?? "")).FontSize(FsData); });
                    });
 
-                   // G-02: Delivery Address from company div fields
                    var addrParts = new[] { _po.DivAddress1, _po.DivAddress2, _po.DivAddress3 }
                        .Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
                    if (!string.IsNullOrWhiteSpace(_po.DivPinCode)) addrParts.Add(_po.DivPinCode);
@@ -505,7 +518,6 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                         .Text(t => { t.Span(": " + deliveryAddr).FontSize(FsData); });
                    });
 
-                   // G-03: GSTIN + State Code
                    col.Item().PaddingTop(2).Text(t =>
                    {
                        t.Span("GSTIN : ").Bold().FontSize(FsSmall);
@@ -515,7 +527,6 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                    });
                });
 
-            // Right: Financial summary
             row.ConstantItem(83, Unit.Millimetre)
                .Column(col =>
                {
@@ -523,15 +534,14 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                    {
                        var item = col.Item();
                        if (topBorder) item = item.BorderTop(BdCell).BorderColor(Black);
-                       item.BorderBottom(BdCell).BorderColor(Black)
-                          .Row(r =>
+                       item.Row(r =>
                           {
                               r.RelativeItem()
                                .PaddingLeft(4).PaddingVertical(1)
                                .Text(t =>
                                {
                                    if (bold) t.Span(label).Bold().FontSize(FsData);
-                                   else      t.Span(label).FontSize(FsData);
+                                   else t.Span(label).FontSize(FsData);
                                });
                               r.ConstantItem(36, Unit.Millimetre)
                                .BorderLeft(BdCell).BorderColor(Black)
@@ -540,76 +550,71 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                                {
                                    t.AlignRight();
                                    if (bold) t.Span(value).Bold().FontSize(FsData);
-                                   else      t.Span(value).FontSize(FsData);
+                                   else t.Span(value).FontSize(FsData);
                                });
                           });
                    }
 
-                   AmtRow("Total",                   F2(totalLineValue));
-                   AmtRow("Discount",                totalDiscount == 0m ? "" : F2(totalDiscount));
-                   // OA-01: always render all three GST rows — blank fields misread as "not calculated"
-                   AmtRow("CGST",                   F2(totalCgst));
-                   AmtRow("SGST",                   F2(totalSgst));
-                   AmtRow("IGST",                   F2(totalIgst));
-                   AmtRow("Freight",                 _po.FreightAmt == 0m ? "" : F2(_po.FreightAmt)); // F-02: always show
-                   AmtRow("Insurance Amt.",          _po.InsAmt     == 0m ? "" : F2(_po.InsAmt));      // F-03: always show
-                   AmtRow("Packing & Forwarding",    _po.PackAmt    == 0m ? "" : F2(_po.PackAmt));     // F-04: always show
-                   AmtRow("Other Charges",           "");                                               // F-05: always blank
+                   AmtRow("Total", F2(totalLineValue));
+                   // OA-01: charge rows always show 0.00 when zero — never blank.
+                   // A blank field on a printed PO can be misread as "not calculated"
+                   // rather than "zero". Tax rows (CGST/SGST/IGST) remain conditional
+                   // because GST routing intentionally hides the non-applicable side.
+                   AmtRow("Discount", F2(totalDiscount));
+                   // OA-01 extension: all three tax rows are always rendered, with
+                   // 0.00 substituted for the non-applicable side. GST routing is
+                   // still authoritative for the grand-total calculation above —
+                   // only the display has changed so no field on the printed PO
+                   // can be misread as "not calculated".
+                   AmtRow("CGST", F2(totalCgst));
+                   AmtRow("SGST", F2(totalSgst));
+                   AmtRow("IGST", F2(totalIgst));
+                   AmtRow("Freight", F2(_po.FreightAmt));
+                   AmtRow("Insurance Amt.", F2(_po.InsAmt));
+                   AmtRow("Packing & Forwarding", F2(_po.PackAmt));
+                   AmtRow("Other Charges", F2(0m));
                    var tcsPer = _po.Lines.FirstOrDefault(l => l.TcsPer != 0m)?.TcsPer ?? 0m;
-                   AmtRow($"TCS {F3(tcsPer)}%",      F2(totalTcs));                                    // F-06: always show
-                   AmtRow("Round off",               F2(_po.RoundOff));                                // F-07: always show
-                   // F-08: dynamic currency (falls back to INR); topBorder visually separates grand total
+                   AmtRow($"TCS {F3(tcsPer)}%", F2(totalTcs));
+                   AmtRow("Round off", F2(_po.RoundOff));
+                   // Currency prefix sourced from PO_ORDH.CurrCode (SP alias: Currency).
+                   // Falls back to "INR" when blank so the line never prints just a bare amount.
                    var totalCurr = string.IsNullOrWhiteSpace(_po.Currency) ? "INR" : _po.Currency;
-                   AmtRow("Total Amount",            $"{totalCurr}  {F2(grandTotal)}", bold: true, topBorder: true);
+                   AmtRow("Total Amount", $"{totalCurr}  {F2(grandTotal)}", bold: true, topBorder: true);
                });
         });
     }
 
-    // ── Signature block ───────────────────────────────────────────────────────────
-
     private void ComposeSignature(IContainer c, string companyName)
     {
         c.Border(BdCell).BorderColor(Black).BorderTop(0)
-         .MinHeight(25, Unit.Millimetre)
-         .Row(row =>
+         .MinHeight(26, Unit.Millimetre)
+         .Padding(4)
+         .Column(col =>
          {
-             row.ConstantItem(50, Unit.Millimetre)
-                .BorderRight(BdCell).BorderColor(Black)
-                .Padding(4)
-                .Column(col =>
-                {
-                    col.Item().Text(t =>
-                    {
-                        t.Span($"For {companyName}").Bold().FontSize(FsData).FontColor(Navy);
-                    });
-                    if (_po.DivLogo is { Length: > 0 })
-                        col.Item().PaddingTop(2).MaxHeight(16, Unit.Millimetre).AlignRight()
-                           .Image(_po.DivLogo).FitHeight();
-                });
+             // "For {Company}" — top right
+             col.Item().AlignRight().Text(t =>
+             {
+                 t.Span($"For {companyName}").Bold().FontSize(FsData).FontColor(Black);
+             });
 
-             row.RelativeItem()
-                .BorderRight(BdCell).BorderColor(Black)
-                .Padding(4)
-                .Column(col =>
-                {
-                    col.Item().Text(t => { t.AlignCenter(); t.Span("Prepared by").Bold().FontSize(FsData); });
-                    col.Item().PaddingTop(14).Text(t => { t.AlignCenter(); t.Span(_po.CreatedBy).FontSize(FsData); });
-                });
+             // Logo — right side, below the company line
+             if (_po.DivLogo is { Length: > 0 })
+                 col.Item().AlignRight().PaddingTop(2)
+                    .MaxHeight(15, Unit.Millimetre)
+                    .Image(_po.DivLogo).FitHeight();
 
-             row.RelativeItem()
-                .BorderRight(BdCell).BorderColor(Black)
-                .Padding(4)
-                .Column(col =>
-                {
-                    col.Item().Text(t => { t.AlignCenter(); t.Span("Checked by").Bold().FontSize(FsData); });
-                });
-
-             row.RelativeItem()
-                .Padding(4)
-                .Column(col =>
-                {
-                    col.Item().Text(t => { t.AlignCenter(); t.Span("Authorised Signatory").Bold().FontSize(FsData); });
-                });
+             // Bottom row of signature labels — no vertical dividers
+             col.Item().PaddingTop(6).Row(row =>
+             {
+                 row.RelativeItem().AlignBottom().Column(c2 =>
+                 {
+                     if (!string.IsNullOrWhiteSpace(_po.CreatedBy))
+                         c2.Item().Text(t => { t.AlignLeft(); t.Span(_po.CreatedBy).FontSize(FsData); });
+                     c2.Item().Text(t => { t.AlignLeft(); t.Span("Prepared by").Bold().FontSize(FsData); });
+                 });
+                 row.RelativeItem().AlignBottom().Text(t => { t.AlignCenter(); t.Span("Checked by").Bold().FontSize(FsData); });
+                 row.RelativeItem().AlignBottom().Text(t => { t.AlignRight(); t.Span("Authorised Signatory").Bold().FontSize(FsData); });
+             });
          });
     }
 }

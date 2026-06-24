@@ -9,7 +9,7 @@ using System.Security.Claims;
 
 namespace Spinrise.API.Areas.PurchaseOrder.Controllers;
 
-[Authorize]
+[Authorize(Policy = "PoAccess")]
 [Area("PurchaseOrder")]
 [Route("api/v1/po")]
 public class PoEntryController : BaseApiController
@@ -216,7 +216,7 @@ public class PoEntryController : BaseApiController
             return FailResponse("Approval Not Complete For This PO", 403);
 
         _logger.LogInformation("Print: Generating PDF PO={PoNo}", poNo);
-        var pdfBytes = PurchaseOrderDocument.Generate(po);
+        var pdfBytes = PurchaseOrderDocumentV2.Generate(po);
 
         try { await _service.UpdatePrintFlagAsync(divCode, poNo, poDate); }
         catch (Exception ex) { _logger.LogError(ex, "Print: SetPrintFlag failed PO={PoNo} — PDF still returned", poNo); }
