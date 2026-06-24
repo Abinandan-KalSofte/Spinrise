@@ -30,10 +30,9 @@ const lbl: React.CSSProperties = {
 // useNetBase: true → amount = (lineItemValue − discAmt) × % per POT-TC-01.
 // cascadeNet: true → when this field changes, also recompute all useNetBase fields.
 const CHARGES: { label: string; perName: string; amtName: string; useNetBase?: boolean; cascadeNet?: boolean }[] = [
-  { label: 'Discount',  perName: 'discPer',    amtName: 'discAmt',    cascadeNet: true },
-  { label: 'Packing',   perName: 'packPer',    amtName: 'packAmt'    },
-  { label: 'Insurance', perName: 'insurPer',   amtName: 'insurAmt',   useNetBase: true },
-  { label: 'Freight',   perName: 'freightPer', amtName: 'freightAmt', useNetBase: true },
+  { label: 'Discount',  perName: 'discPer',  amtName: 'discAmt',  cascadeNet: true },
+  { label: 'Packing',   perName: 'packPer',  amtName: 'packAmt',  useNetBase: true },
+  { label: 'Insurance', perName: 'insurPer', amtName: 'insurAmt', useNetBase: true },
 ]
 
 const APPLICABILITY: { label: string; name: string; opts: { label: string; value: string }[]; tooltip?: string }[] = [ 
@@ -49,21 +48,21 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
   const form = Form.useFormInstance()
   const base = lineItemValue || 0
 
-  // POT-TC-01: freight & insurance base = lineItemValue − discAmt
+  // POT-TC-01: insurance & packing net base = lineItemValue − discAmt
   const getEffectiveBase = (useNetBase?: boolean) => {
     if (!useNetBase) return base
     const discAmt = (form.getFieldValue('discAmt') as number) || 0
     return round2(base - discAmt)
   }
 
-  // After computing this field's amount, recompute all net-base fields (freight, insurance).
+  // After computing discAmt, recompute all net-base fields (insurance, packing).
   const cascadeNetBaseFields = (newDiscAmt: number) => {
-    const netBase   = round2(base - newDiscAmt)
-    const freightPer = (form.getFieldValue('freightPer') as number) || 0
-    const insurPer   = (form.getFieldValue('insurPer')   as number) || 0
+    const netBase  = round2(base - newDiscAmt)
+    const insurPer = (form.getFieldValue('insurPer') as number) || 0
+    const packPer  = (form.getFieldValue('packPer')  as number) || 0
     form.setFieldsValue({
-      freightAmt: round2(freightPer * netBase / 100),
-      insurAmt:   round2(insurPer   * netBase / 100),
+      insurAmt: round2(insurPer * netBase / 100),
+      packAmt:  round2(packPer  * netBase / 100),
     })
   }
 
@@ -96,14 +95,13 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
 
   useEffect(() => {
     if (disabled || base === 0) return
-    const v = form.getFieldsValue(['discPer', 'freightPer', 'packPer', 'insurPer'])
-    const discAmt   = round2((Number(v.discPer) || 0) * base / 100)
-    const netAfDisc = round2(base - discAmt)   // POT-TC-01 base for freight & insurance
+    const v = form.getFieldsValue(['discPer', 'packPer', 'insurPer'])
+    const discAmt   = round2((Number(v.discPer)  || 0) * base       / 100)
+    const netAfDisc = round2(base - discAmt)
     form.setFieldsValue({
       discAmt,
-      packAmt:    round2((Number(v.packPer)    || 0) * base       / 100),
-      insurAmt:   round2((Number(v.insurPer)   || 0) * netAfDisc  / 100), // POT-TC-01
-      freightAmt: round2((Number(v.freightPer) || 0) * netAfDisc  / 100), // POT-TC-01
+      packAmt:  round2((Number(v.packPer)  || 0) * base       / 100),
+      insurAmt: round2((Number(v.insurPer) || 0) * netAfDisc  / 100),
     })
   }, [lineItemValue]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -135,7 +133,7 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
         {/* Thin vertical separator */}
         <div style={{ width: 1, background: '#d1d5db', flexShrink: 0, margin: '16px 4px 0', alignSelf: 'stretch' }} />
 
-        {/* Deduction charge pairs */}
+        {/* Deduction charge pairs (% + ₹) */}
         {CHARGES.map(({ label, perName, amtName, useNetBase, cascadeNet }) => (
           <div key={perName} style={{ flex: 1, minWidth: 155 }}>
             <div style={lbl}>{label}</div>
@@ -151,6 +149,14 @@ export function TaxDiscountTab({ disabled, lineItemValue }: TaxDiscountTabProps)
             </div>
           </div>
         ))}
+
+        {/* Freight — amount entry only, no % field */}
+        <div style={{ flex: 1, minWidth: 90 }}>
+          <div style={lbl}>Freight</div>
+          <Form.Item name="freightAmt" style={{ marginBottom: 0 }}>
+            <InputNumber {...pct} addonAfter="₹" disabled={disabled} />
+          </Form.Item>
+        </div>
       </div>
 
       {/* ── Divider ── */}
