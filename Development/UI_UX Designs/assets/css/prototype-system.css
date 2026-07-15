@@ -1,0 +1,259 @@
+/*
+  SpinRise Prototype System
+  Shared polish layer for static ERP workflow prototypes.
+  Keep module-specific layout in each page; put cross-page behavior here.
+*/
+
+:root {
+  --sr-focus:#F59E0B;
+  --sr-radius-sm:4px;
+  --sr-radius-md:6px;
+  --sr-shadow-modal:0 24px 60px rgba(15,23,42,.28);
+}
+
+* {
+  box-sizing:border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font:inherit;
+}
+
+button,
+[role="button"],
+.menu-item,
+.menu-group,
+.menu-solo,
+.sider-logo,
+.hdr-user {
+  -webkit-tap-highlight-color:transparent;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+.menu-item:focus-visible,
+.menu-group:focus-visible,
+.menu-solo:focus-visible,
+.sider-logo:focus-visible,
+.hdr-user:focus-visible {
+  outline:2px solid var(--sr-focus);
+  outline-offset:2px;
+}
+
+.sr-only {
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+
+.app-root {
+  min-height:100vh;
+}
+
+.modal,
+.confirm-box {
+  max-width:calc(100vw - 32px);
+  box-shadow:var(--sr-shadow-modal);
+}
+
+.overlay:not(.hidden),
+.modal-backdrop:not(.hidden),
+.confirm-overlay:not(.hidden) {
+  padding:16px;
+}
+
+.modal-x,
+.btn-ghost,
+.btn-prim,
+.btn-danger,
+.m-btn-cls,
+.m-btn-close,
+.m-btn-sel,
+.tb-btn,
+.tb-nav-btn,
+.hdr-toggle,
+.sub-tab,
+.ist-btn {
+  min-height:30px;
+}
+
+.fld-error,
+.cell-error {
+  border-color:var(--error, #A32D2D) !important;
+  background:#fff7f7 !important;
+}
+
+.validation-msg {
+  color:var(--error, #A32D2D);
+  font-size:11px;
+  font-weight:600;
+  margin-top:3px;
+}
+
+.prototype-hub-list {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:12px;
+  width:min(920px, calc(100vw - 48px));
+  margin-top:18px;
+}
+
+.prototype-hub-card {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:14px 16px;
+  border:1px solid var(--border, #E2E2E2);
+  border-radius:8px;
+  background:#fff;
+  color:inherit;
+  text-decoration:none;
+  box-shadow:0 1px 2px rgba(15,23,42,.05);
+}
+
+.prototype-hub-card:hover {
+  border-color:var(--blue, #185FA5);
+  box-shadow:0 8px 18px rgba(15,23,42,.09);
+}
+
+.prototype-hub-card strong {
+  color:var(--text-900, #1A1A1A);
+  font-size:13px;
+}
+
+.prototype-hub-card span {
+  color:var(--text-500, #666);
+  font-size:12px;
+  line-height:1.45;
+}
+
+.prototype-status-pill {
+  align-self:flex-start;
+  padding:2px 7px;
+  border-radius:999px;
+  background:var(--blue-100, #E6F1FB);
+  color:var(--blue, #185FA5);
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+@media (max-width: 900px) {
+  .app-root {
+    min-width:0;
+  }
+
+  .sider {
+    width:64px !important;
+    min-width:64px !important;
+  }
+
+  .sider:not(.collapsed) .logo-text,
+  .sider:not(.collapsed) .menu-group-label,
+  .sider:not(.collapsed) .menu-chevron,
+  .sider:not(.collapsed) .menu-item {
+    font-size:0;
+  }
+
+  .main-area,
+  .page-content {
+    min-width:0;
+  }
+
+  .app-header {
+    gap:8px;
+  }
+
+  .hdr-center {
+    display:none;
+  }
+
+  .toolbar {
+    overflow-x:auto;
+    flex-wrap:nowrap;
+  }
+
+  .doc-band,
+  .form-band,
+  .view-hdr-meta,
+  .reason-strip {
+    flex-wrap:wrap;
+  }
+
+  .modal {
+    width:calc(100vw - 32px) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  html,
+  body {
+    min-width:320px;
+  }
+
+  .app-root {
+    height:auto !important;
+    min-height:100vh;
+    overflow:auto !important;
+  }
+
+  .ist-bar {
+    position:sticky;
+    overflow-x:auto;
+  }
+
+  .sider {
+    display:none !important;
+  }
+
+  .page-content,
+  .main-area {
+    overflow:visible !important;
+  }
+
+  .fields-row,
+  .view-field-grid,
+  .footer-cards,
+  .kpi-cards {
+    display:grid !important;
+    grid-template-columns:1fr !important;
+  }
+
+  .fg,
+  .fg-s,
+  .fg-m,
+  .fg-ml,
+  .fg-l,
+  .fg-xl {
+    width:100% !important;
+  }
+
+  .confirm-box {
+    width:calc(100vw - 32px) !important;
+  }
+
+  .toasts {
+    left:12px !important;
+    right:12px !important;
+    bottom:12px !important;
+  }
+
+  .toast {
+    min-width:0 !important;
+    max-width:none !important;
+  }
+}

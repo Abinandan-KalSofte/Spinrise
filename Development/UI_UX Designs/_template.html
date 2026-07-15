@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════╗
+  ║  SpinRise UI/UX Design Template                         ║
+  ║  Copy this file into a new folder for each screen.      ║
+  ║                                                          ║
+  ║  When copying to a subfolder, change every:             ║
+  ║    assets/  →  ../assets/                               ║
+  ║  in the <link> and <script> src paths below.            ║
+  ╚══════════════════════════════════════════════════════════╝
+
+  CHECKLIST FOR A NEW SCREEN:
+  [ ] Rename <title> to the screen name
+  [ ] Set the correct .menu-item as active in the sidebar
+  [ ] Update .bc-parent / .bc-current in the doc-band
+  [ ] Replace the placeholder form fields with real fields
+  [ ] Define AG Grid columnDefs and rowData
+  [ ] Remove unused sections (form / grid / both)
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpinRise — [Screen Name] | [Module]</title>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- SpinRise Design System -->
+<link rel="stylesheet" href="assets/css/spinrise-tokens.css">
+<link rel="stylesheet" href="assets/css/spinrise-shell.css">
+<link rel="stylesheet" href="assets/css/spinrise-components.css">
+<link rel="stylesheet" href="assets/css/prototype-system.css">
+
+<!-- AG Grid v35 Community (CDN) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@35.3.0/styles/ag-grid.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@35.3.0/styles/ag-theme-quartz.css">
+<link rel="stylesheet" href="assets/css/spinrise-aggrid.css">
+
+<!-- Page-specific styles only go here -->
+<style>
+/* Add screen-specific CSS below. Shell, tokens, and components are already loaded. */
+</style>
+</head>
+
+<!-- Add class="has-ist-bar" to <body> when IST bar is present -->
+<body class="has-ist-bar">
+
+<!-- ── IST Design Review Bar ─────────────────────────── -->
+<!-- Remove this entire block when IST bar is not needed -->
+<div class="ist-bar">
+  <span class="ist-label">SCREEN:</span>
+  <span>[Screen Name]</span>
+  <div class="ist-sep"></div>
+  <span class="ist-label">MODULE:</span>
+  <span>M01 — Purchase Requisition</span>
+  <div class="ist-sep"></div>
+  <span class="ist-label">FSD:</span>
+  <span>v1.0</span>
+  <div class="ist-sep"></div>
+  <!-- State toggle buttons — add more as needed for different screen states -->
+  <button class="ist-btn active" onclick="switchState(this,'list')">List View</button>
+  <button class="ist-btn"        onclick="switchState(this,'detail')">Detail View</button>
+</div>
+
+<div class="app-root">
+
+  <!-- ══════════════════════════════════════════════════
+       SIDEBAR
+       ══════════════════════════════════════════════════ -->
+  <div class="sider" id="sider">
+
+    <!-- Logo -->
+    <div class="sider-logo" onclick="navigate('hub')">
+      <div class="logo-mark"><span>S</span></div>
+      <span class="logo-text">Spinrise ERP</span>
+    </div>
+
+    <!-- Navigation -->
+    <div class="sider-nav">
+
+      <div class="menu-solo" onclick="navigate('hub')">
+        <span class="menu-group-icon">⊞</span>
+        <span>Dashboard</span>
+      </div>
+
+      <div class="menu-group open" id="grp-po" onclick="toggleGroup('grp-po-ch','grp-po')">
+        <span class="menu-group-icon">🛒</span>
+        <span class="menu-group-label">Purchase Order</span>
+        <span class="menu-chevron">›</span>
+      </div>
+      <div class="menu-children open" id="grp-po-ch">
+        <div class="menu-item" onclick="navigate('pr')">
+          <span class="menu-item-icon">📄</span>Purchase Requisition (PR)
+        </div>
+        <div class="menu-item" onclick="navigate('amendment')">
+          <span class="menu-item-icon">✏️</span>PR Amendment
+        </div>
+        <div class="menu-item" onclick="navigate('foreclosure')">
+          <span class="menu-item-icon">⚡</span>PR Foreclosure
+        </div>
+        <div class="menu-item" onclick="navigate('cancellation')">
+          <span class="menu-item-icon">🚫</span>PR Cancellation
+        </div>
+        <!-- Mark the active screen by adding class="active" to the correct item -->
+        <div class="menu-item active" onclick="navigate('first-approval')">
+          <span class="menu-item-icon">✅</span>PR First Level Approval
+        </div>
+        <div class="menu-item" onclick="navigate('PRFinalLevelApproval')">
+          <span class="menu-item-icon">✅</span>PR Final Level Approval
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /sider -->
+
+  <!-- ══════════════════════════════════════════════════
+       MAIN AREA
+       ══════════════════════════════════════════════════ -->
+  <div class="main-area">
+
+    <!-- Header -->
+    <div class="app-header">
+      <div class="hdr-left">
+        <button class="hdr-toggle" onclick="toggleSider()" title="Toggle sidebar">
+          <svg id="toggle-icon" width="16" height="16" viewBox="0 0 16 16"
+               fill="none" stroke="currentColor" stroke-width="1.6">
+            <line x1="1" y1="4"  x2="15" y2="4"/>
+            <line x1="1" y1="8"  x2="15" y2="8"/>
+            <line x1="1" y1="12" x2="15" y2="12"/>
+            <polyline points="10,5 13,8 10,11" stroke-width="1.4"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="hdr-center">
+        <span class="hdr-company">KALPATHARU SPINNERS PVT. LTD.</span>
+      </div>
+
+      <div class="hdr-user" onclick="toggleUserMenu()">
+        <div class="user-avatar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="#fff" stroke-width="2">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+        </div>
+        <div class="user-info">
+          <span class="user-name">Abinandan</span>
+          <span class="user-div">KALPATHARU SPINNERS</span>
+        </div>
+        <span class="hdr-chevron">▾</span>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-item">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+          </div>
+        </div>
+      </div>
+    </div><!-- /header -->
+
+    <!-- ══════════════════════════════════════════════
+         PAGE CONTENT — replace everything inside here
+         ══════════════════════════════════════════════ -->
+    <main class="page-content">
+
+      <!-- ── Doc Band ── -->
+      <div class="doc-band">
+        <div class="breadcrumb">
+          <span class="bc-parent">Purchase Order</span>
+          <span class="bc-sep">›</span>
+          <span class="bc-current">[Screen Name]</span>
+        </div>
+        <div class="band-right">
+          <span class="band-sublabel">FY</span>
+          <span class="band-subvalue">2025-26</span>
+        </div>
+      </div>
+
+      <!-- ── Toolbar ── -->
+      <div class="toolbar">
+        <button class="tb-btn primary">Load</button>
+        <div class="tb-sep"></div>
+        <button class="tb-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Export
+        </button>
+        <div class="tb-sep"></div>
+        <button class="tb-btn danger" disabled>Delete</button>
+        <div class="tb-sep"></div>
+        <!-- Record navigation -->
+        <div class="tb-nav">
+          <button class="tb-nav-btn" title="First">«</button>
+          <button class="tb-nav-btn" title="Previous">‹</button>
+          <button class="tb-nav-btn" title="Next">›</button>
+          <button class="tb-nav-btn" title="Last">»</button>
+        </div>
+      </div>
+
+      <!-- ── Form Section (header / filter fields) ── -->
+      <div class="form-section">
+        <div class="form-sec-hdr">
+          <div class="form-sec-hdr-left">
+            <span class="form-sec-title">Filter</span>
+          </div>
+        </div>
+        <div class="form-fields">
+          <div class="fields-row">
+            <div class="fg fg-ml">
+              <label class="fld-lbl">Department <span class="req">*</span></label>
+              <select class="fld-ctrl">
+                <option value="">Select…</option>
+                <option>Spinning</option>
+                <option>Weaving</option>
+                <option>Admin</option>
+              </select>
+            </div>
+            <div class="fg fg-m">
+              <label class="fld-lbl">From Date</label>
+              <input type="date" class="fld-ctrl" value="2025-04-01">
+            </div>
+            <div class="fg fg-m">
+              <label class="fld-lbl">To Date</label>
+              <input type="date" class="fld-ctrl" value="2026-03-31">
+            </div>
+            <div class="fg fg-ml">
+              <label class="fld-lbl">Status</label>
+              <select class="fld-ctrl">
+                <option value="">All</option>
+                <option>Pending</option>
+                <option>Approved</option>
+                <option>Rejected</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── AG Grid Section ── -->
+      <div class="grid-section">
+        <div class="grid-bar">
+          <span class="grid-bar-lbl">Records</span>
+          <span class="grid-ct" id="grid-count">0</span>
+          <span class="sr-spacer"></span>
+          <!-- Optional right-side grid bar content here -->
+        </div>
+        <div class="grid-wrap">
+          <div id="mainGrid"
+               class="ag-theme-quartz sr-grid"
+               style="height:100%;width:100%;"></div>
+        </div>
+      </div>
+
+    </main><!-- /page-content -->
+
+  </div><!-- /main-area -->
+</div><!-- /app-root -->
+
+<!-- Toast container (keep at body level) -->
+<div class="toasts" id="toasts"></div>
+
+<!-- ── AG Grid v35 CDN ── -->
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@35.3.0/dist/ag-grid-community.min.noStyle.js"></script>
+
+<!-- ── SpinRise scripts ── -->
+<script src="assets/js/spinrise-aggrid-helper.js"></script>
+<script src="assets/js/prototype-system.js"></script>
+
+<script>
+/* ──────────────────────────────────────────────
+   Shell behaviours
+   ────────────────────────────────────────────── */
+function toggleSider() {
+  document.getElementById('sider').classList.toggle('collapsed');
+}
+function toggleGroup(childId, groupId) {
+  document.getElementById(childId).classList.toggle('open');
+  document.getElementById(groupId).classList.toggle('open');
+}
+function toggleUserMenu() {
+  document.getElementById('user-dropdown').classList.toggle('open');
+}
+
+/* Close user menu on outside click */
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('user-dropdown');
+  if (menu && !menu.closest('.hdr-user').contains(e.target)) {
+    menu.classList.remove('open');
+  }
+});
+
+/* IST state switcher (for prototypes with multiple view states) */
+function switchState(btn, state) {
+  document.querySelectorAll('.ist-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  /* Show/hide panes with class="state-pane" data-state="xxx" */
+  document.querySelectorAll('.state-pane').forEach(function(p) {
+    p.style.display = p.dataset.state === state ? '' : 'none';
+  });
+}
+
+/* ──────────────────────────────────────────────
+   Toast helper
+   ────────────────────────────────────────────── */
+function showToast(msg, type) {
+  var container = document.getElementById('toasts');
+  var t = document.createElement('div');
+  t.className = 'toast toast-' + (type || 'info');
+  t.innerHTML = '<span class="toast-msg">' + msg + '</span>';
+  container.appendChild(t);
+  setTimeout(function() { t.remove(); }, 3500);
+}
+
+/* ──────────────────────────────────────────────
+   AG Grid setup
+   Replace columnDefs and rowData with real data.
+   ────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function () {
+
+  var columnDefs = [
+    SpinRiseGrid.serialCol(),                                          /* # */
+    { field: 'prno',    headerName: 'PR No.',        width: 110, pinned: 'left', cellClass: 'cell-mono' },
+    { field: 'prdate',  headerName: 'PR Date',       width: 100, cellClass: 'cell-date' },
+    { field: 'dept',    headerName: 'Department',    flex: 1,   minWidth: 140 },
+    { field: 'item',    headerName: 'Item',          flex: 2,   minWidth: 180 },
+    { field: 'qty',     headerName: 'Qty',           width: 80,  cellClass: 'cell-right cell-mono' },
+    { field: 'unit',    headerName: 'Unit',          width: 70  },
+    { field: 'status',  headerName: 'Status',        width: 110,
+      cellRenderer: function(params) {
+        var map = {
+          'Pending':  'badge-blue',
+          'Approved': 'badge-success',
+          'Rejected': 'badge-error',
+        };
+        var cls = map[params.value] || 'badge-neutral';
+        return '<span class="badge ' + cls + '">' + (params.value || '') + '</span>';
+      }
+    },
+  ];
+
+  var rowData = [
+    { prno:'PR-2526-0001', prdate:'01 Apr 2025', dept:'Spinning',   item:'Polyester Yarn 40D',   qty:'500.000', unit:'KG', status:'Pending'  },
+    { prno:'PR-2526-0002', prdate:'02 Apr 2025', dept:'Weaving',    item:'Cotton Yarn 30s',      qty:'200.000', unit:'KG', status:'Pending'  },
+    { prno:'PR-2526-0003', prdate:'05 Apr 2025', dept:'Admin',      item:'A4 Paper Ream',        qty:'50.000',  unit:'NO', status:'Approved' },
+    { prno:'PR-2526-0004', prdate:'08 Apr 2025', dept:'Spinning',   item:'Lubricant Oil 5L',     qty:'10.000',  unit:'LT', status:'Rejected' },
+  ];
+
+  var gridApi = SpinRiseGrid.create('mainGrid', {
+    columnDefs: columnDefs,
+    rowData:    rowData,
+    onGridReady: function(params) {
+      document.getElementById('grid-count').textContent = rowData.length;
+    },
+    onRowClicked: function(params) {
+      /* Handle row selection — show detail, enable toolbar buttons, etc. */
+    },
+  });
+
+  /* Example: update count after data changes */
+  window._gridApi = gridApi;
+});
+</script>
+</body>
+</html>

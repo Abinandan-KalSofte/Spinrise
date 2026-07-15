@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpinRise — PR First Level Approval | SPINRISE_FSD_M01_PRFirstLevelApproval_v1_1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/prototype-system.css">
+<style>
+:root {
+  --blue:#185FA5; --blue-dark:#0C447C; --blue-100:#E6F1FB;
+  --bg:#F5F5F3; --surface-alt:#FAFAF8; --border:#E2E2E2;
+  --text-900:#1A1A1A; --text-600:#4A4A4A; --text-400:#888888;
+  --success:#3B6D11; --success-l:#EAF3DE;
+  --warning:#BA7517; --warning-l:#FAEEDA;
+  --error:#A32D2D; --error-l:#FCEBEB;
+  --purple:#722ED1; --purple-l:#F3EEFF;
+  --sidebar-bg:#1a2236;
+  --font:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:var(--font);font-size:13px;color:var(--text-900);}
+
+/* ── IST Bar ── */
+.ist-bar{
+  position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#0f172a;display:flex;align-items:center;gap:6px;padding:5px 14px;
+  font-size:11px;font-weight:600;color:rgba(255,255,255,.65);
+  border-bottom:2px solid #1e293b;flex-wrap:wrap;
+}
+.ist-label{color:rgba(255,255,255,.35);font-size:10px;margin-right:2px;}
+.ist-btn{
+  padding:3px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.18);
+  background:transparent;color:rgba(255,255,255,.65);font-size:10px;font-weight:600;
+  cursor:pointer;font-family:var(--font);transition:.12s;
+}
+.ist-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.ist-btn:hover:not(.active){background:rgba(255,255,255,.08);}
+.ist-sep{width:1px;height:14px;background:rgba(255,255,255,.15);margin:0 4px;}
+.ist-badge{
+  font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700;
+  background:rgba(255,140,0,.2);color:#fb923c;border:1px solid rgba(255,140,0,.35);
+}
+
+/* ── App Shell ── */
+.app-root{display:flex;height:100vh;overflow:hidden;padding-top:30px;}
+
+/* ── Sider ── */
+.sider{width:280px;min-width:280px;height:100%;background:var(--sidebar-bg);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;transition:width .2s,min-width .2s;}
+.sider.collapsed{width:52px;min-width:52px;}
+.sider-logo{height:48px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;overflow:hidden;}
+.sider.collapsed .sider-logo{justify-content:center;padding:0;}
+.logo-mark{width:28px;height:28px;border-radius:6px;flex-shrink:0;background:linear-gradient(135deg,#185FA5,#1677ff);display:flex;align-items:center;justify-content:center;}
+.logo-mark span{color:#fff;font-size:13px;font-weight:800;}
+.logo-text{color:#fff;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;}
+.sider.collapsed .logo-text{display:none;}
+.sider-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0;}
+.sider-nav::-webkit-scrollbar{width:0;}
+.menu-group{display:flex;align-items:center;gap:8px;padding:8px 16px;color:rgba(255,255,255,.65);font-size:13px;font-weight:500;cursor:pointer;border-left:3px solid transparent;user-select:none;transition:.15s;white-space:nowrap;overflow:hidden;}
+.menu-group:hover{background:rgba(255,255,255,.05);color:#fff;}
+.menu-group.open{color:#fff;}
+.menu-group-icon{font-size:14px;flex-shrink:0;width:16px;text-align:center;}
+.menu-group-label{flex:1;white-space:nowrap;overflow:hidden;}
+.menu-chevron{font-size:10px;color:rgba(255,255,255,.35);transition:transform .2s;flex-shrink:0;}
+.menu-group.open .menu-chevron{transform:rotate(90deg);}
+.sider.collapsed .menu-group-label,.sider.collapsed .menu-chevron{display:none;}
+.sider.collapsed .menu-group{justify-content:center;padding:8px 0;}
+.menu-children{overflow:hidden;max-height:0;transition:max-height .2s ease;}
+.menu-children.open{max-height:400px;}
+.menu-item{display:flex;align-items:center;gap:8px;padding:7px 16px 7px 36px;color:rgba(255,255,255,.55);font-size:12px;font-weight:500;cursor:pointer;border-left:3px solid transparent;transition:.12s;white-space:nowrap;overflow:hidden;}
+.menu-item:hover{background:rgba(255,255,255,.05);color:#fff;}
+.menu-item.active{background:rgba(24,95,165,.25);color:#fff;border-left-color:var(--blue);font-weight:600;}
+.menu-item-icon{font-size:12px;flex-shrink:0;}
+.sider.collapsed .menu-item{display:none;}
+
+/* ── Main Area ── */
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.app-header{height:48px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;position:relative;}
+.hdr-toggle{background:none;border:none;cursor:pointer;padding:6px;border-radius:6px;color:var(--text-600);display:flex;}
+.hdr-toggle:hover{background:var(--bg);}
+.hdr-left{display:flex;align-items:center;gap:8px;}
+.hdr-center{position:absolute;left:50%;transform:translateX(-50%);}
+.hdr-company{font-size:13px;font-weight:700;color:var(--text-900);letter-spacing:.01em;}
+.hdr-user{margin-left:auto;display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:6px;position:relative;}
+.hdr-user:hover{background:var(--bg);}
+.user-avatar{width:28px;height:28px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;}
+.user-info{display:flex;flex-direction:column;}
+.user-name{font-size:12px;font-weight:600;color:var(--text-900);line-height:1.2;}
+.user-div{font-size:10px;color:var(--text-400);}
+.hdr-chevron{font-size:10px;color:var(--text-400);}
+.user-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.10);min-width:160px;z-index:500;display:none;overflow:hidden;}
+.user-dropdown.open{display:block;}
+.user-dropdown-item{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:12px;color:var(--text-600);cursor:pointer;}
+.user-dropdown-item:hover{background:var(--bg);}
+
+/* ── Page structure ── */
+.page-content{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
+
+/* ── Doc Band ── */
+.doc-band{background:linear-gradient(90deg,var(--blue-dark) 0%,var(--blue) 100%);padding:0 20px;height:30px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.breadcrumb{display:flex;align-items:center;gap:6px;}
+.bc-parent{font-size:11px;color:rgba(255,255,255,.65);}
+.bc-sep{font-size:11px;color:rgba(255,255,255,.35);}
+.bc-current{font-size:11px;font-weight:600;color:#fff;}
+.band-right{display:flex;align-items:center;gap:6px;}
+.band-sublabel{font-size:10px;color:rgba(255,255,255,.5);}
+.band-subvalue{font-size:11px;font-weight:700;color:#fff;font-family:var(--mono);}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;gap:4px;padding:6px 16px;background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+.tb-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:5px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-600);font-family:var(--font);transition:.12s;white-space:nowrap;position:relative;}
+.tb-btn:hover:not(:disabled){background:var(--bg);border-color:#ccc;color:var(--text-900);}
+.tb-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+.tb-btn.primary:hover:not(:disabled){background:var(--blue-dark);}
+.tb-btn.danger{color:var(--error);border-color:var(--error);}
+.tb-btn.danger:hover:not(:disabled){background:var(--error-l);}
+.tb-btn.danger-f{background:var(--error);color:#fff;border-color:var(--error);}
+.tb-btn.danger-f:hover:not(:disabled){background:#8a2020;}
+.tb-btn.active-mode{background:var(--blue-100);color:var(--blue);border-color:#a8c8ea;font-weight:600;}
+.tb-btn.active-mode-del{background:var(--error-l);color:var(--error);border-color:#e8b4b4;font-weight:600;}
+.tb-btn:disabled{opacity:.4;cursor:not-allowed;}
+.tb-btn .kbd{font-family:var(--mono);font-size:9px;font-weight:700;background:rgba(0,0,0,.07);padding:1px 4px;border-radius:3px;color:inherit;margin-left:2px;}
+.tb-btn.primary .kbd{background:rgba(255,255,255,.2);}
+.tb-sep{width:1px;height:20px;background:var(--border);margin:0 4px;}
+.tb-nav{display:flex;}
+.tb-nav-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--text-600);font-size:13px;transition:.12s;font-family:var(--font);}
+.tb-nav-btn:not(:first-child){border-left:none;}
+.tb-nav-btn:first-child{border-radius:5px 0 0 5px;}
+.tb-nav-btn:last-child{border-radius:0 5px 5px 0;}
+.tb-nav-btn:hover:not(:disabled){background:var(--bg);}
+.tb-nav-btn:disabled{opacity:.35;cursor:not-allowed;}
+.tb-print-tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;font-size:10px;font-weight:500;padding:4px 9px;border-radius:4px;white-space:nowrap;z-index:100;pointer-events:none;max-width:280px;text-align:center;}
+.tb-btn:hover .tb-print-tooltip{display:block;}
+
+/* ── Delete banner ── */
+.del-banner{background:var(--error-l);border-bottom:2px solid var(--error);padding:8px 16px;font-size:12px;color:var(--error);font-weight:500;flex-shrink:0;}
+
+/* ── Form Section ── */
+.form-section{background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;}
+.form-sec-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--border);}
+.form-sec-hdr-left{display:flex;align-items:center;gap:8px;}
+.form-sec-title{font-size:13px;font-weight:600;color:var(--text-900);}
+.form-date-pill{background:var(--blue-100);color:var(--blue);font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;}
+.form-fields{padding:12px 16px 8px;}
+.fields-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px;}
+.fields-row:last-of-type{margin-bottom:4px;}
+.fg{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.fg-s{flex:0 0 128px;}
+.fg-m{flex:0 0 148px;}
+.fg-ml{flex:0 0 175px;}
+.fg-l{flex:1 1 190px;}
+.fg-xl{flex:2 1 260px;}
+.fld-lbl{font-size:11px;font-weight:500;color:var(--text-400);line-height:1;}
+.fld-lbl .req{color:var(--error);margin-left:1px;}
+.fld-ctrl{height:30px;border:1px solid var(--border);border-radius:4px;padding:0 8px;font-size:12px;font-family:var(--font);color:var(--text-900);background:#fff;width:100%;outline:none;transition:border-color .15s;}
+.fld-ctrl:focus{border-color:var(--blue);}
+.fld-ctrl:disabled,.fld-ctrl[readonly]{background:var(--bg);color:var(--text-600);}
+.fld-ctrl.mono{font-family:var(--mono);font-weight:600;}
+.fld-ctrl.blue{color:var(--blue);}
+.fld-hint{font-size:10px;color:var(--text-400);margin-top:2px;}
+
+/* ── Approval Level Switches (read-only display per FSD) ── */
+.apv-level-row{display:flex;align-items:center;gap:14px;}
+.apv-level-item{display:flex;align-items:center;gap:5px;}
+.apv-sw{display:inline-block;cursor:default;}
+.apv-sw-track{width:34px;height:18px;border-radius:9px;background:var(--border);position:relative;transition:background .2s;}
+.apv-sw.on .apv-sw-track{background:var(--success);}
+.apv-sw-thumb{position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+.apv-sw.on .apv-sw-thumb{left:19px;}
+.apv-sw.pending .apv-sw-track{background:var(--blue);}
+.apv-sw.pending .apv-sw-thumb{left:19px;}
+.apv-level-lbl{font-size:11px;font-weight:700;color:var(--text-400);min-width:22px;}
+.apv-sw.on~.apv-level-lbl{color:var(--success);}
+.apv-sw.pending~.apv-level-lbl{color:var(--blue);}
+.apv-level-sep{width:1px;height:16px;background:var(--border);}
+
+/* ── Checkbox column ── */
+.col-cb{width:34px;text-align:center;padding:0 4px;}
+.col-cb input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:var(--blue);}
+.row-chk-td{width:34px;text-align:center;padding:0 4px;}
+.row-chk-td input[type=checkbox]{width:13px;height:13px;cursor:pointer;accent-color:var(--blue);}
+tr.row-selected td{background:#EBF3FF!important;}
+
+/* ── Grid section ── */
+.grid-section{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#fff;}
+.grid-bar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface-alt);flex-shrink:0;}
+.grid-bar-lbl{font-size:12px;font-weight:600;color:var(--text-600);}
+.grid-ct{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--blue-100);color:var(--blue);}
+.grid-wrap{overflow:auto;flex:1;}
+.amend-tbl{border-collapse:collapse;font-size:12px;width:max-content;min-width:100%;}
+.amend-tbl thead tr{background:#1e293b;color:#fff;position:sticky;top:0;z-index:2;}
+.amend-tbl th{padding:8px 8px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.07);}
+.amend-tbl th.r{text-align:right;}
+.amend-tbl th.c{text-align:center;}
+.amend-tbl td{padding:3px 6px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+.amend-tbl tbody tr:hover td{background:#f0f6ff;}
+.c-no{width:36px;text-align:center;font-size:11px;color:var(--text-400);padding:0 8px;}
+.c-id{font-weight:700;font-family:var(--mono);font-size:11px;white-space:nowrap;padding:0 8px;}
+.c-ro{font-family:var(--mono);font-size:11px;color:var(--text-400);text-align:right;padding:0 8px;}
+.cell-inp{height:26px;border:1px solid var(--border);border-radius:3px;padding:0 6px;font-size:11px;font-family:var(--mono);color:var(--text-900);background:#fff;outline:none;transition:border-color .12s;text-align:right;}
+.cell-inp:focus{border-color:var(--blue);background:#f8fbff;}
+.cell-inp:disabled{background:var(--bg);color:var(--text-400);border-color:transparent;}
+.cell-inp.txt{font-family:var(--font);text-align:left;}
+.cell-inp.editable{background:#fffce8;border-color:#e0d070;}
+.cell-inp.editable:focus{background:#fff;border-color:var(--blue);}
+.sc{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;display:inline-block;}
+.sc-req{background:var(--blue-100);color:var(--blue);}
+.sc-fapp{background:var(--success-l);color:var(--success);}
+.sc-ord{background:var(--warning-l);color:var(--warning);}
+.sc-enq{background:var(--purple-l);color:var(--purple);}
+.sc-recv{background:#e8f4fb;color:#0e7cb5;}
+.sc-can{background:#f5f5f5;color:var(--text-400);}
+
+/* ── Empty state ── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:10px;flex:1;}
+.empty-icon{font-size:36px;opacity:.3;}
+.empty-title{font-size:14px;font-weight:600;color:var(--text-400);}
+.empty-sub{font-size:12px;color:var(--text-400);text-align:center;max-width:400px;line-height:1.7;}
+
+/* ── Footer summary ── */
+.form-footer{background:#fff;border-top:1px solid var(--border);display:flex;flex-shrink:0;}
+.footer-card{flex:1;padding:10px 20px;border-right:1px solid var(--border);}
+.footer-card:last-child{border-right:none;}
+.footer-card-lbl{font-size:10px;font-weight:600;color:var(--text-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}
+.footer-card-val{font-size:18px;font-weight:700;color:var(--text-900);line-height:1.1;font-family:var(--mono);}
+.footer-card-sub{font-size:10px;color:var(--text-400);margin-top:1px;}
+
+/* ── Modals ── */
+.overlay{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;}
+.modal{background:#fff;border-radius:10px;box-shadow:0 24px 48px rgba(0,0,0,.22);display:flex;flex-direction:column;max-height:90vh;}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.modal-hdr-sub{font-size:11px;color:var(--text-400);margin-top:2px;}
+.modal-x{background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-400);padding:2px 6px;border-radius:4px;font-family:var(--font);}
+.modal-x:hover{background:var(--bg);}
+.modal-search{padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.modal-search-inp{width:100%;height:34px;border:1px solid var(--border);border-radius:6px;padding:0 12px;font-size:13px;font-family:var(--font);outline:none;}
+.modal-search-inp:focus{border-color:var(--blue);}
+.modal-body{overflow:auto;}
+.m-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.m-tbl thead tr{background:var(--surface-alt);position:sticky;top:0;}
+.m-tbl th{padding:8px 12px;font-size:11px;font-weight:700;text-align:left;border-bottom:2px solid var(--border);}
+.m-tbl th.r{text-align:right;}
+.m-tbl td{padding:7px 12px;border-bottom:1px solid #f5f5f5;}
+.m-tbl tbody tr{cursor:pointer;transition:.1s;}
+.m-tbl tbody tr:hover{background:var(--blue-100);}
+.m-tbl tbody tr.sel{background:#dbeafe;}
+.modal-ftr{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;}
+.m-btn-cls{padding:6px 14px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;cursor:pointer;font-family:var(--font);}
+.m-btn-cls:hover{background:var(--bg);}
+.m-btn-sel{padding:6px 22px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.m-btn-sel:disabled{opacity:.38;cursor:not-allowed;}
+
+/* ── Confirm ── */
+.confirm-overlay{position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;}
+.confirm-box{background:#fff;border-radius:10px;width:440px;box-shadow:0 24px 48px rgba(0,0,0,.25);overflow:hidden;}
+.confirm-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);}
+.confirm-icon{font-size:22px;}
+.confirm-title{font-size:15px;font-weight:700;}
+.confirm-body{padding:16px 20px;font-size:13px;color:var(--text-600);line-height:1.6;}
+.confirm-ftr{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;background:var(--surface-alt);border-top:1px solid var(--border);}
+.btn-ghost{padding:6px 16px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);}
+.btn-ghost:hover{background:var(--bg);}
+.btn-prim{padding:6px 20px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.btn-danger{padding:6px 20px;background:var(--error);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+
+/* ── Toasts ── */
+.toasts{position:fixed;bottom:24px;right:24px;z-index:9998;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);font-size:12px;font-weight:500;min-width:220px;max-width:380px;animation:slideIn .2s ease;pointer-events:auto;}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+.toast.success{background:var(--success-l);color:var(--success);border:1px solid #c3e4a0;}
+.toast.error{background:var(--error-l);color:var(--error);border:1px solid #f5c0c0;}
+.toast.info{background:var(--blue-100);color:var(--blue);border:1px solid #a8c8ea;}
+.toast.warning{background:var(--warning-l);color:var(--warning);border:1px solid #f0d89a;}
+
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+
+<!-- IST Control Bar -->
+<div class="ist-bar">
+  <span class="ist-label">IST Prototype</span>
+  <span class="ist-badge">FSD v1.1 · CEO Stage 4 Pending</span>
+  <div class="ist-sep"></div>
+  <span class="ist-label">State:</span>
+  <button class="ist-btn active" onclick="setAPPState('query')">Query Mode</button>
+  <div class="ist-sep"></div>
+  <button class="ist-btn" onclick="setAPPState('load-loaded')">Load PRs: Loaded</button>
+  <button class="ist-btn" onclick="setAPPState('delete-loaded')">Delete: Loaded</button>
+  <button class="ist-btn" onclick="setAPPState('saved')">Post Save (Print Enabled)</button>
+</div>
+
+<!-- App Shell -->
+<div class="app-root">
+
+  <!-- Sider -->
+  <div class="sider" id="sider">
+    <div class="sider-logo">
+      <div class="logo-mark"><span>S</span></div>
+      <span class="logo-text">Spinrise ERP</span>
+    </div>
+    <div class="sider-nav">
+      <div class="menu-group open" id="grp-po" onclick="toggleGroup('grp-po-children','grp-po')">
+        <span class="menu-group-icon">🛒</span>
+        <span class="menu-group-label">Purchase Order</span>
+        <span class="menu-chevron">›</span>
+      </div>
+      <div class="menu-children open" id="grp-po-children">
+        <div class="menu-item" onclick="navigate('foreclosure')">
+          <span class="menu-item-icon">⚡</span>Purchase Requisition Foreclosure
+        </div>
+        <div class="menu-item" onclick="navigate('cancellation')">
+          <span class="menu-item-icon">🚫</span>Purchase Requisition Cancellation
+        </div>
+        <div class="menu-item" onclick="navigate('amendment')">
+          <span class="menu-item-icon">✏️</span>Purchase Requisition Amendment
+        </div>
+        <div class="menu-item active" onclick="navigate('first-approval')">
+          <span class="menu-item-icon">✅</span>PR First Level Approval
+        </div>
+        <div class="menu-item" onclick="navigate('PRFinalLevelApproval')">
+          <span class="menu-item-icon">✅</span>Purchase Requisition Final Level Approval
+        </div>
+      </div>
+    </div>
+  </div><!-- /sider -->
+
+  <!-- Main Area -->
+  <div class="main-area">
+
+    <!-- App Header -->
+    <div class="app-header">
+      <div class="hdr-left">
+        <button class="hdr-toggle" id="toggle-btn" onclick="toggleSider()" title="Toggle sidebar">
+          <svg id="toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/>
+            <line x1="1" y1="12" x2="15" y2="12"/>
+            <polyline points="10,5 13,8 10,11" stroke-width="1.4"/>
+          </svg>
+        </button>
+      </div>
+      <div class="hdr-center">
+        <span class="hdr-company">KALPATHARU SPINNERS PVT. LTD.</span>
+      </div>
+      <div class="hdr-user" onclick="toggleUserMenu()">
+        <div class="user-avatar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+        </div>
+        <div class="user-info">
+          <span class="user-name">KALSOFTE</span>
+          <span class="user-div">KALPATHARU SPINNERS PVT. LTD.</span>
+        </div>
+        <span class="hdr-chevron">▾</span>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-item">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Content -->
+    <div class="page-content">
+
+      <!-- Doc Band -->
+      <div class="doc-band">
+        <div class="breadcrumb">
+          <span class="bc-parent">Purchase Order</span>
+          <span class="bc-sep">›</span>
+          <span class="bc-current">PR First Level Approval</span>
+        </div>
+        <div class="band-right">
+          <span class="band-sublabel">PR No.</span>
+          <span class="band-subvalue" id="band-prno">—</span>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button class="tb-btn" id="btn-load" onclick="doLoadPRs()">
+          🔄 <span>Load PRs</span>
+        </button>
+        <button class="tb-btn danger" id="btn-del-approval" onclick="enterDeleteMode()">
+          ✘ <span>Delete</span>
+        </button>
+        <button class="tb-btn" id="btn-find" onclick="doFind()">
+          ≡ <span>Find</span>
+        </button>
+        <div class="tb-sep"></div>
+        <div class="tb-nav">
+          <button class="tb-nav-btn" id="nav-first" title="First"    onclick="navFirst()" disabled>«</button>
+          <button class="tb-nav-btn" id="nav-prev"  title="Previous" onclick="navPrev()" disabled>‹</button>
+          <button class="tb-nav-btn" id="nav-next"  title="Next"     onclick="navNext()" disabled>›</button>
+          <button class="tb-nav-btn" id="nav-last"  title="Last"     onclick="navLast()" disabled>»</button>
+        </div>
+        <div class="tb-sep"></div>
+        <button class="tb-btn primary" id="btn-save" onclick="doSave()" disabled>
+          ✓ <span id="btn-save-lbl">Save</span><span class="kbd">Ctrl+S</span>
+        </button>
+        <button class="tb-btn" id="btn-print" onclick="doPrint()" disabled>
+          🖨 <span>Print</span>
+          <span class="tb-print-tooltip">Save approval first, then use Print. Note: Print is blocked until DirectApp condition resolved (OI-05 open).</span>
+        </button>
+        <button class="tb-btn" id="btn-cancel" onclick="doCancel()" disabled>
+          ✕ <span>Cancel</span><span class="kbd">Alt+X</span>
+        </button>
+      </div>
+
+      <!-- Delete Approval Banner -->
+      <div class="del-banner hidden" id="del-banner">
+        ⚠ Delete Approval Mode — Undoing First Level Approval for PR <strong id="del-prno-lbl"></strong>. Requires <em>DeleteApproval</em> role permission (OI-07 CLOSED). Self-delete is not permitted.
+      </div>
+
+      <!-- Form Section — Header Details -->
+      <div class="form-section" id="form-hdr-section">
+        <div class="form-sec-hdr">
+          <div class="form-sec-hdr-left">
+            <span class="form-sec-title">Approval Details</span>
+            <span class="form-date-pill" id="hdr-pill">Approve Date: 26/05/2026</span>
+          </div>
+          <div class="apv-level-row">
+            <div class="apv-level-item">
+              <div class="apv-sw" id="sw-sm">
+                <div class="apv-sw-track"><div class="apv-sw-thumb"></div></div>
+              </div>
+              <span class="apv-level-lbl" id="lbl-sm">SM</span>
+            </div>
+            <div class="apv-level-sep"></div>
+            <div class="apv-level-item">
+              <div class="apv-sw" id="sw-fm">
+                <div class="apv-sw-track"><div class="apv-sw-thumb"></div></div>
+              </div>
+              <span class="apv-level-lbl" id="lbl-fm">FM</span>
+            </div>
+            <div class="apv-level-sep"></div>
+            <div class="apv-level-item">
+              <div class="apv-sw" id="sw-gm">
+                <div class="apv-sw-track"><div class="apv-sw-thumb"></div></div>
+              </div>
+              <span class="apv-level-lbl" id="lbl-gm">GM</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-fields">
+          <!-- Row 1: PR No / PR Date / Approve Date -->
+          <div class="fields-row">
+            <div class="fg fg-s">
+              <span class="fld-lbl">PR No.<span class="req">*</span></span>
+              <input class="fld-ctrl mono blue" id="fld-prno" value="" readonly placeholder="Select PR →">
+            </div>
+            <div class="fg fg-m">
+              <span class="fld-lbl">PR Date</span>
+              <input class="fld-ctrl mono" id="fld-prdate" value="" readonly placeholder="—">
+            </div>
+            <div class="fg fg-m">
+              <span class="fld-lbl">Approve Date<span class="req">*</span></span>
+              <input class="fld-ctrl mono" id="fld-appdate" type="date" value="2026-05-26" readonly>
+              <span class="fld-hint">Must be ≤ process date (pdate). Default: today.</span>
+            </div>
+          </div>
+          <!-- Row 2: Dept Id / Dept Name / Ref No / Section -->
+          <div class="fields-row">
+            <div class="fg fg-s">
+              <span class="fld-lbl">Department Id</span>
+              <input class="fld-ctrl mono" id="fld-depcode" value="" readonly placeholder="—">
+            </div>
+            <div class="fg fg-l">
+              <span class="fld-lbl">Department Name</span>
+              <input class="fld-ctrl" id="fld-depname" value="" readonly placeholder="—">
+            </div>
+            <div class="fg fg-m">
+              <span class="fld-lbl">Reference No.</span>
+              <input class="fld-ctrl" id="fld-refno" value="" readonly placeholder="—">
+            </div>
+            <div class="fg fg-m">
+              <span class="fld-lbl">Section</span>
+              <input class="fld-ctrl" id="fld-section" value="" readonly placeholder="—">
+            </div>
+          </div>
+          <!-- Row 3: Sub Cost / Sub Cost Centre Name / Requester Name -->
+          <div class="fields-row">
+            <div class="fg fg-m">
+              <span class="fld-lbl">Sub Cost Centre</span>
+              <input class="fld-ctrl mono" id="fld-subcost" value="" readonly placeholder="—">
+            </div>
+            <div class="fg fg-xl">
+              <span class="fld-lbl">Sub Cost Centre Name</span>
+              <input class="fld-ctrl" id="fld-sccname" value="" readonly placeholder="—">
+            </div>
+            <div class="fg fg-l">
+              <span class="fld-lbl">Requester Name</span>
+              <input class="fld-ctrl" id="fld-reqname" value="" readonly placeholder="—">
+            </div>
+          </div>
+        </div>
+      </div><!-- /form-section -->
+
+      <!-- Grid Section -->
+      <div class="grid-section">
+        <div class="grid-bar">
+          <span class="grid-bar-lbl">PR Line Items</span>
+          <span class="grid-ct" id="grid-count">0 items</span>
+          <span style="font-size:11px;color:var(--text-400);margin-left:8px;" id="grid-edit-hint" class="hidden">Editable: First Approval Quantity · Rate (auto-calculates Approx. Value)</span>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty" id="grid-empty">
+          <div class="empty-icon">📋</div>
+          <div class="empty-title">No PR Selected</div>
+          <div class="empty-sub">Click <strong>Load PRs</strong> to select a pending Purchase Requisition for First Level Approval, or <strong>Delete</strong> to undo an existing First Level Approval.</div>
+        </div>
+
+        <!-- Grid wrapper -->
+        <div class="grid-wrap hidden" id="grid-wrap">
+          <table class="amend-tbl" id="pr-grid">
+            <thead>
+              <tr>
+                <th class="col-cb"><input type="checkbox" id="chk-all" title="Select All" onchange="toggleAllRows(this)"></th>
+                <th style="width:36px" class="c">#</th>
+                <th style="min-width:80px">Item Id</th>
+                <th style="min-width:200px">Item Name</th>
+                <th style="min-width:60px" class="c">Unit</th>
+                <th style="min-width:95px" class="r">Rate ✎</th>
+                <th style="min-width:100px">Machine</th>
+                <th style="min-width:100px" class="r">Current Stock</th>
+                <th style="min-width:110px" class="r">Quantity Required</th>
+                <th style="min-width:130px" class="r">First Approval Quantity ✎</th>
+                <th style="min-width:95px" class="c">Required Date</th>
+                <th style="min-width:100px" class="r">Approx. Value</th>
+                <th style="min-width:140px">Remarks</th>
+              </tr>
+            </thead>
+            <tbody id="grid-body">
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer -->
+        <div class="form-footer hidden" id="form-footer">
+          <div class="footer-card">
+            <div class="footer-card-lbl">Total Items</div>
+            <div class="footer-card-val" id="footer-items">0</div>
+          </div>
+          <div class="footer-card">
+            <div class="footer-card-lbl">Total Value</div>
+            <div class="footer-card-val" id="footer-value">0.00</div>
+            <div class="footer-card-sub">First Approval Quantity × Rate (auto-calculated)</div>
+          </div>
+          <div class="footer-card">
+            <div class="footer-card-lbl">Approval Status</div>
+            <div class="footer-card-val" id="footer-status" style="font-size:13px;padding-top:3px;">—</div>
+          </div>
+        </div>
+
+      </div><!-- /grid-section -->
+
+    </div><!-- /page-content -->
+  </div><!-- /main-area -->
+</div><!-- /app-root -->
+
+<!-- ── Department Selection Modal (Load PRs — Step 1 of 2) ── -->
+<div class="overlay hidden" id="overlay-dept">
+  <div class="modal" style="width:520px">
+    <div class="modal-hdr">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--text-900)">Select Department</div>
+        <div class="modal-hdr-sub">Step 1 of 2 — Choose a department to filter pending PRs</div>
+      </div>
+      <button class="modal-x" onclick="closeDeptModal()">✕</button>
+    </div>
+    <div class="modal-search">
+      <input class="modal-search-inp" id="dept-search-inp" placeholder="Search department code or name …" oninput="filterDepts(this.value)">
+    </div>
+    <div class="modal-body" style="max-height:320px">
+      <table class="m-tbl">
+        <thead>
+          <tr>
+            <th>Department Id</th>
+            <th>Department Name</th>
+            <th class="r">Pending PRs</th>
+          </tr>
+        </thead>
+        <tbody id="dept-modal-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-ftr">
+      <span style="font-size:11px;color:var(--text-400);flex:1" id="dept-count-lbl">0 departments</span>
+      <button class="m-btn-cls" onclick="closeDeptModal()">Close</button>
+      <button class="m-btn-sel" id="btn-dept-next" onclick="onDeptSelected()" disabled>Next ›</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── PR Lookup Modal (Load PRs / Delete / Find) ── -->
+<div class="overlay hidden" id="overlay-lookup">
+  <div class="modal" style="width:700px">
+    <div class="modal-hdr">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--text-900)" id="modal-lookup-title">Select PR for First Level Approval</div>
+        <div class="modal-hdr-sub" id="modal-lookup-sub">Showing PRs pending First Level Approval (sp_PR_GetPendingFirstApproval)</div>
+      </div>
+      <button class="modal-x" onclick="closeLookupModal()">✕</button>
+    </div>
+    <div class="modal-search">
+      <input class="modal-search-inp" id="modal-search-inp" placeholder="Search PR No., Department, Ref No. …" oninput="filterLookup(this.value)">
+    </div>
+    <div class="modal-body" style="max-height:380px">
+      <table class="m-tbl">
+        <thead>
+          <tr>
+            <th>PR No.</th>
+            <th>PR Date</th>
+            <th>Department Id</th>
+            <th>Department Name</th>
+            <th>Reference No.</th>
+            <th>Section</th>
+          </tr>
+        </thead>
+        <tbody id="modal-lookup-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-ftr">
+      <span style="font-size:11px;color:var(--text-400);flex:1" id="modal-count-lbl">3 records found</span>
+      <button class="m-btn-cls" onclick="closeLookupModal()">Close</button>
+      <button class="m-btn-sel" id="btn-modal-select" onclick="selectPRFromModal()" disabled>Select</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Confirm: Save (First Level Approval) ── -->
+<div class="confirm-overlay hidden" id="confirm-save">
+  <div class="confirm-box">
+    <div class="confirm-hdr">
+      <span class="confirm-icon">✅</span>
+      <span class="confirm-title" id="confirm-save-title">Confirm First Level Approval</span>
+    </div>
+    <div class="confirm-body" id="confirm-save-body">
+      First Level Approve PR <strong id="cs-prno">—</strong> dated <strong id="cs-prdate">—</strong>?<br>
+      <strong id="cs-lines">—</strong> will be First Level Approved.<br>
+      PRSTATUS will transition to <strong>First Approved (F)</strong>.
+    </div>
+    <div class="confirm-ftr">
+      <button class="btn-ghost" onclick="document.getElementById('confirm-save').classList.add('hidden')">Cancel</button>
+      <button class="btn-prim" onclick="executeSave()">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Confirm: Delete Approval ── -->
+<div class="confirm-overlay hidden" id="confirm-delete">
+  <div class="confirm-box">
+    <div class="confirm-hdr">
+      <span class="confirm-icon">⚠️</span>
+      <span class="confirm-title">Delete First Level Approval</span>
+    </div>
+    <div class="confirm-body" id="confirm-delete-body">
+      Delete First Level Approval for PR <strong id="cd-prno">—</strong>?<br>
+      This will reset <em>app1, app1date, app1time</em> on PO_PRH and reset <em>QTYREQD, FirstAppQty, FirstApp</em> on all PO_PRL lines (DirectApp IS NULL only).<br>
+      PRSTATUS will revert to <strong>Requested</strong>. LogDet_PO Trans_Mod = <em>DELETE</em>.
+    </div>
+    <div class="confirm-ftr">
+      <button class="btn-ghost" onclick="document.getElementById('confirm-delete').classList.add('hidden')">Cancel</button>
+      <button class="btn-danger" onclick="executeDelete()">Delete Approval</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toasts ── -->
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ── State ── */
+let appState   = 'query';
+let lookupMode = 'approve'; // approve | delete
+let currentPR  = null;
+let selectedRow = null;
+let gridEditable = false;
+let selectedDept = null;
+let deptList = [];
+let navList = [];
+let navIdx = -1;
+const PROCESSING_DATE = '2026-05-26';
+
+/* ── Sample Data ── */
+const pendingList = [
+  { prno:'25001', prdate:'15/04/2026', depcode:'MTG', depname:'Manufacturing',  refno:'REF-2026-001', section:'SPINNING',  subcost:'SC01', sccname:'Spinning Unit A',  reqname:'Rajesh Kumar',  app1:null, app2:null, app3:null },
+  { prno:'25002', prdate:'18/04/2026', depcode:'DYG', depname:'Dyeing',         refno:'REF-2026-002', section:'DYEING',    subcost:'SC02', sccname:'Dyeing Unit B',     reqname:'Priya Sharma',  app1:null, app2:null, app3:null },
+  { prno:'25003', prdate:'20/04/2026', depcode:'MNT', depname:'Maintenance',    refno:'',             section:'MAINT',     subcost:'SC03', sccname:'Maintenance Unit',  reqname:'Suresh Babu',   app1:null, app2:null, app3:null },
+];
+
+const approvedList = [
+  { prno:'24998', prdate:'10/04/2026', depcode:'MTG', depname:'Manufacturing',  refno:'REF-2026-099', section:'SPINNING',  subcost:'SC01', sccname:'Spinning Unit A',  reqname:'Rajesh Kumar',  app1:'Y', app2:null, app3:null },
+  { prno:'24999', prdate:'12/04/2026', depcode:'DYG', depname:'Dyeing',         refno:'REF-2026-100', section:'DYEING',    subcost:'SC02', sccname:'Dyeing Unit B',     reqname:'Priya Sharma',  app1:'Y', app2:null, app3:null },
+];
+
+const lineData = {
+  '25001': [
+    { prsno:1, itemcode:'YRN001', itemname:'Cotton Yarn 40s',       cuom:'KGS', qtyind:500.000, qtyreqd:500.000, firstappqty:0.000,   rate:285.5000, curstk:1250.000, secondappqty:0.000, thirdappqty:0.000, qtyord:0.000, qtyrec:0.000, reqddate:'30/05/2026', prstatus:null, place:'SPINNING',  appcost:140000.00, remarks:'For weaving dept',    bgrpcode:'BG001', machine:''     },
+    { prsno:2, itemcode:'YRN002', itemname:'Cotton Yarn 60s Combed', cuom:'KGS', qtyind:200.000, qtyreqd:200.000, firstappqty:0.000,   rate:320.0000, curstk:450.000,  secondappqty:0.000, thirdappqty:0.000, qtyord:0.000, qtyrec:0.000, reqddate:'30/05/2026', prstatus:null, place:'SPINNING',  appcost:62000.00,  remarks:'Fine count yarn',     bgrpcode:'BG001', machine:''     },
+    { prsno:3, itemcode:'DYE001', itemname:'Reactive Dye Red M-8B', cuom:'KGS', qtyind:50.000,  qtyreqd:50.000,  firstappqty:0.000,   rate:1250.0000,curstk:15.000,   secondappqty:0.000, thirdappqty:0.000, qtyord:0.000, qtyrec:0.000, reqddate:'15/06/2026', prstatus:null, place:'DYEING',    appcost:60000.00,  remarks:'For dyeing process',  bgrpcode:'BG002', machine:''     },
+    { prsno:4, itemcode:'CHM001', itemname:'Soda Ash Light',        cuom:'KGS', qtyind:100.000, qtyreqd:100.000, firstappqty:0.000,   rate:45.0000,  curstk:200.000,  secondappqty:0.000, thirdappqty:0.000, qtyord:0.000, qtyrec:0.000, reqddate:'15/06/2026', prstatus:null, place:'DYEING',    appcost:4200.00,   remarks:'Chemical process',    bgrpcode:'BG002', machine:''     },
+    { prsno:5, itemcode:'MNT001', itemname:'Bearing SKF 6205',      cuom:'NOS', qtyind:10.000,  qtyreqd:10.000,  firstappqty:0.000,   rate:580.0000, curstk:2.000,    secondappqty:0.000, thirdappqty:0.000, qtyord:0.000, qtyrec:0.000, reqddate:'30/06/2026', prstatus:null, place:'MAINT',     appcost:5500.00,   remarks:'Preventive maintenance',bgrpcode:'BG003', machine:'M001' },
+  ],
+  '24998': [
+    { prsno:1, itemcode:'YRN003', itemname:'Cotton Yarn 80s',       cuom:'KGS', qtyind:300.000, qtyreqd:300.000, firstappqty:300.000, rate:420.0000, curstk:800.000,  secondappqty:0.000, thirdappqty:0.000, qtyord:0.000, qtyrec:0.000, reqddate:'20/05/2026', prstatus:'F',  place:'SPINNING',  appcost:124000.00, remarks:'',                    bgrpcode:'BG001', machine:''     },
+    { prsno:2, itemcode:'YRN004', itemname:'Cotton Yarn 100s',      cuom:'KGS', qtyind:150.000, qtyreqd:150.000, firstappqty:150.000, rate:520.0000, curstk:320.000,  secondappqty:0.000, thirdappqty:0.000, qtyord:0.000, qtyrec:0.000, reqddate:'20/05/2026', prstatus:'F',  place:'SPINNING',  appcost:76000.00,  remarks:'',                    bgrpcode:'BG001', machine:''     },
+  ],
+};
+
+/* ── IST State Switcher ── */
+function setAPPState(state) {
+  document.querySelectorAll('.ist-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  if (state === 'query') {
+    resetToQuery();
+  } else if (state === 'load-loaded') {
+    loadPR(pendingList[0], lineData['25001'], 'approve');
+  } else if (state === 'delete-loaded') {
+    loadPR(approvedList[0], lineData['24998'], 'delete');
+  } else if (state === 'saved') {
+    loadPR(approvedList[0], lineData['24998'], 'saved');
+  }
+}
+
+/* ── Reset to Query ── */
+function resetToQuery() {
+  appState = 'query';
+  currentPR = null;
+  gridEditable = false;
+  navList = [];
+  navIdx = -1;
+
+  // Clear header fields
+  setHeaderFields(null);
+  document.getElementById('band-prno').textContent = '—';
+
+  // Toolbar
+  setBtn('btn-load',         false, '', 'tb-btn');
+  setBtn('btn-del-approval', false, '', 'tb-btn danger');
+  setBtn('btn-find',         false, '', 'tb-btn');
+  setNavBtns(true);
+  setBtn('btn-save',         true,  'Save', 'tb-btn primary');
+  setBtn('btn-print',        true,  null, 'tb-btn');
+  setBtn('btn-cancel',       true,  null, 'tb-btn');
+  document.getElementById('del-banner').classList.add('hidden');
+  document.getElementById('grid-edit-hint').classList.add('hidden');
+  document.getElementById('fld-appdate').readOnly = true;
+  updateApprovalBadges(null, null, null);
+
+  // Grid
+  document.getElementById('grid-empty').classList.remove('hidden');
+  document.getElementById('grid-wrap').classList.add('hidden');
+  document.getElementById('form-footer').classList.add('hidden');
+  document.getElementById('grid-count').textContent = '0 items';
+  document.getElementById('footer-items').textContent = '0';
+  document.getElementById('footer-value').textContent = '0.00';
+  document.getElementById('footer-status').textContent = '—';
+}
+
+/* ── Load PR into form ── */
+function loadPR(pr, lines, mode) {
+  currentPR = { ...pr, lines: lines.map(l => ({ ...l, value: +(l.qtyreqd * l.rate).toFixed(2) })) };
+  appState = mode;
+  gridEditable = (mode === 'approve');
+
+  setHeaderFields(pr);
+  document.getElementById('band-prno').textContent = pr.prno;
+  document.getElementById('fld-appdate').readOnly = !(mode === 'approve' || mode === 'modify');
+
+  // First level approval maps to SM + FM; show PENDING (blue) until save completes
+  if (mode === 'approve') {
+    updateApprovalBadges('PENDING', 'PENDING', null);
+  } else {
+    updateApprovalBadges(pr.app1, pr.app2, pr.app3);
+  }
+
+  // Toolbar by mode
+  if (mode === 'approve') {
+    setBtn('btn-load',         false, '', 'tb-btn active-mode');
+    setBtn('btn-del-approval', true,  '', 'tb-btn danger');
+    setBtn('btn-find',         true,  '', 'tb-btn');
+    setNavBtns(true);
+    setBtn('btn-save',         false, 'Save', 'tb-btn primary');
+    setBtn('btn-print',        true,  null, 'tb-btn');
+    setBtn('btn-cancel',       false, null, 'tb-btn');
+    document.getElementById('del-banner').classList.add('hidden');
+    document.getElementById('grid-edit-hint').classList.remove('hidden');
+  } else if (mode === 'delete') {
+    setBtn('btn-load',         true,  '', 'tb-btn');
+    setBtn('btn-del-approval', false, '', 'tb-btn active-mode-del');
+    setBtn('btn-find',         true,  '', 'tb-btn');
+    setNavBtns(true);
+    setBtn('btn-save',         false, 'Confirm Delete', 'tb-btn danger-f');
+    setBtn('btn-print',        true,  null, 'tb-btn');
+    setBtn('btn-cancel',       false, null, 'tb-btn');
+    document.getElementById('del-banner').classList.remove('hidden');
+    document.getElementById('del-prno-lbl').textContent = pr.prno;
+    document.getElementById('grid-edit-hint').classList.add('hidden');
+  } else if (mode === 'saved') {
+    setBtn('btn-load',         false, '', 'tb-btn');
+    setBtn('btn-del-approval', false, '', 'tb-btn danger');
+    setBtn('btn-find',         false, '', 'tb-btn');
+    updateNavBtns();
+    setBtn('btn-save',         true,  'Save', 'tb-btn primary');
+    setBtn('btn-print',        false, null, 'tb-btn');
+    setBtn('btn-cancel',       true,  null, 'tb-btn');
+    document.getElementById('del-banner').classList.add('hidden');
+    document.getElementById('grid-edit-hint').classList.add('hidden');
+    // Simulate saved: update lines to show F status
+    currentPR.lines.forEach(l => l.prstatus = 'F');
+  }
+
+  renderGrid(currentPR.lines, gridEditable);
+  updateFooter();
+}
+
+/* ── Render grid ── */
+function renderGrid(lines, editable) {
+  document.getElementById('grid-empty').classList.add('hidden');
+  document.getElementById('grid-wrap').classList.remove('hidden');
+  document.getElementById('form-footer').classList.remove('hidden');
+  document.getElementById('grid-count').textContent = lines.length + ' item' + (lines.length !== 1 ? 's' : '');
+
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) { chkAll.checked = false; chkAll.indeterminate = false; }
+  const tbody = document.getElementById('grid-body');
+  tbody.innerHTML = '';
+
+  lines.forEach((l, i) => {
+    const value = +(l.qtyreqd * l.rate).toFixed(2);
+    const sc = statusChip(l.prstatus);
+    const row = document.createElement('tr');
+    row.setAttribute('data-idx', i);
+    row.innerHTML = `
+      <td class="row-chk-td"><input type="checkbox" class="row-chk" onchange="onRowCheck(this)"></td>
+      <td class="c-no">${i+1}</td>
+      <td class="c-id">${esc(l.itemcode)}</td>
+      <td style="white-space:nowrap;padding:0 8px;max-width:220px;overflow:hidden;text-overflow:ellipsis;">${esc(l.itemname)}</td>
+      <td style="text-align:center;padding:0 8px;font-size:11px;">${esc(l.cuom)}</td>
+      <td style="padding:3px 4px;text-align:right">
+        <input class="cell-inp${editable?' editable':''}" style="width:80px" data-field="rate" data-idx="${i}" value="${fmt4(l.rate)}" ${editable?'':'disabled'} onchange="onCellChange(this,${i},'rate')" oninput="onCellChange(this,${i},'rate')">
+      </td>
+      <td style="font-size:11px;padding:0 8px;">${esc(l.machine)}</td>
+      <td class="c-ro">${fmt3(l.curstk)}</td>
+      <td class="c-ro">${fmt3(l.qtyind)}</td>
+      <td style="padding:3px 4px;text-align:right">
+        <input class="cell-inp${editable?' editable':''}" style="width:88px" data-field="firstappqty" data-idx="${i}" value="${fmt3(l.firstappqty)}" ${editable?'':'disabled'} onchange="onCellChange(this,${i},'firstappqty')">
+      </td>
+      <td style="text-align:center;font-size:11px;padding:0 8px;">${l.reqddate||'—'}</td>
+      <td class="c-ro" id="val-${i}">${fmt2(l.appcost)}</td>
+      <td style="font-size:11px;padding:0 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.remarks)}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+/* ── Cell change handler ── */
+function onCellChange(el, idx, field) {
+  if (!currentPR) return;
+  const val = parseFloat(el.value) || 0;
+  currentPR.lines[idx][field] = val;
+
+  if (field === 'firstappqty' || field === 'rate') {
+    const line = currentPR.lines[idx];
+    const newVal = +(line.firstappqty * line.rate).toFixed(2);
+    line.appcost = newVal;
+    const vcell = document.getElementById('val-' + idx);
+    if (vcell) vcell.textContent = fmt2(newVal);
+
+    // Validate: firstappqty must be <= qtyind
+    if (field === 'firstappqty' && val > line.qtyind) {
+      el.style.borderColor = 'var(--error)';
+      el.style.background = 'var(--error-l)';
+      showToast('First Approval Quantity cannot exceed Quantity Required (' + fmt3(line.qtyind) + ') for row ' + (idx+1), 'error');
+    } else {
+      el.style.borderColor = '';
+      el.style.background = '';
+    }
+  }
+  updateFooter();
+}
+
+/* ── Status chip ── */
+function statusChip(prstatus) {
+  if (!prstatus) return '<span class="sc sc-req">Requested</span>';
+  if (prstatus === 'F') return '<span class="sc sc-fapp">First Approved</span>';
+  if (prstatus === 'C') return '<span class="sc sc-recv">Received</span>';  // NOTE: C = RECEIVED, not Cancelled
+  if (prstatus === 'O') return '<span class="sc sc-ord">Ordered</span>';
+  if (prstatus === 'E') return '<span class="sc sc-enq">Enquired</span>';
+  return '<span class="sc sc-can">' + prstatus + '</span>';
+}
+
+/* ── Approval level switches (read-only, driven by app1/app2/app3 IS NOT NULL) ── */
+function updateApprovalBadges(app1, app2, app3) {
+  setSwitch('sw-sm', 'lbl-sm', app1, 'SM');
+  setSwitch('sw-fm', 'lbl-fm', app2, 'FM');
+  setSwitch('sw-gm', 'lbl-gm', app3, 'GM');
+}
+function setSwitch(swId, lblId, val, label) {
+  const sw  = document.getElementById(swId);
+  const lbl = document.getElementById(lblId);
+  if (!sw || !lbl) return;
+  sw.classList.remove('on', 'pending');
+  if (val === 'Y') {
+    sw.classList.add('on');
+    lbl.textContent = label + ' ✓';
+  } else if (val === 'PENDING') {
+    sw.classList.add('pending');
+    lbl.textContent = label + ' …';
+  } else {
+    lbl.textContent = label;
+  }
+}
+
+/* ── Header fields ── */
+function setHeaderFields(pr) {
+  document.getElementById('fld-prno').value    = pr ? pr.prno    : '';
+  document.getElementById('fld-prdate').value  = pr ? pr.prdate  : '';
+  document.getElementById('fld-depcode').value = pr ? pr.depcode : '';
+  document.getElementById('fld-depname').value = pr ? pr.depname : '';
+  document.getElementById('fld-refno').value   = pr ? pr.refno   : '';
+  document.getElementById('fld-section').value = pr ? pr.section : '';
+  document.getElementById('fld-subcost').value = pr ? pr.subcost  : '';
+  document.getElementById('fld-sccname').value = pr ? pr.sccname  : '';
+  document.getElementById('fld-reqname').value = pr ? (pr.reqname || '') : '';
+  document.getElementById('hdr-pill').textContent = 'Approve Date: 26/05/2026';
+}
+
+/* ── Footer ── */
+function updateFooter() {
+  if (!currentPR) return;
+  const lines = currentPR.lines;
+  const total = lines.reduce((s, l) => s + (l.appcost || 0), 0);
+  document.getElementById('footer-items').textContent = lines.length;
+  document.getElementById('footer-value').textContent = fmt2(total);
+  const mode = appState;
+  document.getElementById('footer-status').textContent =
+    mode === 'saved'  ? '✅ First Approved' :
+    mode === 'delete' ? '⚠ Pending Deletion' :
+    mode === 'approve' ? '✎ Pending Save' : '—';
+}
+
+/* ── Toolbar actions ── */
+function doLoadPRs() {
+  openDeptModal();
+}
+function enterDeleteMode() {
+  openLookupModal('delete');
+}
+function doFind() {
+  openLookupModal('find');
+}
+
+function doSave() {
+  if (!currentPR) return;
+  if (appState === 'delete') {
+    document.getElementById('cd-prno').textContent = currentPR.prno;
+    document.getElementById('confirm-delete').classList.remove('hidden');
+    return;
+  }
+
+  // Validate: at least one row must be selected
+  const checkedRows = document.querySelectorAll('#grid-body .row-chk:checked');
+  if (checkedRows.length === 0) {
+    showToast('Please select at least one line item to approve.', 'error');
+    return;
+  }
+
+  // Validate approve date
+  const adEl = document.getElementById('fld-appdate');
+  const ad = new Date(adEl.value);
+  const today = new Date(PROCESSING_DATE);
+  if (ad > today) {
+    showToast('Date should be Equal to Current Date Or Max Purchase Requisition Date', 'error');
+    adEl.style.borderColor = 'var(--error)';
+    return;
+  }
+  adEl.style.borderColor = '';
+
+  // Show confirm
+  const totalLines = currentPR.lines.length;
+  const selectedCount = checkedRows.length;
+  document.getElementById('cs-prno').textContent   = currentPR.prno;
+  document.getElementById('cs-prdate').textContent = currentPR.prdate;
+  document.getElementById('cs-lines').textContent  = selectedCount + ' of ' + totalLines + ' item' + (totalLines !== 1 ? 's' : '') + ' selected';
+  document.getElementById('confirm-save-title').textContent = 'Confirm First Level Approval';
+  document.getElementById('confirm-save').classList.remove('hidden');
+}
+
+function executeSave() {
+  document.getElementById('confirm-save').classList.add('hidden');
+  appState = 'saved';
+  currentPR.app1 = 'Y';
+  // First level maps to SM + FM — both turn green
+  updateApprovalBadges('Y', 'Y', null);
+
+  // Collect selected row indices before re-render clears checkboxes
+  const checkedRows = document.querySelectorAll('#grid-body .row-chk:checked');
+  const selectedIdxs = Array.from(checkedRows).map(chk => parseInt(chk.closest('tr').getAttribute('data-idx')));
+
+  // Only selected rows get First Approved status
+  selectedIdxs.forEach(idx => {
+    const l = currentPR.lines[idx];
+    l.prstatus = 'F';
+    l.firstappqty = l.firstappqty || l.qtyreqd;
+  });
+
+  renderGrid(currentPR.lines, false);
+  updateFooter();
+
+  setBtn('btn-load',         false, '', 'tb-btn');
+  setBtn('btn-del-approval', false, '', 'tb-btn danger');
+  setBtn('btn-find',         false, '', 'tb-btn');
+  updateNavBtns();
+  setBtn('btn-save',         true,  'Save', 'tb-btn primary');
+  setBtn('btn-print',        false, null, 'tb-btn');
+  setBtn('btn-cancel',       true,  null, 'tb-btn');
+  document.getElementById('grid-edit-hint').classList.add('hidden');
+
+  showToast('PR ' + currentPR.prno + ' — First Level Approval saved. ' + selectedIdxs.length + ' item(s) approved. PRSTATUS → First Approved (F).', 'success');
+}
+
+function executeDelete() {
+  document.getElementById('confirm-delete').classList.add('hidden');
+  // Simulate delete
+  currentPR.app1 = null;
+  updateApprovalBadges(null, null, null);
+  currentPR.lines.forEach(l => { l.prstatus = null; l.firstappqty = 0; l.qtyreqd = l.qtyind; });
+  renderGrid(currentPR.lines, false);
+  updateFooter();
+  resetToQuery();
+  showToast('First Level Approval deleted for PR ' + currentPR.prno + '. PRSTATUS → Requested.', 'info');
+}
+
+function doPrint() {
+  showToast('Print: OI-05 (DirectApp condition) is currently open. Print will be available after OI-05 resolution and CEO Stage 4 countersignature.', 'warning');
+}
+
+function doCancel() {
+  resetToQuery();
+  showToast('Cancelled — returned to Query mode.', 'info');
+}
+
+function navFirst() { if (!navList.length) return; navIdx = 0; loadNavPR(); }
+function navPrev()  { if (navIdx > 0) { navIdx--; loadNavPR(); } }
+function navNext()  { if (navIdx < navList.length - 1) { navIdx++; loadNavPR(); } }
+function navLast()  { if (!navList.length) return; navIdx = navList.length - 1; loadNavPR(); }
+
+function loadNavPR() {
+  const pr = navList[navIdx];
+  const lines = lineData[pr.prno] || lineData['24998'];
+  loadPR(pr, lines, 'saved');
+  updateNavBtns();
+  showToast('PR ' + pr.prno + ' — record ' + (navIdx + 1) + ' of ' + navList.length + '.', 'info');
+}
+
+function updateNavBtns() {
+  document.getElementById('nav-first').disabled = !navList.length || navIdx <= 0;
+  document.getElementById('nav-prev').disabled  = !navList.length || navIdx <= 0;
+  document.getElementById('nav-next').disabled  = !navList.length || navIdx >= navList.length - 1;
+  document.getElementById('nav-last').disabled  = !navList.length || navIdx >= navList.length - 1;
+}
+
+/* ── Lookup Modal ── */
+let lookupList = [];
+let selectedLookupIdx = null;
+
+function openLookupModal(mode, filteredList, subtitle) {
+  lookupMode = mode;
+  selectedLookupIdx = null;
+  document.getElementById('btn-modal-select').disabled = true;
+  document.getElementById('modal-search-inp').value = '';
+
+  if (mode === 'delete') {
+    lookupList = approvedList;
+    document.getElementById('modal-lookup-title').textContent = 'Select PR — Delete First Level Approval';
+    document.getElementById('modal-lookup-sub').textContent   = 'Showing First Level Approved PRs (sp_PR_GetFirstApprovedForDeletion)';
+  } else if (mode === 'find') {
+    lookupList = approvedList;
+    document.getElementById('modal-lookup-title').textContent = 'Find PR — First Level Approved';
+    document.getElementById('modal-lookup-sub').textContent   = 'Showing First Level Approved PRs (sp_PR_GetFirstApproved)';
+  } else {
+    lookupList = filteredList || pendingList;
+    document.getElementById('modal-lookup-title').textContent = 'Select PR — Load for First Level Approval';
+    document.getElementById('modal-lookup-sub').textContent   = subtitle
+      ? 'Filtered by ' + subtitle + ' · sp_PR_GetPendingFirstApproval'
+      : 'Showing PRs pending First Level Approval (sp_PR_GetPendingFirstApproval)';
+  }
+
+  renderLookupTable(lookupList);
+  document.getElementById('modal-count-lbl').textContent = lookupList.length + ' record' + (lookupList.length !== 1 ? 's' : '') + ' found';
+  document.getElementById('overlay-lookup').classList.remove('hidden');
+}
+
+function renderLookupTable(list) {
+  const tbody = document.getElementById('modal-lookup-body');
+  tbody.innerHTML = '';
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-400)">No records found</td></tr>';
+    return;
+  }
+  list.forEach((pr, i) => {
+    const tr = document.createElement('tr');
+    if (selectedLookupIdx === i) tr.classList.add('sel');
+    tr.innerHTML = `
+      <td style="font-weight:700;font-family:var(--mono)">${esc(pr.prno)}</td>
+      <td>${esc(pr.prdate)}</td>
+      <td style="font-family:var(--mono)">${esc(pr.depcode)}</td>
+      <td>${esc(pr.depname)}</td>
+      <td>${esc(pr.refno)||'—'}</td>
+      <td>${esc(pr.section)}</td>
+    `;
+    tr.onclick = () => selectLookupRow(i, tr);
+    tr.ondblclick = () => { selectLookupRow(i, tr); selectPRFromModal(); };
+    tbody.appendChild(tr);
+  });
+}
+
+function selectLookupRow(idx, tr) {
+  document.querySelectorAll('#modal-lookup-body tr').forEach(r => r.classList.remove('sel'));
+  tr.classList.add('sel');
+  selectedLookupIdx = idx;
+  document.getElementById('btn-modal-select').disabled = false;
+}
+
+function filterLookup(q) {
+  const filtered = q
+    ? lookupList.filter(pr =>
+        pr.prno.includes(q) || pr.depname.toLowerCase().includes(q.toLowerCase()) ||
+        pr.refno.toLowerCase().includes(q.toLowerCase()) || pr.depcode.toLowerCase().includes(q.toLowerCase()))
+    : lookupList;
+  selectedLookupIdx = null;
+  document.getElementById('btn-modal-select').disabled = true;
+  renderLookupTable(filtered);
+  document.getElementById('modal-count-lbl').textContent = filtered.length + ' record' + (filtered.length !== 1 ? 's' : '') + ' found';
+}
+
+function selectPRFromModal() {
+  if (selectedLookupIdx === null) return;
+  const pr = lookupList[selectedLookupIdx];
+  closeLookupModal();
+  if (lookupMode === 'delete') {
+    const lines = lineData[pr.prno] || lineData['24998'];
+    loadPR(pr, lines, 'delete');
+    showToast('PR ' + pr.prno + ' loaded for Delete Approval.', 'info');
+  } else if (lookupMode === 'find') {
+    navList = approvedList.slice();
+    navIdx  = approvedList.findIndex(p => p.prno === pr.prno);
+    const lines = lineData[pr.prno] || lineData['24998'];
+    loadPR(pr, lines, 'saved');
+    updateNavBtns();
+    showToast('PR ' + pr.prno + ' — record ' + (navIdx + 1) + ' of ' + navList.length + '. Use ‹ › to browse First Level Approved records.', 'info');
+  } else {
+    const lines = lineData[pr.prno] || lineData['25001'];
+    loadPR(pr, lines, 'approve');
+    showToast('PR ' + pr.prno + ' loaded for First Level Approval.', 'info');
+  }
+}
+
+function closeLookupModal() {
+  document.getElementById('overlay-lookup').classList.add('hidden');
+}
+
+/* ── Department Modal (Load PRs — Step 1) ── */
+function openDeptModal() {
+  selectedDept = null;
+  document.getElementById('btn-dept-next').disabled = true;
+  document.getElementById('dept-search-inp').value = '';
+
+  // Build unique dept list from pendingList with PR count
+  const deptMap = {};
+  pendingList.forEach(pr => {
+    if (!deptMap[pr.depcode]) deptMap[pr.depcode] = { depcode: pr.depcode, depname: pr.depname, count: 0 };
+    deptMap[pr.depcode].count++;
+  });
+  deptList = Object.values(deptMap);
+
+  renderDeptTable(deptList);
+  document.getElementById('dept-count-lbl').textContent = deptList.length + ' department' + (deptList.length !== 1 ? 's' : '');
+  document.getElementById('overlay-dept').classList.remove('hidden');
+}
+
+function renderDeptTable(list) {
+  const tbody = document.getElementById('dept-modal-body');
+  tbody.innerHTML = '';
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text-400)">No departments found</td></tr>';
+    return;
+  }
+  list.forEach((d, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:700;font-family:var(--mono)">${esc(d.depcode)}</td>
+      <td>${esc(d.depname)}</td>
+      <td style="text-align:right;font-family:var(--mono);padding-right:16px">${d.count}</td>
+    `;
+    tr.onclick = () => selectDeptRow(i, tr, d);
+    tr.ondblclick = () => { selectDeptRow(i, tr, d); onDeptSelected(); };
+    tbody.appendChild(tr);
+  });
+}
+
+function selectDeptRow(idx, tr, dept) {
+  document.querySelectorAll('#dept-modal-body tr').forEach(r => r.classList.remove('sel'));
+  tr.classList.add('sel');
+  selectedDept = dept;
+  document.getElementById('btn-dept-next').disabled = false;
+}
+
+function filterDepts(q) {
+  const filtered = q
+    ? deptList.filter(d =>
+        d.depcode.toLowerCase().includes(q.toLowerCase()) ||
+        d.depname.toLowerCase().includes(q.toLowerCase()))
+    : deptList;
+  selectedDept = null;
+  document.getElementById('btn-dept-next').disabled = true;
+  renderDeptTable(filtered);
+  document.getElementById('dept-count-lbl').textContent = filtered.length + ' department' + (filtered.length !== 1 ? 's' : '');
+}
+
+function closeDeptModal() {
+  document.getElementById('overlay-dept').classList.add('hidden');
+}
+
+function onDeptSelected() {
+  if (!selectedDept) return;
+  closeDeptModal();
+  const filtered = pendingList.filter(pr => pr.depcode === selectedDept.depcode);
+  openLookupModal('approve', filtered, selectedDept.depname + ' (' + selectedDept.depcode + ')');
+}
+
+/* ── Row checkbox ── */
+function toggleAllRows(masterChk) {
+  document.querySelectorAll('#grid-body .row-chk').forEach(chk => {
+    chk.checked = masterChk.checked;
+    const tr = chk.closest('tr');
+    if (tr) tr.classList.toggle('row-selected', masterChk.checked);
+  });
+}
+function onRowCheck(chk) {
+  const tr = chk.closest('tr');
+  if (tr) tr.classList.toggle('row-selected', chk.checked);
+  const all  = document.querySelectorAll('#grid-body .row-chk');
+  const checked = document.querySelectorAll('#grid-body .row-chk:checked');
+  const master = document.getElementById('chk-all');
+  if (master) {
+    master.checked = checked.length === all.length && all.length > 0;
+    master.indeterminate = checked.length > 0 && checked.length < all.length;
+  }
+}
+
+/* ── Helpers ── */
+function setBtn(id, disabled, label, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.disabled = disabled;
+  el.className = cls;
+  if (label !== null && label !== undefined) {
+    const lbl = el.querySelector('span:first-of-type');
+    if (lbl && label !== '') lbl.textContent = label;
+    else if (id === 'btn-save') {
+      const s = document.getElementById('btn-save-lbl');
+      if (s && label) s.textContent = label;
+    }
+  }
+}
+
+function setNavBtns(disabled) {
+  ['nav-first','nav-prev','nav-next','nav-last'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled;
+  });
+}
+
+function fmt3(v) { return (+v||0).toFixed(3); }
+function fmt4(v) { return (+v||0).toFixed(4); }
+function fmt2(v) { return (+v||0).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function esc(s) {
+  if (s === null || s === undefined || s === '') return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showToast(msg, type) {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type||'info');
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 4000);
+}
+
+/* ── Layout ── */
+function toggleSider() {
+  document.getElementById('sider').classList.toggle('collapsed');
+}
+function toggleGroup(childrenId, groupId) {
+  document.getElementById(childrenId).classList.toggle('open');
+  document.getElementById(groupId).classList.toggle('open');
+}
+function toggleUserMenu() {
+  document.getElementById('user-dropdown').classList.toggle('open');
+}
+
+/* ── Navigation ── */
+function navigate(target) {
+  const links = {
+    hub            : '../index.html',
+    foreclosure    : '../SPINRISE_FSD_M01_PRForeclosure_v1_1/SPINRISE_FSD_M01_PRForeclosure_v1_1.html',
+    cancellation   : '../SPINRISE_FSD_M01_PRCancellationUndo_v1_1/SPINRISE_FSD_M01_PRCancellationUndo_v1_1.html',
+    amendment      : '../SPINRISE_FSD_M01_PRAmendment_v2_3/SPINRISE_FSD_M01_PRAmendment_v2_3.html',
+    'first-approval'     : 'SPINRISE_FSD_M01_PRFirstLevelApproval_v1_1.html',
+    PRFinalLevelApproval : '../SPINRISE_FSD_M01_PRFinalLevelApproval_v1_1/SPINRISE_FSD_M01_PRFinalLevelApproval_v1_2.html'
+  };
+  if (links[target]) window.location.href = links[target];
+}
+
+/* ── Keyboard shortcuts ── */
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.key === 's') { e.preventDefault(); if (!document.getElementById('btn-save').disabled) doSave(); }
+  if (e.altKey  && e.key === 'x') { e.preventDefault(); if (!document.getElementById('btn-cancel').disabled) doCancel(); }
+  if (e.key === 'Escape') {
+    document.getElementById('overlay-dept').classList.add('hidden');
+    document.getElementById('overlay-lookup').classList.add('hidden');
+    document.getElementById('confirm-save').classList.add('hidden');
+    document.getElementById('confirm-delete').classList.add('hidden');
+  }
+});
+
+/* ── Init ── */
+resetToQuery();
+</script>
+<script src="../assets/js/prototype-system.js"></script>
+</body>
+</html>

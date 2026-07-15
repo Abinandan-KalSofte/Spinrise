@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpinRise — PR Foreclosure Entry | SPINRISE_FSD_M01_PRForeclosure_v1_1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/prototype-system.css">
+<style>
+/* ══════════════════════════════════════════════════════
+   DESIGN TOKENS — SpinRise Blueprint v6 (exact match)
+══════════════════════════════════════════════════════ */
+:root {
+  --blue:#185FA5; --blue-dark:#0C447C; --blue-100:#E6F1FB;
+  --bg:#F5F5F3; --surface-alt:#FAFAF8; --border:#E2E2E2;
+  --text-900:#1A1A1A; --text-600:#4A4A4A; --text-400:#888888;
+  --success:#3B6D11; --success-l:#EAF3DE;
+  --warning:#BA7517; --warning-l:#FAEEDA;
+  --error:#A32D2D; --error-l:#FCEBEB;
+  --purple:#722ED1; --sidebar-bg:#1a2236;
+  --font:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:var(--font);font-size:13px;color:var(--text-900);}
+
+/* ── IST Control Bar (top strip for testers) ──────────────────────── */
+.ist-bar{
+  position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#0f172a;display:flex;align-items:center;gap:6px;padding:5px 14px;
+  font-size:11px;font-weight:600;color:rgba(255,255,255,.65);
+  border-bottom:2px solid #1e293b;
+}
+.ist-label{color:rgba(255,255,255,.35);font-size:10px;margin-right:2px;}
+.ist-btn{
+  padding:3px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.18);
+  background:transparent;color:rgba(255,255,255,.65);font-size:10px;font-weight:600;
+  cursor:pointer;font-family:var(--font);transition:.12s;
+}
+.ist-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.ist-btn:hover:not(.active){background:rgba(255,255,255,.08);}
+.ist-sep{width:1px;height:14px;background:rgba(255,255,255,.15);margin:0 4px;}
+.ist-badge{
+  font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700;
+  background:rgba(255,140,0,.2);color:#fb923c;border:1px solid rgba(255,140,0,.35);
+}
+.ist-back{margin-left:auto;color:rgba(255,255,255,.4);text-decoration:none;font-size:10px;}
+.ist-back:hover{color:#fff;}
+
+/* ── App Shell (exact AppShell.tsx dimensions) ────────────────────── */
+.app-root{display:flex;height:100vh;overflow:hidden;padding-top:30px;}
+
+/* ── Sider — exact AppShell.tsx ──────────────────────────────────── */
+.sider{
+  width:280px;min-width:240px;height:100%;background:var(--sidebar-bg);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;
+  transition:width .2s,min-width .2s;
+}
+.sider.collapsed{width:52px;min-width:52px;}
+
+/* Logo area — height:48, border-bottom rgba(255,255,255,0.08) */
+.sider-logo{
+  height:48px;display:flex;align-items:center;gap:10px;
+  padding:0 16px;border-bottom:1px solid rgba(255,255,255,.08);
+  flex-shrink:0;cursor:pointer;overflow:hidden;
+}
+.sider.collapsed .sider-logo{justify-content:center;padding:0;}
+.logo-mark{
+  width:28px;height:28px;border-radius:6px;flex-shrink:0;
+  background:linear-gradient(135deg,#185FA5,#1677ff);
+  display:flex;align-items:center;justify-content:center;
+}
+.logo-mark span{color:#fff;font-size:13px;font-weight:800;}
+.logo-text{color:#fff;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;}
+.sider.collapsed .logo-text{display:none;}
+
+/* Nav menu */
+.sider-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0;}
+.sider-nav::-webkit-scrollbar{width:0;}
+
+/* Group header (like Ant Design SubMenu title) */
+.menu-group{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 16px;color:rgba(255,255,255,.65);
+  font-size:13px;font-weight:500;cursor:pointer;
+  border-left:3px solid transparent;
+  user-select:none;transition:.15s;
+  white-space:nowrap;overflow:hidden;
+}
+.menu-group:hover{background:rgba(255,255,255,.05);color:#fff;}
+.menu-group.open{color:#fff;}
+.menu-group-icon{font-size:14px;flex-shrink:0;width:16px;text-align:center;}
+.menu-group-label{flex:1;white-space:nowrap;overflow:hidden;}
+.menu-chevron{font-size:10px;color:rgba(255,255,255,.35);transition:transform .2s;flex-shrink:0;}
+.menu-group.open .menu-chevron{transform:rotate(90deg);}
+.sider.collapsed .menu-group-label,.sider.collapsed .menu-chevron{display:none;}
+.sider.collapsed .menu-group{justify-content:center;padding:8px 0;}
+
+/* Sub-items */
+.menu-children{overflow:hidden;max-height:0;transition:max-height .2s ease;}
+.menu-children.open{max-height:400px;}
+.sider.collapsed .menu-children{display:none;}
+
+.menu-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 16px 7px 36px;
+  color:rgba(255,255,255,.55);font-size:12px;font-weight:400;
+  cursor:pointer;border-left:3px solid transparent;
+  white-space:nowrap;overflow:hidden;transition:.15s;
+}
+.menu-item:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.9);}
+/* Ant Design dark theme active: #1677ff bg with slight transparency */
+.menu-item.active{
+  background:#177ddc22;
+  color:#40a9ff;
+  border-left-color:#1677ff;
+  font-weight:500;
+}
+.menu-item-icon{font-size:12px;flex-shrink:0;width:14px;text-align:center;}
+
+/* Top-level solo item (Dashboard) */
+.menu-solo{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 16px;color:rgba(255,255,255,.65);
+  font-size:13px;font-weight:400;cursor:pointer;
+  border-left:3px solid transparent;white-space:nowrap;overflow:hidden;transition:.15s;
+}
+.menu-solo:hover{background:rgba(255,255,255,.05);color:#fff;}
+.menu-solo.active{background:#177ddc22;color:#40a9ff;border-left-color:#1677ff;font-weight:500;}
+.sider.collapsed .menu-solo{justify-content:center;padding:8px 0;}
+.sider-bottom{border-top:1px solid rgba(255,255,255,.08);padding:8px 0;flex-shrink:0;}
+.tb-print-tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:#1e293b;color:#fff;font-size:10px;font-weight:500;
+  padding:4px 9px;border-radius:4px;white-space:nowrap;z-index:100;pointer-events:none;}
+.tb-btn:hover .tb-print-tooltip{display:block;}
+
+/* ── Header — exact AppShell.tsx ──────────────────────────────────── */
+.app-header{
+  height:48px;padding:0 16px;background:#fff;
+  border-bottom:1px solid #e8e8e8;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.hdr-left{display:flex;align-items:center;gap:4px;}
+.hdr-toggle{
+  display:flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border-radius:6px;border:none;background:transparent;
+  color:#64748b;font-size:14px;cursor:pointer;transition:.12s;
+}
+.hdr-toggle:hover{background:#f1f5f9;}
+/* Company name centred — exact AppShell.tsx */
+.hdr-center{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;min-width:0;
+}
+.hdr-company{
+  font-size:14px;font-weight:700;color:#1e293b;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em;
+}
+/* User widget — exact AppShell.tsx */
+.hdr-user{display:flex;align-items:center;gap:8px;cursor:pointer;position:relative;}
+.user-avatar{
+  width:32px;height:32px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,#185FA5,#1677ff);
+  display:flex;align-items:center;justify-content:center;
+}
+.user-avatar svg{color:#fff;}
+.user-info{display:flex;flex-direction:column;line-height:1.2;}
+.user-name{font-size:13px;color:#1e293b;font-weight:600;}
+.user-div{font-size:11px;color:#64748b;font-weight:400;}
+.hdr-chevron{color:#94a3b8;font-size:10px;}
+/* Dropdown */
+.user-dropdown{
+  position:absolute;top:40px;right:0;width:160px;
+  background:#fff;border:1px solid var(--border);border-radius:8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;overflow:hidden;
+  display:none;
+}
+.user-dropdown.open{display:block;}
+.user-dropdown-item{
+  display:flex;align-items:center;gap:8px;padding:9px 14px;
+  font-size:12px;color:#ef4444;cursor:pointer;transition:.12s;
+}
+.user-dropdown-item:hover{background:#fff5f5;}
+
+/* ── Main layout ──────────────────────────────────────────────────── */
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.page-content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;background:var(--bg);}
+
+/* ── Doc Band — exact PRDocBand ──────────────────────────────────── */
+.doc-band{
+  background:linear-gradient(135deg,var(--blue-dark) 0%,var(--blue) 100%);
+  padding:6px 18px;display:flex;align-items:center;
+  justify-content:space-between;flex-shrink:0;
+}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:12px;}
+.bc-parent{color:rgba(255,255,255,.55);}
+.bc-sep{color:rgba(255,255,255,.35);}
+.bc-current{color:#fff;font-weight:600;letter-spacing:.2px;}
+.doc-band-right{text-align:right;}
+.doc-band-sublabel{font-size:10px;color:rgba(255,255,255,.6);margin-bottom:1px;}
+.doc-band-subvalue{font-size:11px;font-weight:600;color:#fff;font-family:var(--mono);}
+
+/* ── Toolbar — exact PRToolbar.tsx TbBtn ─────────────────────────── */
+.toolbar{
+  background:#fff;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:4px;padding:0 12px;height:44px;flex-shrink:0;
+}
+.tb-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 11px;border:1px solid #d0d0d0;border-radius:6px;
+  background:#fff;font-size:12px;font-weight:500;cursor:pointer;
+  color:var(--text-900);font-family:var(--font);white-space:nowrap;
+  transition:background .12s,opacity .12s;
+}
+.tb-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+.tb-btn.success{background:#185FA5;color:#fff;border-color:#185FA5;}
+.tb-btn.danger{color:var(--error);border-color:#E24B4A;}
+.tb-btn.danger-f{background:#dc2626;color:#fff;border-color:#dc2626;}
+.tb-btn.warn-f{background:var(--warning);color:#fff;border-color:var(--warning);}
+.tb-btn:disabled,.tb-btn.disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
+.tb-btn:not(:disabled):not(.disabled):hover{filter:brightness(.93);}
+.tb-sep{width:1px;height:22px;background:#d0d0d0;margin:0 3px;flex-shrink:0;}
+.kbd{
+  font-size:10px;padding:1px 4px;border:1px solid #d0d0d0;border-radius:3px;
+  color:var(--text-400);background:var(--bg);font-family:var(--mono);margin-left:2px;
+}
+
+/* ── Status banner ────────────────────────────────────────────────── */
+.banner{
+  padding:6px 16px;font-size:12px;font-weight:500;flex-shrink:0;
+  display:flex;align-items:flex-start;gap:8px;
+}
+.banner.info{background:#e6f4ff;color:#1677ff;border-bottom:1px solid #bae0ff;}
+.banner.warn{background:var(--warning-l);color:var(--warning);border-bottom:1px solid #fcd34d;}
+.banner.err{background:var(--error-l);color:var(--error);border-bottom:1px solid #fca5a5;}
+.banner-icon{flex-shrink:0;font-size:13px;margin-top:1px;}
+
+/* ══════════════════════════════════════════════════════
+   MODULE PANES
+══════════════════════════════════════════════════════ */
+.module-pane{display:none;flex-direction:column;flex:1;min-height:0;}
+.module-pane.active{display:flex;}
+
+/* ══════════════════════════════════════════════════════
+   PR FORECLOSURE
+══════════════════════════════════════════════════════ */
+.fc-filter-bar{
+  background:#fff;border-bottom:1px solid var(--border);
+  padding:7px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.filter-lbl{font-size:11px;font-weight:600;color:#475569;white-space:nowrap;}
+.filter-input{
+  height:30px;padding:0 9px;border:1px solid var(--border);border-radius:6px;
+  font-size:12px;font-family:var(--font);outline:none;width:150px;
+}
+.filter-input:focus{border-color:var(--blue);background:#F0F7FF;}
+.load-btn{
+  height:30px;padding:0 12px;background:var(--blue);color:#fff;
+  border:none;border-radius:6px;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:5px;
+}
+.load-btn:hover{background:var(--blue-dark);}
+.fc-filter-note{font-size:10px;color:var(--text-400);}
+.sel-badge{
+  display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+  padding:3px 10px;border-radius:20px;
+  background:var(--blue-100);color:var(--blue);border:1px solid #bfdbfe;
+  margin-left:auto;
+}
+.sel-badge.has{background:#dcfce7;color:#15803d;border-color:#86efac;}
+
+/* Grid */
+.grid-wrap{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.grid-scroll{flex:1;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;}
+.grid-tbl{width:100%;border-collapse:collapse;min-width:820px;}
+.grid-tbl th{
+  padding:6px 8px;font-size:10px;font-weight:700;letter-spacing:.06em;
+  color:#f1f5f9;background:#1e293b;border-bottom:2px solid #0f172a;
+  white-space:nowrap;position:sticky;top:0;z-index:10;text-align:left;
+}
+.grid-tbl th.r,.grid-tbl td.r{text-align:right;}
+.grid-tbl th.c,.grid-tbl td.c{text-align:center;}
+.grid-tbl td{
+  padding:4px 8px;vertical-align:middle;border-bottom:1px solid #f0f0f0;
+  height:30px;font-size:11px;color:#1e293b;
+}
+.grid-tbl tr.even td{background:#f0f5ff;}
+.grid-tbl tr:hover td{background:var(--blue-100);}
+.grid-tbl tr.sel td{background:#dbeafe!important;border-left:3px solid var(--blue);}
+.grid-tbl tr.sel td:first-child{padding-left:5px;}
+.row-chk{width:15px;height:15px;accent-color:var(--blue);cursor:pointer;}
+.mono{font-family:var(--mono);}
+.fw7{font-weight:700;}
+.col-blue{color:var(--blue-dark);}
+.col-green{color:#15803d;font-weight:700;}
+
+/* Status badges */
+.badge{
+  display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;
+  border-radius:10px;white-space:nowrap;
+}
+.bg-requested{background:#dcfce7;color:#15803d;border:1px solid #86efac;}
+.bg-partial{background:var(--warning-l);color:var(--warning);border:1px solid #fcd34d;}
+.bg-enquired{background:var(--blue-100);color:var(--blue);border:1px solid #bfdbfe;}
+.bg-ordered{background:#f3e8ff;color:#7c3aed;border:1px solid #ddd6fe;}
+.bg-cancelled{background:var(--error-l);color:var(--error);border:1px solid #fca5a5;}
+
+/* FC footer */
+.fc-footer{
+  background:var(--surface-alt);border-top:2px solid var(--blue);
+  padding:7px 16px;display:flex;align-items:center;gap:20px;flex-shrink:0;
+}
+.ft-stat{font-size:11px;color:var(--text-600);display:flex;align-items:center;gap:5px;}
+.ft-stat .val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--blue);}
+
+/* Empty state */
+.empty{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;color:var(--text-400);padding:40px;
+}
+.empty-icon{font-size:40px;}
+.empty-title{font-size:13px;font-weight:600;}
+.empty-sub{font-size:11px;text-align:center;max-width:300px;line-height:1.6;}
+
+/* ══════════════════════════════════════════════════════
+   PR CANCELLATION
+══════════════════════════════════════════════════════ */
+/* Sub-tab bar */
+.sub-tabs{
+  background:var(--surface-alt);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;flex-shrink:0;gap:2px;
+}
+.sub-tab{
+  padding:9px 16px;border:1px solid transparent;border-bottom:none;
+  border-radius:6px 6px 0 0;margin-bottom:-1px;
+  font-size:12px;font-weight:600;cursor:pointer;
+  color:var(--text-400);background:transparent;font-family:var(--font);transition:.15s;
+}
+.sub-tab.active{background:#fff;border-color:var(--border);color:var(--blue);}
+.sub-tab:hover:not(.active){color:var(--text-600);}
+
+/* Sub bodies */
+.sub-body{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+.sub-body.active{display:flex;}
+
+.req{color:#ef4444;margin-left:2px;}
+
+/* ── Cancel mode banner — exact PurchaseRequisitionPage.tsx isDeleteMode bar ─ */
+.del-banner{
+  background:#FCEBEB;border-bottom:1px solid #fca5a5;
+  padding:6px 16px;color:#A32D2D;font-weight:500;font-size:12px;flex-shrink:0;
+}
+
+/* ── PRHeaderV1 view mode (disabled=true) exact clone ─────────────────────── */
+.view-hdr{
+  background:#fff;border-bottom:1px solid #e2e2e2;
+  padding:8px 18px 10px;flex-shrink:0;
+}
+.view-hdr-meta{
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;
+}
+.view-hdr-left{display:flex;align-items:center;gap:8px;}
+.view-section-lbl{font-size:10px;font-weight:700;color:#185FA5;letter-spacing:.06em;}
+.view-date-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  background:linear-gradient(135deg,#eff6ff,#dbeafe);
+  border:1px solid #bfdbfe;border-radius:20px;padding:1px 8px;
+}
+.view-date-badge span{font-size:10px;font-weight:700;color:#1e40af;}
+.view-hdr-right{display:flex;align-items:center;gap:8px;}
+.view-created{font-size:11px;color:#94A3B8;}
+.view-created strong{color:#475569;}
+.view-prno-tag{
+  font-size:12px;font-weight:700;font-family:var(--mono);
+  padding:2px 10px;border-radius:4px;
+  background:#e6f4ff;color:#0958d9;border:1px solid #91caff;
+}
+/* 6-column field grid — col widths match PRHeaderV1 md={3,5,4,5,4,3} */
+.view-field-grid{
+  display:grid;
+  grid-template-columns:3fr 5fr 4fr 5fr 4fr 3fr;
+  gap:6px 10px;padding-bottom:4px;
+}
+.view-lbl{font-size:11px;font-weight:600;color:#475569;letter-spacing:.01em;margin-bottom:2px;}
+.view-val{font-size:12px;color:#1e293b;font-weight:500;line-height:1.4;}
+.view-type-tag{
+  display:inline-block;font-size:11px;font-weight:700;
+  padding:1px 8px;border-radius:4px;
+  background:#fff1f0;color:#a61d24;border:1px solid #ffccc7;
+}
+
+/* ── Reason strip (compact bar between header and grid) ──────────────────── */
+.reason-strip{
+  background:#fff;border-bottom:1px solid var(--border);
+  padding:7px 18px;flex-shrink:0;display:flex;align-items:flex-start;gap:12px;
+}
+.reason-strip-lbl{font-size:11px;font-weight:600;color:#475569;white-space:nowrap;padding-top:5px;min-width:150px;}
+.reason-strip-body{flex:1;display:flex;flex-direction:column;gap:3px;}
+.reason-strip textarea{
+  width:100%;min-height:48px;max-height:72px;padding:5px 9px;
+  border:1px solid var(--border);border-radius:6px;
+  font-size:12px;font-family:var(--font);color:var(--text-900);
+  resize:vertical;outline:none;
+}
+.reason-strip textarea:focus{border-color:var(--error);}
+.reason-strip textarea.invalid{border-color:var(--error);background:#fff9f9;}
+.reason-strip-meta{display:flex;justify-content:space-between;}
+
+/* ── Items section — exact PRLineItemsTable disabled (view) mode ─────────── */
+.items-section{
+  flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+  background:#fff;border-radius:4px;border:1px solid #e2e2e2;
+}
+.items-bar{
+  display:flex;align-items:center;padding:8px 14px;
+  border-bottom:1px solid #e2e2e2;background:#fafaf8;flex-shrink:0;gap:8px;
+}
+.items-bar-lbl{font-size:11px;font-weight:600;color:#185FA5;letter-spacing:.3px;}
+.items-ct{font-size:11px;padding:2px 8px;background:#E6F1FB;color:#185FA5;border-radius:20px;}
+.items-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;}
+.items-tbl{width:100%;border-collapse:collapse;min-width:960px;}
+.items-tbl th{
+  padding:6px 8px;font-size:10px;font-weight:700;letter-spacing:.06em;
+  color:#f1f5f9;background:#1e293b;border-bottom:2px solid #0f172a;
+  white-space:nowrap;position:sticky;top:0;z-index:10;text-align:left;
+}
+.items-tbl th.r,.items-tbl td.r{text-align:right;}
+.items-tbl th.c,.items-tbl td.c{text-align:center;}
+.items-tbl td{
+  padding:4px 8px;vertical-align:middle;border-bottom:1px solid #f0f0f0;
+  height:28px;font-size:11px;color:#1e293b;
+}
+.items-tbl tr:nth-child(even) td{background:#fafafa;}
+.items-tbl tr:hover td{background:var(--blue-100);}
+.items-dash{color:#d1d5db;}
+
+/* ── KPI strip — exact PRKPIStrip ────────────────────────────────────────── */
+.kpi-strip{
+  background:#fafaf8;border-top:1px solid var(--border);
+  padding:8px 16px;flex-shrink:0;
+}
+.kpi-appr-bar{
+  display:flex;align-items:center;
+  padding:5px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px;
+}
+.kpi-stage{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:84px;}
+.kpi-dot{
+  width:10px;height:10px;border-radius:50%;flex-shrink:0;
+  border:2px solid #d1d5db;background:transparent;transition:all .2s;
+}
+.kpi-dot.cur{background:#185FA5;border-color:#185FA5;box-shadow:0 0 0 3px #E6F1FB;}
+.kpi-dot.done{background:#3B6D11;border-color:#3B6D11;}
+.kpi-stage-lbl{font-size:9px;font-weight:500;color:#888;white-space:nowrap;}
+.kpi-stage-lbl.cur{font-weight:700;color:#185FA5;}
+.kpi-stage-lbl.done{color:#3B6D11;}
+.kpi-stage-line{flex:1;height:2px;margin-bottom:13px;background:#e2e2e2;}
+.kpi-stage-line.done{background:#3B6D11;}
+.kpi-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.kpi-card{
+  background:#fff;border:1px solid var(--border);border-radius:8px;
+  padding:7px 12px;min-width:0;
+}
+.kpi-card.acc-blue{border-left:3px solid #185FA5;}
+.kpi-card.acc-amber{border-left:3px solid #BA7517;}
+.kpi-card.acc-red{border-left:3px solid #A32D2D;}
+.kpi-card-lbl{font-size:10px;font-weight:600;color:#888;letter-spacing:.3px;margin-bottom:2px;}
+.kpi-card-val{
+  font-size:15px;font-weight:700;color:#1a1a1a;line-height:1.2;
+  font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.kpi-card-val.blue{color:#185FA5;}
+.kpi-card-val.amber{color:#BA7517;}
+.kpi-card-val.red{color:#A32D2D;}
+.kpi-card-val.green{color:#3B6D11;}
+.kpi-card-val.mono12{font-size:12px;font-family:var(--mono);}
+.kpi-card-sub{font-size:10px;color:#888;margin-top:2px;white-space:nowrap;}
+
+/* Undo card */
+.undo-card{
+  margin:10px 16px 0;background:#fff;border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;flex-shrink:0;
+}
+.undo-card-hdr{
+  background:var(--warning-l);padding:7px 14px;border-bottom:1px solid #fcd34d;
+  display:flex;align-items:center;gap:6px;
+}
+.undo-card-hdr-title{font-size:11px;font-weight:700;color:var(--warning);}
+.undo-card-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+.undo-reason-box{
+  padding:8px 10px;background:var(--bg);border:1px solid var(--border);
+  border-radius:6px;font-size:12px;color:var(--text-600);font-style:italic;
+  line-height:1.5;
+}
+.undo-info{
+  display:flex;gap:8px;padding:8px 10px;background:#e6f4ff;
+  border:1px solid #bae0ff;border-radius:6px;font-size:11px;color:#1677ff;
+  line-height:1.5;
+}
+
+/* ══════════════════════════════════════════════════════
+   MODAL (PR Lookup)
+══════════════════════════════════════════════════════ */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;
+  display:flex;align-items:center;justify-content:center;
+}
+.overlay.hidden{display:none;}
+.modal{
+  background:#fff;border-radius:10px;width:780px;max-height:560px;
+  display:flex;flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,.28);overflow:hidden;
+}
+.modal-hdr{
+  padding:12px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;
+}
+.modal-title{font-size:14px;font-weight:700;color:var(--text-900);}
+.modal-sub{font-size:11px;color:var(--text-400);margin-top:2px;}
+.modal-x{
+  width:28px;height:28px;border-radius:6px;border:1px solid var(--border);
+  background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--text-400);flex-shrink:0;transition:.12s;
+}
+.modal-x:hover{background:var(--error-l);color:var(--error);border-color:var(--error);}
+.modal-search{
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  display:flex;gap:8px;align-items:center;flex-shrink:0;
+}
+.modal-search-input{
+  flex:1;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;
+  font-size:12px;font-family:var(--font);outline:none;
+}
+.modal-search-input:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(24,95,165,.15);}
+.modal-body{flex:1;overflow-y:auto;}
+.m-tbl{width:100%;border-collapse:collapse;}
+.m-tbl th{
+  padding:8px 10px;font-size:10px;font-weight:700;color:#64748b;
+  text-transform:uppercase;letter-spacing:.05em;
+  background:#f8fafc;border-bottom:2px solid #e2e8f0;
+  white-space:nowrap;position:sticky;top:0;z-index:1;text-align:left;
+}
+.m-tbl th.r,.m-tbl td.r{text-align:right;}
+.m-tbl td{
+  padding:8px 10px;border-bottom:1px solid #f1f5f9;
+  vertical-align:middle;font-size:12px;
+}
+.m-tbl tr:hover td{background:var(--blue-100);cursor:pointer;}
+.m-tbl tr.row-sel td{background:#eff6ff;}
+.modal-ftr{
+  padding:10px 16px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--surface-alt);flex-shrink:0;
+}
+.modal-count{font-size:12px;font-weight:600;color:var(--text-600);}
+.m-btn-sel{
+  padding:6px 18px;background:var(--blue);color:#fff;
+  border:none;border-radius:6px;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:var(--font);
+}
+.m-btn-sel:hover{background:var(--blue-dark);}
+.m-btn-sel:disabled{opacity:.4;cursor:not-allowed;}
+.m-btn-close{
+  padding:6px 14px;background:#fff;color:var(--text-600);
+  border:1px solid var(--border);border-radius:6px;
+  font-size:12px;cursor:pointer;font-family:var(--font);
+}
+
+/* ══════════════════════════════════════════════════════
+   CONFIRM DIALOG
+══════════════════════════════════════════════════════ */
+.confirm-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;
+  display:flex;align-items:center;justify-content:center;
+}
+.confirm-overlay.hidden{display:none;}
+.confirm-box{
+  background:#fff;border-radius:10px;width:420px;overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.28);
+}
+.confirm-hdr{
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.confirm-icon{font-size:20px;}
+.confirm-title{font-size:14px;font-weight:700;color:var(--text-900);}
+.confirm-body{padding:16px 20px;font-size:12px;color:var(--text-600);line-height:1.7;}
+.confirm-body strong{color:var(--text-900);}
+.confirm-body code{font-family:var(--mono);font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px;}
+.confirm-ftr{
+  padding:12px 20px;border-top:1px solid var(--border);
+  display:flex;justify-content:flex-end;gap:8px;background:var(--surface-alt);
+}
+.btn-ghost{padding:6px 14px;background:#fff;color:var(--text-600);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);}
+.btn-danger{padding:6px 16px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.btn-warn{padding:6px 16px;background:var(--warning);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+
+/* ── Toast ────────────────────────────────────────────────────────── */
+.toasts{position:fixed;bottom:20px;right:20px;z-index:5000;display:flex;flex-direction:column;gap:8px;}
+.toast{
+  padding:10px 16px;border-radius:8px;font-size:12px;font-weight:500;
+  display:flex;align-items:center;gap:8px;min-width:260px;max-width:380px;
+  box-shadow:0 4px 16px rgba(0,0,0,.12);animation:tIn .25s ease;
+}
+.toast.ok{background:#dcfce7;color:#15803d;border:1px solid #86efac;}
+.toast.er{background:var(--error-l);color:var(--error);border:1px solid #fca5a5;}
+.toast.wn{background:var(--warning-l);color:var(--warning);border:1px solid #fcd34d;}
+.toast.if{background:#e6f4ff;color:#1677ff;border:1px solid #bae0ff;}
+@keyframes tIn{from{transform:translateX(110%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+@keyframes tOut{from{opacity:1;}to{opacity:0;transform:translateX(110%);}}
+
+/* Utility */
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     IST TESTER CONTROL BAR
+═══════════════════════════════════════════════════ -->
+<div class="ist-bar">
+  <span class="ist-label">IST Prototype</span>
+  <span class="ist-badge">FSD v1.1 · TL-IST Cleared · 23 May 2026</span>
+  <div class="ist-sep"></div>
+  <span class="ist-label">State:</span>
+  <button class="ist-btn active" id="ist-fc-loaded" onclick="setFCState('loaded')">FC: Lines Loaded</button>
+  <button class="ist-btn" id="ist-fc-empty" onclick="setFCState('empty')">FC: Empty</button>
+  
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     APP SHELL
+═══════════════════════════════════════════════════ -->
+<div class="app-root">
+
+  <!-- ── Sider (exact AppShell.tsx) ──────────────────────────────── -->
+  <div class="sider" id="sider">
+
+    <!-- Logo -->
+    <div class="sider-logo">
+      <div class="logo-mark"><span>S</span></div>
+      <span class="logo-text">Spinrise ERP</span>
+    </div>
+
+    <!-- Nav -->
+    <div class="sider-nav">
+
+      <!-- Purchase Order group -->
+      <div class="menu-group open" id="grp-po" onclick="toggleGroup('grp-po-children','grp-po')">
+        <span class="menu-group-icon">🛒</span>
+        <span class="menu-group-label">Purchase Order</span>
+        <span class="menu-chevron">›</span>
+      </div>
+      <div class="menu-children open" id="grp-po-children">
+        <div class="menu-item" id="nav-pr" onclick="navigate('pr')">
+          <span class="menu-item-icon">📋</span>Purchase Requisition
+        </div>
+        <div class="menu-item active" id="nav-foreclosure" onclick="navigate('foreclosure')">
+          <span class="menu-item-icon">⚡</span>Purchase Requisition Foreclosure
+        </div>
+        <div class="menu-item" id="nav-cancellation" onclick="navigate('cancellation')">
+          <span class="menu-item-icon">🚫</span>Purchase Requisition Cancellation
+        </div>
+        <div class="menu-item" id="nav-amendment" onclick="navigate('amendment')">
+          <span class="menu-item-icon">✏️</span>Purchase Requisition Amendment
+        </div>
+        <div class="menu-item" onclick="navigate('first-approval')">
+          <span class="menu-item-icon">✅</span>PR First Level Approval
+        </div>
+        <div class="menu-item" onclick="navigate('PRFinalLevelApproval')">
+          <span class="menu-item-icon">✅</span>Purchase Requisition Final Level Approval
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /sider -->
+
+  <!-- ── Main Area ─────────────────────────────────────────────────── -->
+  <div class="main-area">
+
+    <!-- Header (exact AppShell.tsx) -->
+    <div class="app-header">
+      <div class="hdr-left">
+        <button class="hdr-toggle" id="toggle-btn" onclick="toggleSider()" title="Toggle sidebar">
+          <svg id="toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/>
+            <line x1="1" y1="12" x2="15" y2="12"/>
+            <polyline points="10,5 13,8 10,11" stroke-width="1.4"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Company name centred — divName from auth store -->
+      <div class="hdr-center">
+        <span class="hdr-company">KALPATHARU SPINNERS PVT. LTD.</span>
+      </div>
+
+      <!-- User widget -->
+      <div class="hdr-user" onclick="toggleUserMenu()">
+        <div class="user-avatar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+        </div>
+        <div class="user-info">
+          <span class="user-name">Abinandan</span>
+          <span class="user-div">KALPATHARU SPINNERS</span>
+        </div>
+        <span class="hdr-chevron">▾</span>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-item" onclick="void 0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+          </div>
+        </div>
+      </div>
+    </div><!-- /header -->
+
+    <!-- Page content -->
+    <div class="page-content">
+
+      <!-- ══════════════════════════════════════════════
+           MODULE: PR FORECLOSURE
+      ══════════════════════════════════════════════ -->
+      <div class="module-pane active" id="pane-foreclosure">
+
+        <!-- Doc Band -->
+        <div class="doc-band">
+          <div class="breadcrumb">
+            <span class="bc-parent">Purchase Order</span>
+            <span class="bc-sep">›</span>
+            <span class="bc-current">PR Foreclosure Entry</span>
+          </div>
+          <div class="doc-band-right">
+            <div class="doc-band-sublabel">Processing Date</div>
+            <div class="doc-band-subvalue">25 May 2026</div>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <!-- <button class="tb-btn primary" onclick="loadFCGrid()" title="Load open PR lines (Ctrl+L)">
+            🔍 <span>Load</span><span class="kbd">Ctrl+L</span>
+          </button> -->
+          <button class="tb-btn" id="btn-sel-all" onclick="fcSelectAll()">☑ Select All</button>
+          <button class="tb-btn" id="btn-clr-sel" onclick="fcClearAll()">☐ Clear</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn success disabled" id="btn-fc-confirm" onclick="fcConfirm()" disabled>
+            ⚡ <span>Confirm Foreclosure</span><span class="kbd">Ctrl+S</span>
+          </button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn disabled" disabled style="position:relative;">
+            🖨 <span>Print</span><span class="kbd">Ctrl+P</span>
+            <span class="tb-print-tooltip">Not implemented — UI/UX design only</span>
+          </button>
+          <button class="tb-btn" onclick="fcClearAll()">✕ <span>Cancel</span><span class="kbd">Alt+X</span></button>
+          <div class="tb-sep"></div>
+          <span class="sel-badge" id="fc-sel-badge">0 selected</span>
+        </div>
+
+        <!-- Banner -->
+        <div class="banner info">
+          <span class="banner-icon">ℹ</span>
+          <span>Shows PR lines with status <strong>Requested</strong> only — balance &gt; 0 · FClosed ≠ 'Y' · CancelFlag = 'N' · Cross-FY scope (sp_PR_GetOpenForForeclosure).
+          <strong>Select lines to force-close. This action cannot be undone — no undo exists for foreclosure.</strong></span>
+        </div>
+
+        <!-- Grid -->
+        <div class="grid-wrap">
+          <div class="grid-scroll" id="fc-grid-area">
+
+            <table class="grid-tbl" id="fc-table">
+              <thead>
+                <tr>
+                  <th class="c" style="width:36px">
+                    <input type="checkbox" class="row-chk" id="fc-master-chk" onchange="fcToggleAll(this)">
+                  </th>
+                  <th style="width:32px">#</th>
+                  <th style="width:88px">PR No</th>
+                  <th style="width:100px">PR Date</th>
+                  <th style="width:160px">Department</th>
+                  <th style="width:86px">Item Id</th>
+                  <th>Item Name</th>
+                  <th class="c" style="width:55px">Unit</th>
+                  <th class="r" style="width:88px">Quantity</th>
+                  <th class="r" style="width:88px">Ordered</th>
+                  <th class="r" style="width:88px">Balance</th>
+                  <th style="width:130px">Sub Cost Centre</th>
+                  <th class="c" style="width:90px">Status</th>
+                </tr>
+              </thead>
+              <tbody id="fc-tbody"></tbody>
+            </table>
+
+            <div class="empty hidden" id="fc-empty">
+              <div class="empty-icon">📭</div>
+              <div class="empty-title">No open PR lines found</div>
+              <div class="empty-sub">All lines have zero balance, are already force-closed, or are cancelled. Try adjusting the PR No filter.</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="fc-footer">
+          <div class="ft-stat">Total Lines: <span class="val" id="fc-total">0</span></div>
+          <div class="ft-stat">Selected: <span class="val" id="fc-sel-ct">0</span></div>
+          <div class="ft-stat">Total Balance: <span class="val" id="fc-tot-bal">0.000</span></div>
+          <div class="ft-stat">Selected Balance: <span class="val" id="fc-sel-bal">0.000</span></div>
+        </div>
+
+      </div><!-- /pane-foreclosure -->
+
+    </div><!-- /page-content -->
+  </div><!-- /main-area -->
+</div><!-- /app-root -->
+
+
+<!-- ═══════════════════════════════════════════════════
+     CONFIRM DIALOG
+═══════════════════════════════════════════════════ -->
+<div class="confirm-overlay hidden" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-hdr">
+      <span class="confirm-icon" id="c-icon">⚡</span>
+      <span class="confirm-title" id="c-title">Confirm</span>
+    </div>
+    <div class="confirm-body" id="c-body"></div>
+    <div class="confirm-ftr">
+      <button class="btn-ghost" onclick="closeConfirm()">Cancel</button>
+      <button class="btn-danger" id="c-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div class="toasts" id="toasts"></div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════ -->
+<script>
+const FC_DATA = [
+  { prno:10023, prdate:'12-Apr-2026', dept:'ELE – Electrical',  prsno:2, code:'ELE00318', name:'MCB 32A DP Schneider',            uom:'NOS',  scccode:'ELE-MNT',  prQty:8,   ordQty:0, bal:8,   prevStatus:'Requested' },
+  { prno:10031, prdate:'19-Apr-2026', dept:'MEC – Mechanical',  prsno:2, code:'MEC01080', name:'Bearing 6205 ZZ',                 uom:'NOS',  scccode:'MEC-GEN',  prQty:50,  ordQty:0, bal:50,  prevStatus:'Requested' },
+  { prno:10031, prdate:'19-Apr-2026', dept:'MEC – Mechanical',  prsno:3, code:'MEC00950', name:'V-Belt A-60 Twin',                uom:'NOS',  scccode:'MEC-GEN',  prQty:30,  ordQty:0, bal:30,  prevStatus:'Requested' },
+  { prno:10052, prdate:'15-May-2026', dept:'STO – Stores',      prsno:1, code:'STO00102', name:'Cotton Waste Bale Standard',      uom:'BALE', scccode:'STO-RAW',  prQty:500, ordQty:0, bal:500, prevStatus:'Requested' },
+  { prno:10052, prdate:'15-May-2026', dept:'STO – Stores',      prsno:2, code:'STO00210', name:'Lubricating Oil 15W-40 (5L Can)', uom:'LTR',  scccode:'STO-CONS', prQty:60,  ordQty:0, bal:60,  prevStatus:'Requested' },
+  { prno:10019, prdate:'08-Apr-2025', dept:'RNG – Ring Frame',  prsno:3, code:'RNG00401', name:'Separator Box Cover Ring Frame',  uom:'NOS',  scccode:'RNG-OVH',  prQty:12,  ordQty:0, bal:12,  prevStatus:'Requested' },
+  { prno:10007, prdate:'14-Feb-2025', dept:'MEC – Mechanical',  prsno:1, code:'MEC00720', name:'Flat Belt 100mm × 5m',            uom:'MTR',  scccode:'MEC-GEN',  prQty:10,  ordQty:0, bal:10,  prevStatus:'Requested' },
+  { prno:10007, prdate:'14-Feb-2025', dept:'MEC – Mechanical',  prsno:2, code:'MEC00810', name:'Timing Belt 960-8M-30',           uom:'NOS',  scccode:'MEC-GEN',  prQty:6,   ordQty:0, bal:6,   prevStatus:'Requested' },
+];
+
+let siderCollapsed = false;
+let fcData         = [...FC_DATA];
+let fcSelected     = new Set();
+let confirmCb      = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  renderFCGrid(fcData);
+});
+
+function navigate(target) {
+  const links = {
+    hub             : '../index.html',
+    foreclosure     : 'SPINRISE_FSD_M01_PRForeclosure_v1_1.html',
+    cancellation    : '../SPINRISE_FSD_M01_PRCancellationUndo_v1_1/SPINRISE_FSD_M01_PRCancellationUndo_v1_1.html',
+    amendment       : '../SPINRISE_FSD_M01_PRAmendment_v2_3/SPINRISE_FSD_M01_PRAmendment_v2_3.html',
+    'first-approval'     : '../SPINRISE_FSD_M01_PRFirstLevelApproval_v1_1/SPINRISE_FSD_M01_PRFirstLevelApproval_v1_1.html',
+    PRFinalLevelApproval : '../SPINRISE_FSD_M01_PRFinalLevelApproval_v1_1/SPINRISE_FSD_M01_PRFinalLevelApproval_v1_2.html'
+  };
+  if (links[target]) window.location.href = links[target];
+}
+
+function toggleGroup(childrenId, groupId) {
+  const ch  = document.getElementById(childrenId);
+  const grp = document.getElementById(groupId);
+  const open = ch.classList.contains('open');
+  ch.classList.toggle('open', !open);
+  grp.classList.toggle('open', !open);
+}
+
+function toggleSider() {
+  siderCollapsed = !siderCollapsed;
+  document.getElementById('sider').classList.toggle('collapsed', siderCollapsed);
+  const icon = document.getElementById('toggle-icon');
+  if (siderCollapsed) {
+    icon.innerHTML = `<line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/><line x1="1" y1="12" x2="15" y2="12"/><polyline points="6,5 3,8 6,11" stroke-width="1.4"/>`;
+  } else {
+    icon.innerHTML = `<line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/><line x1="1" y1="12" x2="15" y2="12"/><polyline points="10,5 13,8 10,11" stroke-width="1.4"/>`;
+  }
+}
+
+function toggleUserMenu() {
+  document.getElementById('user-dropdown').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.hdr-user')) {
+    document.getElementById('user-dropdown').classList.remove('open');
+  }
+});
+
+function renderFCGrid(rows) {
+  const tbody = document.getElementById('fc-tbody');
+  tbody.innerHTML = '';
+  if (!rows.length) {
+    document.getElementById('fc-table').style.display = 'none';
+    document.getElementById('fc-empty').classList.remove('hidden');
+    document.getElementById('fc-total').textContent = '0';
+    document.getElementById('fc-tot-bal').textContent = '0.000';
+    return;
+  }
+  document.getElementById('fc-table').style.display = '';
+  document.getElementById('fc-empty').classList.add('hidden');
+
+  let totBal = 0;
+  rows.forEach((r, i) => {
+    totBal += r.bal;
+    const sc  = {Requested:'bg-requested',Partial:'bg-partial',Enquired:'bg-enquired',Ordered:'bg-ordered'}[r.prevStatus] || 'bg-requested';
+    const tr  = document.createElement('tr');
+    tr.className = i % 2 ? 'even' : '';
+    tr.dataset.idx = i;
+    tr.innerHTML = `
+      <td class="c"><input type="checkbox" class="row-chk" data-idx="${i}" onchange="fcRowCheck(this)"></td>
+      <td style="color:var(--text-400)">${i+1}</td>
+      <td class="mono fw7 col-blue">${String(r.prno).padStart(5,'0')}</td>
+      <td>${r.prdate}</td>
+      <td>${r.dept}</td>
+      <td class="mono" style="font-weight:600">${r.code}</td>
+      <td>${r.name}</td>
+      <td class="c">${r.uom || '—'}</td>
+      <td class="r">${r.prQty.toFixed(3)}</td>
+      <td class="r">${r.ordQty.toFixed(3)}</td>
+      <td class="r col-green">${r.bal.toFixed(3)}</td>
+      <td>${r.scccode || '—'}</td>
+      <td class="c"><span class="badge ${sc}">${r.prevStatus}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('fc-total').textContent   = rows.length;
+  document.getElementById('fc-tot-bal').textContent = totBal.toFixed(3);
+  updateFCFooter();
+}
+
+function fcRowCheck(chk) {
+  const idx = parseInt(chk.dataset.idx);
+  chk.checked ? fcSelected.add(idx) : fcSelected.delete(idx);
+  chk.closest('tr').classList.toggle('sel', chk.checked);
+  updateFCFooter();
+  const master = document.getElementById('fc-master-chk');
+  master.indeterminate = fcSelected.size > 0 && fcSelected.size < fcData.length;
+  master.checked       = fcSelected.size === fcData.length;
+}
+
+function fcToggleAll(masterChk) {
+  fcSelected.clear();
+  document.querySelectorAll('#fc-tbody .row-chk').forEach((c, i) => {
+    c.checked = masterChk.checked;
+    c.closest('tr').classList.toggle('sel', masterChk.checked);
+    if (masterChk.checked) fcSelected.add(i);
+  });
+  updateFCFooter();
+}
+
+function fcSelectAll() { document.getElementById('fc-master-chk').checked = true; fcToggleAll({checked:true}); }
+function fcClearAll()  {
+  document.getElementById('fc-master-chk').checked = false;
+  document.getElementById('fc-master-chk').indeterminate = false;
+  fcToggleAll({checked:false});
+}
+
+function updateFCFooter() {
+  const ct = fcSelected.size;
+  let selBal = 0;
+  fcSelected.forEach(i => selBal += fcData[i].bal);
+  document.getElementById('fc-sel-ct').textContent  = ct;
+  document.getElementById('fc-sel-bal').textContent = selBal.toFixed(3);
+  const badge = document.getElementById('fc-sel-badge');
+  badge.textContent = ct + ' selected';
+  badge.className   = 'sel-badge' + (ct > 0 ? ' has' : '');
+  const btn = document.getElementById('btn-fc-confirm');
+  btn.disabled = ct === 0;
+  btn.classList.toggle('disabled', ct === 0);
+}
+
+function loadFCGrid() {
+  const filtered = [...fcData];
+  fcSelected.clear();
+  renderFCGrid(filtered);
+  toast(`Loaded ${filtered.length} open PR lines`, 'if');
+}
+
+function fcConfirm() {
+  if (!fcSelected.size) return;
+  const n = fcSelected.size;
+  let selBal = 0;
+  fcSelected.forEach(i => selBal += fcData[i].bal);
+  showConfirm({
+    icon:'⚡',
+    title:`Confirm Foreclosure — ${n} Line${n>1?'s':''}`,
+    body:`You are about to <strong>force-close ${n} PR line${n>1?'s':''}</strong> with a total balance of
+         <strong>${selBal.toFixed(3)}</strong> units.<br><br>
+         Sets <code>FClosed = 'Y'</code> and <code>FCloseddt = GETDATE()</code> on selected PO_PRL rows.
+         Audit entry written to LogDet_PO inside BeginTrans.<br><br>
+         <strong>This action cannot be undone. No undo-foreclosure exists.</strong>`,
+    okLabel:`⚡ Force-Close ${n} Line${n>1?'s':''}`,
+    okClass:'btn-danger',
+    onOk: () => {
+      const t = toast('Processing foreclosure…','if',0);
+      setTimeout(() => {
+        removeToast(t);
+        const removedIdxs = Array.from(fcSelected).sort((a,b)=>b-a);
+        removedIdxs.forEach(i => fcData.splice(i,1));
+        fcSelected.clear();
+        renderFCGrid(fcData);
+        document.getElementById('fc-master-chk').checked = false;
+        toast(`✔ ${n} line${n>1?'s':''} force-closed. Audit written to LogDet_PO.`, 'ok');
+      }, 800);
+    }
+  });
+}
+
+function setFCState(s) {
+  document.getElementById('ist-fc-loaded').classList.toggle('active', s==='loaded');
+  document.getElementById('ist-fc-empty').classList.toggle('active', s==='empty');
+  if (s === 'empty') { fcData = []; fcSelected.clear(); renderFCGrid([]); }
+  else               { fcData = [...FC_DATA]; fcSelected.clear(); renderFCGrid(fcData); }
+}
+
+function toggleSider() {
+  siderCollapsed = !siderCollapsed;
+  document.getElementById('sider').classList.toggle('collapsed', siderCollapsed);
+  const icon = document.getElementById('toggle-icon');
+  if (siderCollapsed) {
+    icon.innerHTML = `<line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/><line x1="1" y1="12" x2="15" y2="12"/><polyline points="6,5 3,8 6,11" stroke-width="1.4"/>`;
+  } else {
+    icon.innerHTML = `<line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/><line x1="1" y1="12" x2="15" y2="12"/><polyline points="10,5 13,8 10,11" stroke-width="1.4"/>`;
+  }
+}
+
+function showConfirm({icon,title,body,okLabel,okClass,onOk}) {
+  document.getElementById('c-icon').textContent  = icon;
+  document.getElementById('c-title').textContent = title;
+  document.getElementById('c-body').innerHTML    = window.SpinRiseProto ? window.SpinRiseProto.sanitizeConfirmHtml(body) : body;
+  const btn = document.getElementById('c-ok');
+  btn.textContent = okLabel;
+  btn.className   = okClass;
+  btn.onclick     = () => { closeConfirm(); onOk && onOk(); };
+  document.getElementById('confirm-overlay').classList.remove('hidden');
+}
+function closeConfirm() {
+  document.getElementById('confirm-overlay').classList.add('hidden');
+}
+
+let _tid = 0;
+function toast(msg, type='if', dur=3500) {
+  const id = ++_tid;
+  const el = document.createElement('div');
+  el.id = 'toast-' + id;
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  if (dur > 0) setTimeout(() => removeToast(id), dur);
+  return id;
+}
+function removeToast(id) {
+  const el = document.getElementById('toast-' + id);
+  if (el) { el.style.animation = 'tOut .25s ease forwards'; setTimeout(() => el.remove(), 260); }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeConfirm(); }
+  if (e.ctrlKey && e.key === 's') { e.preventDefault(); fcConfirm(); }
+  if (e.ctrlKey && e.key === 'l') { e.preventDefault(); loadFCGrid(); }
+  if (e.altKey && e.key === 'x') { e.preventDefault(); fcClearAll(); }
+});
+</script>
+<script src="../assets/js/prototype-system.js"></script>
+</body>
+</html>

@@ -29,28 +29,31 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @CessPer          NUMERIC(10,2)  = 0,
     @AedPer           NUMERIC(10,2)  = 0,    -- legacy pass-through (D-11)
     @FreightAmt       NUMERIC(13,2)  = 0,
+    @FreightPer       NUMERIC(10,2)  = 0,    -- CR-009: derives FreightAmt when FreightAmt=0
     @PackPer          NUMERIC(10,2)  = 0,
     @InsurPer         NUMERIC(10,2)  = 0,
     @SurchargePer     NUMERIC(10,2)  = 0,
     @AddTaxPer        NUMERIC(10,2)  = 0,
+    @RoundOff         NUMERIC(13,2)  = 0,
     @FileNo           VARCHAR(20)    = NULL,
     @FcaFob           NUMERIC(13,2)  = 0,
     @FreightType      VARCHAR(10)    = 'PAID',
-    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- DISFLG: stored as LEFT(@DiscApp,1) → 'B'/'A'
-    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG
-    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg
-    @FrtFlg           VARCHAR(1)     = 'B',       -- FRT_FLG: 'B'=Before-tax / 'A'=After-tax
-    @InsFlg           VARCHAR(1)     = 'B',       -- INS_FLG: 'B'=Before-tax / 'A'=After-tax
+    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- disflg:   'BEFORE'→'B', 'AFTER'→'A'
+    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG: 'BEFORE'→'B', 'AFTER'→'A'
+    @FreightPosition  VARCHAR(10)    = 'BEFORE',  -- FRT_FLG:  'BEFORE'→'B', 'AFTER'→'A'
+    @InsurancePosition VARCHAR(10)   = 'BEFORE',  -- Ins_Flg:  'BEFORE'→'B', 'AFTER'→'A'
+    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg: 'BEFORE'→'B', 'AFTER'→'A'
     -- Payment
     @PayMode          VARCHAR(10)    = 'DIRECT',
     @DirectInstr      VARCHAR(200)   = NULL,
     @BankCode         VARCHAR(10)    = NULL,
     @PaymentTerms     VARCHAR(100)   = NULL,
+    @PayTermCode      VARCHAR(25)    = NULL,   -- CHANGED BY CLAUDE: paytermcode lookup code (Ig_PayTerm.PayTerm_Code)
     @AdvPer           NUMERIC(10,2)  = 0,
     @AdvAmt           NUMERIC(13,2)  = 0,
     @ModeOfPayment    VARCHAR(20)    = NULL,
-    @PayRef           VARCHAR(50)    = NULL,   -- no column in PO_ORDH; accepted, not stored
-    @PayRefDate       DATE           = NULL,   -- no column in PO_ORDH; accepted, not stored
+    @PayRef           VARCHAR(50)    = NULL,   -- confirmed by SasiR: maps to CHQNO (non-bank payment ref; COALESCE with @ChequeNo)
+    @PayRefDate       DATE           = NULL,   -- confirmed by SasiR: maps to CHQDT (non-bank payment ref date; COALESCE with @ChequeDate)
     @ChequeNo         VARCHAR(50)    = NULL,
     @ChequeDate       DATE           = NULL,
     -- Instructions
@@ -61,7 +64,7 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @SpecialInstr     VARCHAR(500)   = NULL,
     @Despatch         VARCHAR(200)   = NULL,
     @Purpose          VARCHAR(500)   = NULL,
-    @OtherLevies      VARCHAR(200)   = NULL,   -- no confirmed column; accepted, not stored
+    @OtherLevies      VARCHAR(200)   = NULL,   -- confirmed by SasiR: maps to Note2 in PO_ORDH
     @PricingTerms     VARCHAR(100)   = NULL,
     @PackForwarding   VARCHAR(200)   = NULL,
     @Insurance        VARCHAR(200)   = NULL,
@@ -113,18 +116,28 @@ BEGIN
             AND RTRIM(ISNULL(@PricingTerms, '')) = ''
             RAISERROR('Pricing Term Cannot be empty', 16, 1);
 
-        -- ── 3. BR-01: Backdate check (FSD §4.6) ─────────────────────────────────
-        -- When BACKDATE='N', PO date must strictly equal the system processing date.
+        -- ── 3. Date validations (CR-017, CR-018, BR-01) ─────────────────────────
+        -- CR-017: Always reject future PO dates.
+        DECLARE @Today DATE = CAST(GETDATE() AS DATE);
+        IF @PoDate > @Today
+            RAISERROR('PO Date cannot be a future date.', 16, 1);
+
+        -- CR-017: Always reject if earlier than last PO date in this division.
+        DECLARE @MaxPoDate DATE;
+        SELECT @MaxPoDate = CAST(MAX(PORDDT) AS DATE) FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode;
+        IF @MaxPoDate IS NOT NULL AND @PoDate < @MaxPoDate
+            RAISERROR('PO Date cannot be earlier than the last Purchase Order date for this division.', 16, 1);
+
+        -- CR-018: Reference Date must not be after PO Date.
+        IF @RefDate IS NOT NULL AND @RefDate > @PoDate
+            RAISERROR('Reference Date cannot be later than the PO Date.', 16, 1);
+
+        -- BR-01: Backdate check (FSD §4.6) — when BACKDATE='N', date must equal today or max PO date.
         DECLARE @BackDate CHAR(1) = 'Y';
         SELECT TOP 1 @BackDate = ISNULL(UPPER(RTRIM(BACKDATE)), 'Y') FROM dbo.IN_PARA;
-
         IF @BackDate <> 'Y'
         BEGIN
-            DECLARE @ProcessingDate DATE = CAST(GETDATE() AS DATE);
-            DECLARE @MaxPoDate      DATE;
-            SELECT @MaxPoDate = CAST(MAX(PORDDT) AS DATE) FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode;
-
-            IF @PoDate <> @ProcessingDate
+            IF @PoDate <> @Today
                AND NOT (@MaxPoDate IS NOT NULL AND @PoDate = @MaxPoDate)
                 RAISERROR('PO Date must be equal to Current Date Or Max Purchase Order Date.', 16, 1);
         END
@@ -150,7 +163,20 @@ BEGIN
             RTRIM(ISNULL(j.IgstCode,''))     AS IgstCode,
             RTRIM(ISNULL(j.RequesterId,''))  AS RequesterId,
             RTRIM(ISNULL(j.RequesterName,'')) AS RequesterName,
-            ISNULL(j.LandCost, 0)            AS LandCost,
+            ISNULL(j.DiscPer,      0)        AS DiscPer,
+            ISNULL(j.PackingPer,   0)        AS PackingPer,
+            ISNULL(j.FreightPer,   0)        AS FreightPer,
+            ISNULL(j.InsurancePer, 0)        AS InsurancePer,
+            ISNULL(j.CessPer,      0)        AS CessPer,
+            ISNULL(j.FcaFob,       0)        AS FcaFob,
+            ISNULL(j.OtherCharges, 0)        AS OtherCharges,
+            RTRIM(ISNULL(j.AddTaxCode, ''))  AS AddTaxCode,
+            ISNULL(j.AddTaxPer,    0)        AS AddTaxPer,
+            RTRIM(ISNULL(j.DiscApp,       'BEFORE')) AS DiscApp,
+            RTRIM(ISNULL(j.PackApp,       'BEFORE')) AS PackApp,
+            RTRIM(ISNULL(j.FreightPos,    'BEFORE')) AS FreightPos,
+            RTRIM(ISNULL(j.InsuranceDuty, 'BEFORE')) AS InsuranceDuty,
+            RTRIM(ISNULL(j.CessTaxPos,    'BEFORE')) AS CessTaxPos,
             j.SlotsJson
         INTO #Lines
         FROM OPENJSON(@LinesJson)
@@ -172,7 +198,20 @@ BEGIN
             IgstCode      VARCHAR(10)    '$.igstCode',
             RequesterId   VARCHAR(20)    '$.requesterId',
             RequesterName VARCHAR(100)   '$.requesterName',
-            LandCost      DECIMAL(18,2)  '$.landCost',
+            DiscPer       NUMERIC(10,2)  '$.discPer',
+            PackingPer    NUMERIC(10,2)  '$.packingPer',
+            FreightPer    NUMERIC(10,2)  '$.freightPer',
+            InsurancePer  NUMERIC(10,2)  '$.insurancePer',
+            CessPer       NUMERIC(10,2)  '$.cessPer',
+            FcaFob        NUMERIC(13,2)  '$.fcaFob',
+            OtherCharges  NUMERIC(13,2)  '$.otherCharges',
+            AddTaxCode    VARCHAR(10)    '$.addTaxCode',
+            AddTaxPer     NUMERIC(10,2)  '$.addTaxPer',
+            DiscApp       VARCHAR(10)    '$.discApp',
+            PackApp       VARCHAR(10)    '$.packApp',
+            FreightPos    VARCHAR(10)    '$.freightPos',
+            InsuranceDuty VARCHAR(10)    '$.insuranceDuty',
+            CessTaxPos    VARCHAR(10)    '$.cessTaxPos',
             SlotsJson     NVARCHAR(MAX)  '$.slots' AS JSON
         ) j
         WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
@@ -243,17 +282,19 @@ BEGIN
         )
             RAISERROR('One or more PR lines are no longer eligible for ordering.', 16, 1);
 
-        -- ── 6. Allocate PO number (atomic SEQUENCE — CEO confirmed 07-Jun-2026) ──
-        -- SEQUENCE guarantees uniqueness under concurrent users (no race condition).
-        -- Prerequisite: dbo.seq_PO_AllocatePONo must exist in JAT DB.
-        --   CREATE SEQUENCE dbo.seq_PO_AllocatePONo START WITH 1 INCREMENT BY 1;
-        SET @PoNo = NEXT VALUE FOR dbo.seq_PO_AllocatePONo;
-
-        -- Floor to PO_DOC_PARA.STDOCNO if the sequence has not yet reached the starting number.
+        -- ── 6. Allocate PO number (FY-scoped MAX+1) ──────────────────────────
+        -- Unique key is (DIVCODE, PORDNO, PORDDT) — numbers restart from STDOCNO
+        -- at the start of each financial year. UPDLOCK+HOLDLOCK inside BEGIN TRAN
+        -- prevents concurrent transactions from reading the same MAX before either commits.
         DECLARE @StartDocNo NUMERIC(10,0) = 1;
         SELECT @StartDocNo = ISNULL(STDOCNO, 1)
         FROM dbo.PO_DOC_PARA
         WHERE TC = 'PURCHASE ORDER';
+
+        SELECT @PoNo = ISNULL(MAX(PORDNO), 0) + 1
+        FROM dbo.PO_ORDH WITH (UPDLOCK, HOLDLOCK)
+        WHERE CAST(PORDDT AS DATE) >= @FDate
+          AND CAST(PORDDT AS DATE) <= @LDate;
 
         IF @PoNo < @StartDocNo
             SET @PoNo = @StartDocNo;
@@ -273,16 +314,22 @@ BEGIN
         DECLARE @Conflg        VARCHAR(1) = CASE WHEN @PoConf          = 'N' THEN 'Y' ELSE 'N' END;
 
         -- ── 7. Derived values ────────────────────────────────────────────────────
+        -- @CgstAmt/@SgstAmt/@IgstAmt are computed in step 9b after PO_ORDL INSERT,
+        -- from position-flag-adjusted per-line amounts matching the frontend formula.
         DECLARE @OrdVal  NUMERIC(18,2);
-        DECLARE @CgstAmt NUMERIC(18,2);
-        DECLARE @SgstAmt NUMERIC(18,2);
-        DECLARE @IgstAmt NUMERIC(18,2);
-        SELECT
-            @OrdVal  = SUM(ROUND(Rate * Qty, 2)),
-            @CgstAmt = SUM(ROUND((Rate * Qty) * CgstPer / 100.0, 2)),
-            @SgstAmt = SUM(ROUND((Rate * Qty) * SgstPer / 100.0, 2)),
-            @IgstAmt = SUM(ROUND((Rate * Qty) * IgstPer / 100.0, 2))
-        FROM #Lines;
+        DECLARE @CgstAmt NUMERIC(18,2) = 0;
+        DECLARE @SgstAmt NUMERIC(18,2) = 0;
+        DECLARE @IgstAmt NUMERIC(18,2) = 0;
+        SELECT @OrdVal = SUM(ROUND(Rate * Qty, 2)) FROM #Lines;
+
+        -- CR-009: Derive FreightAmt from FreightPer when FreightAmt not supplied.
+        IF @FreightPer > 0 AND @FreightAmt = 0
+            SET @FreightAmt = ROUND(@OrdVal * @FreightPer / 100.0, 2);
+
+        -- CHANGED BY CLAUDE: Ins_Amt and Pack_Amt were never computed; ksp_PO_GetPrint reads
+        -- h.Ins_Amt and h.Pack_Amt from PO_ORDH — these must be stored or print always shows 0.
+        DECLARE @InsAmt  NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@InsurPer,  0) / 100.0, 2);
+        DECLARE @PackAmt NUMERIC(13,2) = ROUND(ISNULL(@OrdVal, 0) * ISNULL(@PackPer,   0) / 100.0, 2);
 
         -- Supplier GSTIN + state code (authoritative from master, not client-sent)
         DECLARE @SupGstin    VARCHAR(50)   = NULL;
@@ -301,19 +348,18 @@ BEGIN
             DIVCODE,   PORDNO,  PORDDT,  POGRP,    SLCODE,
             CurrCode,  FCurRate, CARCODE, INSPECT,
             Form_type, refno,   refDate, REMARKS,
-            DISPER, Cessper, FREIGHT, PCKPER, INSPER, SURPER, ADDTAXPER,
-            FILENO, FCACharg, FRTFLG,
-            DISFLG, PACK_FLG, FRT_FLG, INS_FLG, Cess_Flg,
-            PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS,
+            DISPER, Cessper, FREIGHT, PCKPER, Pack_Amt, INSPER, Ins_Amt, SURPER, ADDTAXPER,
+            FILENO, FCACharg, FRTFLG, disflg, PACK_FLG, FRT_FLG, Ins_Flg, Cess_Flg,
+            PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS, paytermcode,
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
             Duedate, DEL_INS1, Billadd, SPL_INS, DEL_INS2,
-            Note, PriceTerm, RemarksPF, RemarksIns, RemarksFrt,
+            Note, Note2, PriceTerm, RemarksPF, RemarksIns, RemarksFrt,
             ORDVAL, roff,
             CGSTAMT, SGSTAMT, IGSTAMT,
             cust_gstinno, cust_gststcode,
             FirstlevelApp, Conflg, poprintflg,
-            createdby, createddt
+            createdby, createddt, htcs_amt
         )
         VALUES
         (
@@ -330,39 +376,43 @@ BEGIN
             ISNULL(@CessPer,      0),
             ISNULL(@FreightAmt,   0),
             ISNULL(@PackPer,      0),
+            ISNULL(@PackAmt,      0),   -- CHANGED BY CLAUDE: Pack_Amt — header packing amount derived from OrdVal × PackPer
             ISNULL(@InsurPer,     0),
+            ISNULL(@InsAmt,       0),   -- CHANGED BY CLAUDE: Ins_Amt  — header insurance amount derived from OrdVal × InsurPer
             ISNULL(@SurchargePer, 0),
             ISNULL(@AddTaxPer,    0),
             NULLIF(RTRIM(ISNULL(@FileNo,'')),       ''),
             ISNULL(@FcaFob, 0),
-            CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE '' END,
-            LEFT(ISNULL(UPPER(RTRIM(@DiscApp)),  'B'), 1),   -- DISFLG:    'B'=Before / 'A'=After
-            LEFT(ISNULL(UPPER(RTRIM(@PackApp)),  'B'), 1),   -- PACK_FLG:  'B'=Before / 'A'=After
-            ISNULL(@FrtFlg, 'B'),                            -- FRT_FLG:   'B'=Before / 'A'=After
-            ISNULL(@InsFlg, 'B'),                            -- INS_FLG:   'B'=Before / 'A'=After
-            LEFT(ISNULL(UPPER(RTRIM(@CessApp)),  'B'), 1),   -- Cess_Flg:  'B'=Before / 'A'=After
+            CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE 'N' END,  -- CHANGED BY CLAUDE: '' → 'N'; legacy flag expects 'Y'/'N', not 'Y'/''
+            CASE WHEN UPPER(RTRIM(ISNULL(@DiscApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- disflg
+            CASE WHEN UPPER(RTRIM(ISNULL(@PackApp,'')))          = 'AFTER' THEN 'A' ELSE 'B' END,  -- PACK_FLG
+            CASE WHEN UPPER(RTRIM(ISNULL(@FreightPosition,'')))  = 'AFTER' THEN 'A' ELSE 'B' END,  -- FRT_FLG
+            CASE WHEN UPPER(RTRIM(ISNULL(@InsurancePosition,''))) = 'AFTER' THEN 'A' ELSE 'B' END, -- Ins_Flg
+            CASE WHEN UPPER(RTRIM(ISNULL(@CessApp,'')))           = 'AFTER' THEN 'A' ELSE 'B' END, -- Cess_Flg
             CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
-            NULLIF(RTRIM(ISNULL(@DirectInstr,'')),  ''),
-            NULLIF(RTRIM(ISNULL(@BankCode,'')),     ''),
-            NULLIF(RTRIM(ISNULL(@PaymentTerms,'')), ''),
+            NULLIF(RTRIM(ISNULL(@DirectInstr,'')),   ''),
+            NULLIF(RTRIM(ISNULL(@BankCode,'')),      ''),
+            NULLIF(RTRIM(ISNULL(@PaymentTerms,'')),  ''),
+            NULLIF(RTRIM(ISNULL(@PayTermCode,'')),   ''),   -- CHANGED BY CLAUDE: paytermcode — Ig_PayTerm lookup code; previously never stored, ksp_PO_GetPrint reads this column
             ISNULL(@AdvPer, 0),
             ISNULL(@AdvAmt, 0),
-            NULLIF(RTRIM(ISNULL(@ModeOfPayment,'')), ''),
-            NULLIF(RTRIM(ISNULL(@ChequeNo,'')),     ''),
-            @ChequeDate,
+            NULLIF(LEFT(RTRIM(ISNULL(@ModeOfPayment,'')), 5), ''),   -- advpaymenttype VARCHAR(5) — confirmed 2026-06-22
+            COALESCE(NULLIF(RTRIM(ISNULL(@ChequeNo, '')), ''), NULLIF(RTRIM(ISNULL(@PayRef, '')), '')),   -- CHQNO: bank cheque no. (primary) else payment ref
+            COALESCE(@ChequeDate, @PayRefDate),                                                            -- CHQDT: bank cheque date (primary) else payment ref date
             ISNULL(@CreditDays, 0),
             @DeliveryDate,
             NULLIF(RTRIM(ISNULL(@DeliveryLocation,'')), ''),
             NULLIF(RTRIM(ISNULL(@BillingAddress,'')),   ''),
             NULLIF(RTRIM(ISNULL(@SpecialInstr,'')),     ''),
             NULLIF(RTRIM(ISNULL(@Despatch,'')),         ''),
-            NULLIF(RTRIM(ISNULL(@Purpose,'')),          ''),
+            NULLIF(RTRIM(ISNULL(@Purpose,'')),          ''),   -- Note
+            NULLIF(RTRIM(ISNULL(@OtherLevies,'')),      ''),   -- Note2 (confirmed by SasiR)
             NULLIF(RTRIM(ISNULL(@PricingTerms,'')),     ''),
             NULLIF(RTRIM(ISNULL(@PackForwarding,'')),   ''),
             NULLIF(RTRIM(ISNULL(@Insurance,'')),        ''),
             NULLIF(RTRIM(ISNULL(@Freight,'')),          ''),
             ISNULL(@OrdVal, 0),
-            0,                        -- roff: round-off (computed by client, stored as 0 here)
+            ISNULL(@RoundOff, 0),     -- roff: client-supplied round-off
             ISNULL(@CgstAmt, 0),
             ISNULL(@SgstAmt, 0),
             ISNULL(@IgstAmt, 0),
@@ -372,7 +422,8 @@ BEGIN
             @Conflg,                  -- 'Y' if PoConf='N' (auto-confirm), else 'N'
             'N',                      -- poprintflg
             @UserId,
-            @CreatedDt
+            @CreatedDt, 
+			@TcsPer
         );
 
         -- FSD §14: Reset amendment/cancellation flags on every new save
@@ -386,9 +437,46 @@ BEGIN
         DECLARE @ActualPoDt DATETIME;
         SELECT @ActualPoDt = PORDDT FROM dbo.PO_ORDH WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
 
-        -- ── 9. INSERT PO_ORDL (one row per line) ─────────────────────────────────
-        --    taxper = CgstPer + SgstPer + IgstPer (total GST %)
-        --    Amounts computed from Rate × Qty × per% / 100
+        -- ── 9. INSERT PO_ORDL via CTE — per-line derived amounts ─────────────────
+        -- POT-TC-01 / CR-012: Packing base = net-of-discount (matches frontend).
+        -- GST base adjusts per per-line position flags (BEFORE/AFTER).
+        -- OTHCHGS is a direct ₹ amount, not a percentage — stored as-is.
+        ;WITH LineCalc AS (
+            SELECT
+                l.*,
+                prl.prdate                                                                                AS PrlPrDate,
+                ROUND(l.Rate * l.Qty, 2)                                                                 AS GrossVal,
+                ROUND(l.Rate * l.Qty * l.DiscPer / 100.0, 2)                                            AS DiscAmt,
+                -- POT-TD-07/08/09/10: fall back to header % when per-line value is 0
+                COALESCE(NULLIF(l.PackingPer,   0), @PackPer)                                            AS EffPackPer,
+                COALESCE(NULLIF(l.FreightPer,   0), @FreightPer)                                         AS EffFrgtPer,
+                COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer)                                           AS EffInsPer,
+                COALESCE(NULLIF(l.CessPer,      0), @CessPer)                                            AS EffCessPer,
+                -- Packing / Freight / Insurance all use netAfterDisc as base (POT-TC-01)
+                ROUND(((l.Rate * l.Qty) - ROUND(l.Rate * l.Qty * l.DiscPer / 100.0, 2))
+                      * COALESCE(NULLIF(l.PackingPer,   0), @PackPer)   / 100.0, 2)                      AS PackAmt,
+                ROUND(((l.Rate * l.Qty) - ROUND(l.Rate * l.Qty * l.DiscPer / 100.0, 2))
+                      * COALESCE(NULLIF(l.FreightPer,   0), @FreightPer) / 100.0, 2)                     AS FrgtAmt,
+                ROUND(((l.Rate * l.Qty) - ROUND(l.Rate * l.Qty * l.DiscPer / 100.0, 2))
+                      * COALESCE(NULLIF(l.InsurancePer, 0), @InsurPer)   / 100.0, 2)                     AS InsAmt
+            FROM #Lines l
+            INNER JOIN dbo.PO_PRL prl
+                ON prl.divcode = @DivCode AND prl.prno = l.PrNo
+               AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno
+        ),
+        LineCalcGst AS (
+            SELECT
+                c.*,
+                -- GST assessable base: gross ± position-flag adjustments (CR-012 / POT-TD-10)
+                ROUND(
+                    c.GrossVal
+                    - CASE WHEN UPPER(RTRIM(c.DiscApp))       = 'BEFORE' THEN c.DiscAmt ELSE 0 END
+                    + CASE WHEN UPPER(RTRIM(c.FreightPos))    = 'BEFORE' THEN c.FrgtAmt ELSE 0 END
+                    + CASE WHEN UPPER(RTRIM(c.PackApp))       = 'BEFORE' THEN c.PackAmt ELSE 0 END
+                    + CASE WHEN UPPER(RTRIM(c.InsuranceDuty)) = 'BEFORE' THEN c.InsAmt  ELSE 0 END
+                , 2)                                                                                      AS GstBase
+            FROM LineCalc c
+        )
         INSERT INTO dbo.PO_ORDL
         (
             DIVCODE,  PORDNO,  PORDDT, PORDSNO, POGRP,
@@ -401,39 +489,63 @@ BEGIN
             igstper,  igstamt,  igst_tax_code,
             Tcs_per,  Tcs_amt,
             reqidpo,  reqnamepo,
-            LandCost
+            disper,   disamt,
+            PACKPER,  Packamt,
+            Frgt1per, Frgt1Amt,
+            Ins_per,  Ins_amt,
+            OTHCHGS,
+            cess_per, cess_amt,
+            ADDTAX_CODE, ADDTAXPER, ADDTAXAMT,
+            FCACharg,
+            DISFLG, PACK_FLG, FRT_FLG, Ins_Flg, Cess_Flg
         )
         SELECT
-            @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
-            l.ItemCode,
-            l.PrNo,
-            prl.prdate,
-            l.PrSno,
-            l.Rate,
-            l.Qty,
-            ROUND(l.Rate * l.Qty, 2),
-            LEFT(l.TaxCode,  5),  -- PO_ORDL.TAX_CODE is varchar(5)
-            l.CgstPer + l.SgstPer + l.IgstPer,
-            ROUND((l.Rate * l.Qty) * (l.CgstPer + l.SgstPer + l.IgstPer) / 100.0, 2),
-            LEFT(l.HsnCode,  8),  -- PO_ORDL.hsncode is varchar(8)
-            l.CgstPer,
-            ROUND((l.Rate * l.Qty) * l.CgstPer / 100.0, 2),
-            LEFT(l.CgstCode, 5),  -- PO_ORDL.cgst_tax_code is varchar(5)
-            l.SgstPer,
-            ROUND((l.Rate * l.Qty) * l.SgstPer / 100.0, 2),
-            LEFT(l.SgstCode, 5),  -- PO_ORDL.sgst_tax_code is varchar(5)
-            l.IgstPer,
-            ROUND((l.Rate * l.Qty) * l.IgstPer / 100.0, 2),
-            LEFT(l.IgstCode, 5),  -- PO_ORDL.igst_tax_code is varchar(5)
-            l.TcsPer,
-            ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2),
-            NULLIF(l.RequesterId, ''),
-            NULLIF(l.RequesterName, ''),
-            l.LandCost
-        FROM #Lines l
-        INNER JOIN dbo.PO_PRL prl
-            ON prl.divcode = @DivCode AND prl.prno = l.PrNo
-           AND CAST(prl.prdate AS DATE) = l.PrDate AND prl.prsno = l.PrSno;
+            @DivCode, @PoNo, @ActualPoDt, c.PORDSNO, @OrderType,
+            c.ItemCode,
+            c.PrNo,
+            c.PrlPrDate,
+            c.PrSno,
+            c.Rate,
+            c.Qty,
+            c.GrossVal,
+            LEFT(c.TaxCode,  5),
+            c.CgstPer + c.SgstPer + c.IgstPer,
+            ROUND(c.GstBase * (c.CgstPer + c.SgstPer + c.IgstPer) / 100.0, 2),
+            LEFT(c.HsnCode,  8),
+            c.CgstPer,
+            ROUND(c.GstBase * c.CgstPer / 100.0, 2),
+            LEFT(c.CgstCode, 5),
+            c.SgstPer,
+            ROUND(c.GstBase * c.SgstPer / 100.0, 2),
+            LEFT(c.SgstCode, 5),
+            c.IgstPer,
+            ROUND(c.GstBase * c.IgstPer / 100.0, 2),
+            LEFT(c.IgstCode, 5),
+            c.TcsPer,
+            ROUND(c.GrossVal * c.TcsPer    / 100.0, 2),
+            NULLIF(c.RequesterId,   ''),   -- reqidpo   VARCHAR(50) — no cap needed
+            NULLIF(c.RequesterName, ''),   -- reqnamepo VARCHAR(100) — no cap needed
+            c.DiscPer,
+            c.DiscAmt,
+            c.EffPackPer,
+            c.PackAmt,
+            c.EffFrgtPer,
+            c.FrgtAmt,
+            c.EffInsPer,
+            c.InsAmt,
+            c.OtherCharges,                              -- direct ₹ amount (not a %)
+            c.EffCessPer,
+            ROUND(c.GrossVal * c.EffCessPer / 100.0, 2),
+            NULLIF(c.AddTaxCode, ''),
+            c.AddTaxPer,
+            ROUND(c.GrossVal * c.AddTaxPer  / 100.0, 2),
+            c.FcaFob,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.DiscApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.PackApp,       ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.FreightPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.InsuranceDuty, ''))) = 'AFTER' THEN 'A' ELSE 'B' END,
+            CASE WHEN UPPER(RTRIM(ISNULL(c.CessTaxPos,    ''))) = 'AFTER' THEN 'A' ELSE 'B' END
+        FROM LineCalcGst c;
 
         -- Guard: every line in #Lines must have produced an insert row.
         -- A mismatch means the PO_PRL join found no match (divcode/prdate mismatch).
@@ -441,6 +553,22 @@ BEGIN
         DECLARE @LinesExpected INT = (SELECT COUNT(*) FROM #Lines);
         IF @LinesInserted <> @LinesExpected
             RAISERROR('PO line save incomplete: %d of %d PR lines were matched in PO_PRL. Refresh the PR picker and retry.', 16, 1, @LinesInserted, @LinesExpected);
+
+        -- ── 9b. Back-fill PO_ORDH GST totals from the inserted per-line amounts ──
+        -- Position-flag-adjusted cgstamt/sgstamt/igstamt are now in PO_ORDL.
+        -- Sum them here and update PO_ORDH so CGSTAMT/SGSTAMT/IGSTAMT are correct.
+        SELECT
+            @CgstAmt = SUM(cgstamt),
+            @SgstAmt = SUM(sgstamt),
+            @IgstAmt = SUM(igstamt)
+        FROM dbo.PO_ORDL
+        WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
+
+        UPDATE dbo.PO_ORDH
+        SET CGSTAMT = ISNULL(@CgstAmt, 0),
+            SGSTAMT = ISNULL(@SgstAmt, 0),
+            IGSTAMT = ISNULL(@IgstAmt, 0)
+        WHERE DIVCODE = @DivCode AND PORDNO = @PoNo;
 
         -- ── 10. INSERT PO_ORDL_DETL (delivery slots, up to 4 per line) ────────────
         --     OPENJSON(NULL) safely returns 0 rows, so no extra NULL guard needed.
@@ -455,6 +583,22 @@ BEGIN
             HAVING COUNT(*) > 4
         )
             RAISERROR('Maximum 4 delivery slots are allowed per order line.', 16, 1);
+
+        -- CR-014: Scheduled qty cannot exceed PO line ordered qty (item-specific message).
+        DECLARE @OverScheduleError NVARCHAR(500);
+        SELECT TOP 1 @OverScheduleError =
+            'Scheduled quantity exceeds PO quantity for item ' + RTRIM(l.ItemCode)
+        FROM #Lines l
+        CROSS APPLY (
+            SELECT SUM(s.qty) AS SlotTotal
+            FROM OPENJSON(l.SlotsJson) WITH (qty NUMERIC(12,3) '$.qty') s
+            WHERE s.qty > 0
+        ) st
+        WHERE l.SlotsJson IS NOT NULL
+          AND st.SlotTotal IS NOT NULL
+          AND st.SlotTotal > l.Qty + 0.001;
+        IF @OverScheduleError IS NOT NULL
+            RAISERROR(@OverScheduleError, 16, 1);
 
         -- Reconciliation: slot qty total must equal line ordered qty
         IF EXISTS (
@@ -471,6 +615,34 @@ BEGIN
         )
             RAISERROR('Delivery slot quantities must sum to the ordered quantity for each line.', 16, 1);
 
+        -- CR-016: Duplicate delivery date — same line, same date within this save batch.
+        IF EXISTS (
+            SELECT 1
+            FROM #Lines l
+            CROSS APPLY OPENJSON(l.SlotsJson)
+            WITH (shDate NVARCHAR(10) '$.shDate', qty NUMERIC(12,3) '$.qty') s
+            WHERE l.SlotsJson IS NOT NULL
+              AND s.qty > 0
+              AND TRY_CAST(s.shDate AS DATE) IS NOT NULL
+            GROUP BY l.PORDSNO, TRY_CAST(s.shDate AS DATE)
+            HAVING COUNT(*) > 1
+        )
+            RAISERROR('Duplicate delivery date: the same delivery date cannot appear more than once for an order line.', 16, 1);
+
+        -- OA-03: 400 reject — qty > 0 with no date (reversed from silent-skip per Sasi/CEO 17-Jun-2026)
+        IF EXISTS (
+            SELECT 1
+            FROM #Lines l
+            CROSS APPLY OPENJSON(l.SlotsJson)
+            WITH (shDate NVARCHAR(10) '$.shDate', qty NUMERIC(12,3) '$.qty') s
+            WHERE l.SlotsJson IS NOT NULL
+              AND s.qty > 0
+              AND (s.shDate IS NULL
+                   OR RTRIM(ISNULL(s.shDate, '')) = ''
+                   OR TRY_CAST(s.shDate AS DATE) IS NULL)
+        )
+            RAISERROR('Delivery slot date is required when quantity is specified.', 16, 1);
+
         INSERT INTO dbo.PO_ORDL_DETL
         (divcode, pordno, porddt, pordsno, pogrp, itemcode, shdate, Quantity)
         SELECT
@@ -478,7 +650,7 @@ BEGIN
             l.PORDSNO,
             @OrderType,
             l.ItemCode,
-            TRY_CAST(NULLIF(RTRIM(ISNULL(s.shDate, '')), '') AS DATE),
+            TRY_CAST(s.shDate AS DATE),
             s.qty
         FROM #Lines l
         CROSS APPLY OPENJSON(l.SlotsJson)
@@ -487,13 +659,25 @@ BEGIN
             qty     NUMERIC(12,3) '$.qty'
         ) s
         WHERE s.qty > 0
-          AND TRY_CAST(NULLIF(RTRIM(ISNULL(s.shDate, '')), '') AS DATE) IS NOT NULL;
+          AND TRY_CAST(s.shDate AS DATE) IS NOT NULL;
 
-        -- ── 11. UPDATE PO_PRL — increment QTYORD, mark as ordered ────────────────
+        -- ── 11. UPDATE PO_PRL — increment QTYORD, conditionally mark as ordered ──
+        -- BR-05B: PRSTATUS='O' and FClosed='Y' set only when fully ordered
+        -- (QTYORD + ordered qty >= QTYREQD). Partial orders keep the current
+        -- PRSTATUS so the line remains visible in the PR picker with its balance qty.
         UPDATE prl
         SET
             QTYORD   = ISNULL(prl.QTYORD, 0) + l.Qty,
-            PRSTATUS = 'O'
+            PRSTATUS = CASE
+                           WHEN (ISNULL(prl.QTYORD, 0) + l.Qty) >= ISNULL(prl.QTYREQD, 0)
+                           THEN 'O'
+                           ELSE prl.PRSTATUS
+                       END,
+            FClosed  = CASE
+                           WHEN (ISNULL(prl.QTYORD, 0) + l.Qty) >= ISNULL(prl.QTYREQD, 0)
+                           THEN 'Y'
+                           ELSE prl.FClosed
+                       END
         FROM dbo.PO_PRL prl
         INNER JOIN #Lines l
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo

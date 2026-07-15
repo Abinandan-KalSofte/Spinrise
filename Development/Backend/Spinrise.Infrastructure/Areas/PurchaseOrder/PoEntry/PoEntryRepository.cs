@@ -109,6 +109,29 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
     }
 
+    public async Task<IEnumerable<CurrencyOptionDto>> GetCurrenciesAsync(string? search)
+    {
+        return await _uow.Connection.QueryAsync<CurrencyOptionDto>(
+            StoredProcedures.Po.GetCurrencies,
+            new { Search = search },
+            commandType: CommandType.StoredProcedure);
+    }
+
+    public async Task<IEnumerable<AddressOptionDto>> GetPricingTermsAsync(string? search)
+    {
+        return await _uow.Connection.QueryAsync<AddressOptionDto>(
+            StoredProcedures.Po.GetPricingTerms,
+            new { Search = search },
+            commandType: CommandType.StoredProcedure);
+    }
+
+    public async Task<IEnumerable<PayTermOptionDto>> GetPayTermsAsync()
+    {
+        return await _uow.Connection.QueryAsync<PayTermOptionDto>(
+            StoredProcedures.Po.GetPayTerms,
+            commandType: CommandType.StoredProcedure);
+    }
+
     public async Task<IEnumerable<EligiblePrLineDto>> GetEligiblePrLinesAsync(
         string divCode, string? orderType, string? search, int page, int pageSize)
     {
@@ -160,10 +183,44 @@ public class PoEntryRepository : IPoEntryRepository
     public async Task<PoSaveResultDto> SaveAsync(string divCode, AddPoRequest request,
         string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate)
     {
-        var linesJson = JsonSerializer.Serialize(request.Lines, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        // CR-006: zero out IGST for LOCAL route, zero out CGST/SGST for IGST route.
+        var linesJson = JsonSerializer.Serialize(
+            request.Lines.Select(l => new
+            {
+                prNo          = l.PrNo,
+                prSno         = l.PrSno,
+                prDate        = l.PrDate,
+                itemCode      = l.ItemCode,
+                rate          = l.Rate,
+                qty           = l.Qty,
+                taxCode       = l.TaxCode,
+                hsnCode       = l.HsnCode,
+                cgstPer       = l.Route == "IGST" ? 0m : l.CgstPer,
+                sgstPer       = l.Route == "IGST" ? 0m : l.SgstPer,
+                igstPer       = l.Route == "LOCAL" ? 0m : l.IgstPer,
+                tcsPer        = l.TcsPer,
+                cgstCode      = l.Route == "IGST" ? "" : l.CgstCode,
+                sgstCode      = l.Route == "IGST" ? "" : l.SgstCode,
+                igstCode      = l.Route == "LOCAL" ? "" : l.IgstCode,
+                requesterId   = l.RequesterId,
+                requesterName = l.RequesterName,
+                discPer       = l.DiscPer,
+                packingPer    = l.PackingPer,
+                freightPer    = l.FreightPer,
+                insurancePer  = l.InsurancePer,
+                cessPer       = l.CessPer,
+                fcaFob        = l.FcaFob,
+                otherCharges  = l.OtherCharges,
+                addTaxCode    = l.AddTaxCode,
+                addTaxPer     = l.AddTaxPer,
+                discApp       = l.DiscApp,
+                packApp       = l.PackApp,
+                freightPos    = l.FreightPos,
+                insuranceDuty = l.InsuranceDuty,
+                cessTaxPos    = l.CessTaxPos,
+                slots         = l.Slots.Select(s => new { shDate = s.ShDate, qty = s.Qty }),
+            }),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
         var p = new DynamicParameters();
         p.Add("DivCode",         divCode);
@@ -186,22 +243,24 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("CessPer",         request.Header.CessPer);
         p.Add("AedPer",          request.Header.AedPer);
         p.Add("FreightAmt",      request.Header.FreightAmt);
+        p.Add("FreightPer",      request.Header.FreightPer);
         p.Add("PackPer",         request.Header.PackPer);
         p.Add("InsurPer",        request.Header.InsurPer);
         p.Add("SurchargePer",    request.Header.SurchargePer);
         p.Add("AddTaxPer",       request.Header.AddTaxPer);
         p.Add("FileNo",          request.Header.FileNo);
         p.Add("FcaFob",          request.Header.FcaFob);
-        p.Add("FreightType",     request.Header.FreightType);
-        p.Add("DiscApp",         request.Header.DiscApp);
-        p.Add("PackApp",         request.Header.PackApp);
-        p.Add("FrtFlg",          request.Header.FreightApp == "AFTER" ? "A" : "B");
-        p.Add("InsFlg",          request.Header.InsurApp   == "AFTER" ? "A" : "B");
-        p.Add("CessApp",         request.Header.CessApp);
+        p.Add("FreightType",          request.Header.FreightType);
+        p.Add("DiscApp",              request.Header.DiscApp);
+        p.Add("PackApp",              request.Header.PackApp);
+        p.Add("FreightPosition",      request.Header.FreightPosition);
+        p.Add("InsurancePosition",    request.Header.InsurancePosition);
+        p.Add("CessApp",              request.Header.CessPosition);
         p.Add("PayMode",         request.Header.PayMode);
         p.Add("DirectInstr",     request.Header.DirectInstr);
         p.Add("BankCode",        request.Header.BankCode);
         p.Add("PaymentTerms",    request.Header.PaymentTerms);
+        p.Add("PayTermCode",     request.Header.PaymentTermCode);
         p.Add("AdvPer",          request.Header.AdvPer);
         p.Add("AdvAmt",          request.Header.AdvAmt);
         p.Add("ModeOfPayment",   request.Header.ModeOfPayment);
@@ -227,6 +286,7 @@ public class PoEntryRepository : IPoEntryRepository
         p.Add("HostName",        hostName);
         p.Add("IpAddress",       ipAddress);
         p.Add("LinesJson",       linesJson);
+        p.Add("RoundOff",        request.Header.RoundOff);
         p.Add("PoNo", dbType: DbType.Decimal, direction: ParameterDirection.Output);
 
         await _uow.Connection.ExecuteAsync(
@@ -235,6 +295,37 @@ public class PoEntryRepository : IPoEntryRepository
             commandType: CommandType.StoredProcedure);
 
         var poNo = p.Get<decimal>("PoNo");
+
+        // SP #13: deduct order value from PO_BUDGET (no-op if BudgetControl='N' in PO_PARA)
+        await _uow.Connection.ExecuteAsync(
+            StoredProcedures.Po.UpdateBudget,
+            new { DivCode = divCode, PoNo = poNo, PoDate = request.PoDate },
+            commandType: CommandType.StoredProcedure);
+
+        // SP #14: deduct ordered qty from PO_BUDGETQTY_YEAR (no-op if BudgetQty='N' in PO_PARA)
+        await _uow.Connection.ExecuteAsync(
+            StoredProcedures.Po.UpdateBudgetQty,
+            new { DivCode = divCode, PoNo = poNo, PoDate = request.PoDate },
+            commandType: CommandType.StoredProcedure);
+
+        // SP #15: record LPO rate history — always active, called once per line
+        foreach (var line in request.Lines)
+            await _uow.Connection.ExecuteAsync(
+                StoredProcedures.Po.SaveLpoRateHistory,
+                new
+                {
+                    DivCode   = divCode,
+                    PoNo      = poNo,
+                    PoDate    = request.PoDate,
+                    OrderType = request.Header.OrderType,
+                    Supplier  = request.Header.Supplier,
+                    ItemCode  = line.ItemCode,
+                    Qty       = line.Qty,
+                    Rate      = line.Rate,
+                    UserId    = userId
+                },
+                commandType: CommandType.StoredProcedure);
+
         return new PoSaveResultDto
         {
             PoNo   = poNo,
@@ -299,21 +390,96 @@ public class PoEntryRepository : IPoEntryRepository
             r.PrNo, r.PrSno, r.Qty, r.Rate, r.Value,
             r.TaxCode, r.TaxPer, r.TaxAmt,
             r.CgstPer, r.CgstAmt, r.SgstPer, r.SgstAmt,
-            r.IgstPer, r.IgstAmt, r.TcsPer, r.TcsAmt
+            r.IgstPer, r.IgstAmt, r.TcsPer, r.TcsAmt,
+            r.LineDis, r.LineDisAmt
         )).ToList();
 
         return new PoPrintDto(
-            header.DivLogo, header.DivName, header.DivPrintName,
+            header.DivLogo, header.DivName, header.DivPrintName, header.DivUnitName,
             header.DivAddress1, header.DivAddress2, header.DivAddress3,
-            header.DivPinCode, header.DivPhone, header.DivEmail, header.DivGstin,
+            header.DivPinCode, header.DivPhone, header.DivEmail, header.DivGstin, header.DivPan, header.DivWeb,
             header.DivCode, header.PoNo, header.PoDate,
-            header.SlCode, header.SlName, header.SlAddress, header.SlGstin,
+            header.SlCode, header.SlName, header.SlAddress, header.SlGstin, header.SlPhone, header.SlEmail,
             header.OrderType, header.Carrier, header.Currency, header.CurrRate,
             header.CreditDays, header.PayMode, header.Remarks,
             header.CgstPer, header.SgstPer, header.IgstPer, header.TcsPer,
             header.DiscPer, header.FreightAmt, header.RoundOff, header.OrderValue,
             header.FirstLevelApp, header.Conflg, header.CreatedBy, header.CreatedDt,
+            header.RefNo, header.RefDate, header.DeliveryDate, header.Purpose,
+            header.PayTerms, header.InsAmt, header.PackAmt,
+            header.DivStateCode, header.SlStateCode,
             lines
+        );
+    }
+
+    // Legacy Crystal print path (KSP_PR_PO_gst): single flat result set, range params.
+    // For a single PO we pass FPONO=TPONO and FPODATE=TPODATE; the header is lifted from
+    // the first row and the lines come from every row. Maps into the shared PoPrintDto so
+    // PurchaseOrderDocumentV2 renders it unchanged. Multi-line addresses are pre-composed
+    // with '\n' (QuestPDF renders newlines as line breaks).
+    public async Task<PoPrintDto?> GetPrintDataGstAsync(string divCode, decimal poNo, DateOnly poDate)
+    {
+        var rows = (await _uow.Connection.QueryAsync<PoPrintGstRow>(
+            StoredProcedures.Po.GetPrintDataGst,
+            new
+            {
+                DIVCODE = divCode,
+                FPONO   = ((long)poNo).ToString(),
+                TPONO   = ((long)poNo).ToString(),
+                FPODATE = poDate.ToString("yyyy-MM-dd"),
+                TPODATE = poDate.ToString("yyyy-MM-dd")
+            },
+            commandType: CommandType.StoredProcedure)).ToList();
+
+        if (rows.Count == 0) return null;
+        var h = rows[0];
+
+        static string Join(string sep, params string[] parts) =>
+            string.Join(sep, parts.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim()));
+
+        static string Fmt(DateTime? d, string f) => d.HasValue ? d.Value.ToString(f) : "";
+
+        // Supplier "To" address — add1 / add2 / add3 / city - pin / state, country
+        var slAddress = Join("\n",
+            h.add1, h.add2, h.add3,
+            Join(" - ", h.city, h.pin),
+            Join(", ", h.state, h.country));
+
+        // Division pincode slot folds "city - pin" + state so the letterhead/delivery
+        // address show the full block within the existing four address slots.
+        var divPinLine = Join("\n", Join(" - ", h.DCITY, h.DPINCODE), h.DSTATENAME);
+
+        var lines = rows.Select((r, i) => new PoPrintLineDto(
+            i + 1,
+            r.ITEMCODE,
+            Join(" ", r.ITEMNAME, r.ITEMSPEC1, r.ITEMSPEC2, r.ITEMSPEC3),
+            r.UOM,
+            r.itemHsn,
+            0m, 0m,
+            r.ORDQTY, r.RATE, r.LORDVAL,
+            "", 0m, 0m,
+            r.cgstper, r.cgstamt, r.sgstper, r.sgstamt,
+            r.igstper, r.igstamt, r.tcs_per, r.tcs_amt,
+            r.DISPER, r.disamt
+        )).ToList();
+
+        return new PoPrintDto(
+            h.DIV_LOGO, h.DIV_PRINTNAME, h.DIV_PRINTNAME, h.DIV_UNITNAME,
+            h.DADD1, h.DADD2, h.DADD3,
+            divPinLine, h.DPHONE1, h.DEMAIL, h.div_gstinno, h.DPAN, h.DWEBADDR,
+            h.DIVCODE, h.PORDNO, DateOnly.FromDateTime(h.PORDDT),
+            "", h.slname, slAddress, h.sup_gstinno, h.sup_phone1, h.sup_email,
+            "", h.CARNAME, h.CurrCode, 1m,
+            0, "", h.hremarks,
+            0m, 0m, 0m, 0m,
+            0m, rows.Sum(r => r.FREIGHT), h.roff, 0m,
+            "N", "N", h.createdby, Fmt(h.createddt, "dd/MM/yyyy  hh:mm:sstt"),
+            h.refno, Fmt(h.RefDate, "dd/MM/yyyy"), Fmt(h.duedate, "dd/MM/yyyy"), h.NOTE,
+            h.PAYTERMS, rows.Sum(r => r.INS_AMT), rows.Sum(r => r.PACKAMT),
+            h.div_GSTstateCode, h.sup_gststatecode,
+            lines,
+            rows.Sum(r => r.OTHCHGS),
+            h.FinalAppSign
         );
     }
 
@@ -332,23 +498,26 @@ public class PoEntryRepository : IPoEntryRepository
             PoQty    = kvp.Value.First().PoQty,
             Slots    = kvp.Value.Select(s => new DeliverySlotDto
             {
-                SlotNo  = (int)s.SlotNo,
-                ShDate  = s.ShDate,
-                Qty     = s.Qty,
-                Remarks = s.Remarks
+                SlotNo = (int)s.SlotNo,
+                ShDate = s.ShDate,
+                Qty    = s.Qty,
             }).ToList()
         }).ToList();
     }
 
-    private sealed record DeliverySlotRow(
-        decimal LineNo,   // PORDSNO is NUMERIC in SQL — must be decimal
-        string  ItemCode,
-        string  ItemName,
-        string  Uom,
-        decimal PrNo,
-        decimal PoQty,
-        long    SlotNo,   // ROW_NUMBER() always returns BIGINT — must be long
-        string? ShDate,
-        decimal Qty,
-        string  Remarks);
+    // Class (not positional record) so Dapper maps by property name and tolerates extra
+    // result columns (e.g. Remarks) / column-order changes. A positional record forces a
+    // constructor match against the result shape and throws when they diverge.
+    private sealed class DeliverySlotRow
+    {
+        public decimal LineNo   { get; set; }   // PORDSNO is NUMERIC in SQL — must be decimal
+        public string  ItemCode { get; set; } = "";
+        public string  ItemName { get; set; } = "";
+        public string  Uom      { get; set; } = "";
+        public decimal PrNo     { get; set; }
+        public decimal PoQty    { get; set; }
+        public long    SlotNo   { get; set; }   // ROW_NUMBER() always returns BIGINT — must be long
+        public string? ShDate   { get; set; }
+        public decimal Qty      { get; set; }
+    }
 }

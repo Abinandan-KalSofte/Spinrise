@@ -7,7 +7,8 @@
 --   2. BR-04: All line delete reasons must be non-empty.
 --   3. Write audit row to LogDet_PO.
 --   4. Reverse QTYORD on PO_PRL (restore PR balance).
---   5. Cascade delete: PO_ORDL_DETL → PO_ORDL → PO_ORDH.
+--   5. Reset PRSTATUS → '' and FClosed → 'N' on PO_PRL so PR lines reappear in picker (POT-LC-01).
+--   6. Cascade delete: PO_ORDL_DETL → PO_ORDL → PO_ORDH.
 -- All steps in one atomic transaction (THROW re-raises on error).
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_DeletePO
@@ -77,6 +78,24 @@ BEGIN
         -- Reverse QTYORD on PR lines (restore PR balance)
         UPDATE prl
         SET    prl.qtyord = ISNULL(prl.qtyord, 0) - ISNULL(pol.ORDqty, 0)
+        FROM   dbo.PO_PRL prl
+        INNER JOIN dbo.PO_ORDL pol
+            ON  pol.DIVCODE = prl.divcode
+            AND pol.PRNO    = prl.prno
+            AND CAST(pol.PRDATE AS DATE) = CAST(prl.prdate AS DATE)
+            AND pol.PRSNO   = prl.prsno
+        WHERE  pol.DIVCODE = @DivCode
+          AND  pol.PORDNO  = @PoNo
+          AND  CAST(pol.PORDDT AS DATE) = @PoDate;
+
+        -- POT-LC-01 / CD-NEW-01: Restore PR line visibility after PO delete.
+        -- Reset PRSTATUS 'O' → '' so line passes the NOT IN ('O',...) filter in GetPRLines.
+        -- Reset FClosed 'Y' → 'N' for fully-ordered lines (set by SaveEntry on full order).
+        -- No FClosed='Y' guard — partial-order lines also carry PRSTATUS='O' before SaveEntry fix,
+        -- so reset all affected lines unconditionally.
+        UPDATE prl
+        SET    prl.FClosed  = 'N',
+               prl.PRSTATUS = CASE WHEN prl.PRSTATUS = 'O' THEN '' ELSE prl.PRSTATUS END
         FROM   dbo.PO_PRL prl
         INNER JOIN dbo.PO_ORDL pol
             ON  pol.DIVCODE = prl.divcode

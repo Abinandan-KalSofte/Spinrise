@@ -4,6 +4,7 @@
     <ProjectReference Include="..\Spinrise.Application\Spinrise.Application.csproj" />
     <ProjectReference Include="..\Spinrise.Shared\Spinrise.Shared.csproj" />
     <ProjectReference Include="..\Spinrise.Infrastructure\Spinrise.Infrastructure.csproj" />
+    <ProjectReference Include="..\Spinrise.Reports\Spinrise.Reports.csproj" />
   </ItemGroup>
 
   <ItemGroup>

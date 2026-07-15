@@ -14,6 +14,9 @@ public interface IPoEntryService
     Task<IEnumerable<FormTypeOptionDto>>  GetFormTypesAsync();
     Task<IEnumerable<GstTaxCodeOptionDto>>  GetGstTaxCodesAsync(string? search);
     Task<IEnumerable<AddressOptionDto>>     GetAddressesAsync(string divCode, string kind, string? search);
+    Task<IEnumerable<CurrencyOptionDto>>    GetCurrenciesAsync(string? search);
+    Task<IEnumerable<AddressOptionDto>>     GetPricingTermsAsync(string? search);
+    Task<IEnumerable<PayTermOptionDto>>     GetPayTermsAsync();
     Task<GstRoutingResultDto>             GetGstRoutingAsync(string divCode, string slCode);
     Task<IEnumerable<EligiblePrLineDto>>  GetEligiblePrLinesAsync(string divCode, string? orderType, string? search, int page, int pageSize);
     Task<IEnumerable<PoSummaryDto>>       GetListAsync(string divCode, DateOnly fDate, DateOnly lDate, string? search, string? supplier, int page, int pageSize);
@@ -22,5 +25,6 @@ public interface IPoEntryService
     Task<PoSaveResultDto>                 AddAsync(string divCode, AddPoRequest request, string userId, string? hostName, string? ipAddress, DateOnly fDate, DateOnly lDate);
     Task                                  DeleteAsync(string divCode, DeletePoRequest request, string userId, string? hostName, string? ipAddress);
     Task<PoPrintDto?>                     GetPrintDataAsync(string divCode, decimal poNo, DateOnly poDate);
+    Task<PoPrintDto?>                     GetPrintDataGstAsync(string divCode, decimal poNo, DateOnly poDate);
     Task                                  UpdatePrintFlagAsync(string divCode, decimal poNo, DateOnly poDate);
 }

@@ -7,6 +7,7 @@ public class SupplierOptionDto
     public string GstinNo      { get; set; } = "";
     public string GstStateCode { get; set; } = "";
     public string GstStateName { get; set; } = "";
+    public string City         { get; set; } = "";   // CR-003
 }
 
 public class OrderTypeOptionDto
@@ -54,4 +55,17 @@ public class AddressOptionDto
 {
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
+}
+
+public class CurrencyOptionDto
+{
+    public string  CurrCode { get; set; } = "";
+    public string  CurrName { get; set; } = "";
+    public decimal CurrRate { get; set; }
+}
+
+public class PayTermOptionDto
+{
+    public string PayTermCode { get; set; } = "";
+    public string PayTermDesc { get; set; } = "";
 }

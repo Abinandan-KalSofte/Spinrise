@@ -61,7 +61,7 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                            && _po.DivStateCode == _po.SlStateCode;
         var grandTotal = totalLineValue - totalDiscount
             + (isIntraState ? totalCgst + totalSgst : totalIgst)
-            + _po.FreightAmt + _po.InsAmt + _po.PackAmt
+            + _po.FreightAmt + _po.InsAmt + _po.PackAmt + _po.OtherCharges
             + totalTcs + _po.RoundOff;
 
         var companyName = string.IsNullOrWhiteSpace(_po.DivPrintName) ? _po.DivName : _po.DivPrintName;
@@ -508,7 +508,7 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                    var addrParts = new[] { _po.DivAddress1, _po.DivAddress2, _po.DivAddress3 }
                        .Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
                    if (!string.IsNullOrWhiteSpace(_po.DivPinCode)) addrParts.Add(_po.DivPinCode);
-                   var deliveryAddr = string.Join(" ", addrParts);
+                   var deliveryAddr = string.Join("\n", addrParts);
 
                    col.Item().PaddingTop(2).PaddingBottom(1).Row(r =>
                    {
@@ -572,7 +572,7 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                    AmtRow("Freight", F2(_po.FreightAmt));
                    AmtRow("Insurance Amt.", F2(_po.InsAmt));
                    AmtRow("Packing & Forwarding", F2(_po.PackAmt));
-                   AmtRow("Other Charges", F2(0m));
+                   AmtRow("Other Charges", F2(_po.OtherCharges));
                    var tcsPer = _po.Lines.FirstOrDefault(l => l.TcsPer != 0m)?.TcsPer ?? 0m;
                    AmtRow($"TCS {F3(tcsPer)}%", F2(totalTcs));
                    AmtRow("Round off", F2(_po.RoundOff));
@@ -582,6 +582,41 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                    AmtRow("Total Amount", $"{totalCurr}  {F2(grandTotal)}", bold: true, topBorder: true);
                });
         });
+    }
+
+    // Extracts a renderable image from a possibly OLE-wrapped legacy binary (e.g. an
+    // Access/VB6 "image" column). Scans the first bytes for a known image header and
+    // strips any wrapper; returns null when nothing renderable is found so QuestPDF
+    // never throws on bad bytes.
+    private static byte[]? ExtractImageBytes(byte[]? raw)
+    {
+        if (raw is null || raw.Length < 4) return null;
+
+        static bool At(byte[] b, int i, params byte[] sig)
+        {
+            if (i + sig.Length > b.Length) return false;
+            for (var k = 0; k < sig.Length; k++)
+                if (b[i + k] != sig[k]) return false;
+            return true;
+        }
+
+        // BMP only at offset 0 (its 2-byte signature is too weak to scan for safely).
+        if (At(raw, 0, 0x42, 0x4D)) return raw;
+
+        var limit = Math.Min(raw.Length - 4, 512);
+        for (var i = 0; i <= limit; i++)
+        {
+            if (At(raw, i, 0xFF, 0xD8, 0xFF) ||             // JPEG
+                At(raw, i, 0x89, 0x50, 0x4E, 0x47) ||       // PNG
+                At(raw, i, 0x47, 0x49, 0x46, 0x38))         // GIF
+            {
+                if (i == 0) return raw;
+                var clean = new byte[raw.Length - i];
+                Array.Copy(raw, i, clean, 0, clean.Length);
+                return clean;
+            }
+        }
+        return null;
     }
 
     private void ComposeSignature(IContainer c, string companyName)
@@ -597,11 +632,15 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                  t.Span($"For {companyName}").Bold().FontSize(FsData).FontColor(Black);
              });
 
-             // Logo — right side, below the company line
-             if (_po.DivLogo is { Length: > 0 })
+             // Authorised-signatory signature (PO_ParaPOApproval.SIGNATURE → FinalAppSign).
+             // Replaces the old company-logo stamp. Bytes are validated/cleaned because the
+             // legacy column can be OLE-wrapped; unrecognised bytes render nothing so a bad
+             // image never crashes the whole PDF. Blank box on an unapproved PO (matches legacy).
+             var authSign = ExtractImageBytes(_po.AuthorisedSign);
+             if (authSign is not null)
                  col.Item().AlignRight().PaddingTop(2)
                     .MaxHeight(15, Unit.Millimetre)
-                    .Image(_po.DivLogo).FitHeight();
+                    .Image(authSign).FitHeight();
 
              // Bottom row of signature labels — no vertical dividers
              col.Item().PaddingTop(6).Row(row =>
@@ -610,6 +649,9 @@ public sealed class PurchaseOrderDocumentV2 : IDocument
                  {
                      if (!string.IsNullOrWhiteSpace(_po.CreatedBy))
                          c2.Item().Text(t => { t.AlignLeft(); t.Span(_po.CreatedBy).FontSize(FsData); });
+                     // Createddt timestamp under the creator name (legacy parity)
+                     if (!string.IsNullOrWhiteSpace(_po.CreatedDt))
+                         c2.Item().Text(t => { t.AlignLeft(); t.Span(_po.CreatedDt).FontSize(FsSmall); });
                      c2.Item().Text(t => { t.AlignLeft(); t.Span("Prepared by").Bold().FontSize(FsData); });
                  });
                  row.RelativeItem().AlignBottom().Text(t => { t.AlignCenter(); t.Span("Checked by").Bold().FontSize(FsData); });

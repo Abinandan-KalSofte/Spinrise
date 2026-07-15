@@ -1,10 +1,8 @@
 -- ============================================================
 -- ksp_PO_GetAddresses
 -- Returns delivery or billing address lookup (Instructions tab).
--- @Kind = 'delivery' or 'billing'
--- ⚠ VERIFY: address lookup table name and column names.
---   Possible tables: PO_ADDMAS, FA_ADDMAS, IN_ADDRESS.
--- ⚠ VERIFY: KIND column/filter logic — how delivery vs billing is distinguished.
+-- @Kind = 'DELIVERY' → in_deladd | 'BILLING' → in_billadd
+-- Source: indenttopo.frm L12877 / L12899
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetAddresses
 (
@@ -16,15 +14,31 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT
-        RTRIM(a.ADDCODE) AS Code,   -- ⚠ VERIFY: column name ADDCODE
-        RTRIM(a.ADDNAME) AS Name    -- ⚠ VERIFY: column name ADDNAME
-    FROM dbo.PO_ADDMAS a            -- ⚠ VERIFY: table name PO_ADDMAS
-    WHERE RTRIM(ISNULL(a.divcode, '')) = @DivCode
-      AND UPPER(RTRIM(ISNULL(a.ADDTYPE, ''))) = UPPER(@Kind)  -- ⚠ VERIFY: KIND column ADDTYPE
-      AND (@Search IS NULL
-           OR RTRIM(a.ADDCODE) LIKE @Search + '%'
-           OR RTRIM(a.ADDNAME) LIKE '%' + @Search + '%')
-    ORDER BY a.ADDNAME;
+    IF UPPER(@Kind) = 'DELIVERY'
+    BEGIN
+        SELECT
+            RTRIM(a.slcode) AS Code,
+            RTRIM(a.slname) AS Name
+        FROM dbo.in_deladd a
+        WHERE RTRIM(a.divcode) = @DivCode
+          AND ISNULL(a.Active, 'N') = 'Y'
+          AND (@Search IS NULL
+               OR RTRIM(a.slcode) LIKE @Search + '%'
+               OR RTRIM(a.slname) LIKE '%' + @Search + '%')
+        ORDER BY a.slname;
+    END
+    ELSE IF UPPER(@Kind) = 'BILLING'
+    BEGIN
+        SELECT
+            RTRIM(a.slcode) AS Code,
+            RTRIM(a.slname) AS Name
+        FROM dbo.in_billadd a
+        WHERE RTRIM(a.divcode) = @DivCode
+          AND ISNULL(a.Active, 'N') = 'Y'
+          AND (@Search IS NULL
+               OR RTRIM(a.slcode) LIKE @Search + '%'
+               OR RTRIM(a.slname) LIKE '%' + @Search + '%')
+        ORDER BY a.slname;
+    END
 END;
 GO

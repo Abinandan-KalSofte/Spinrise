@@ -4370,10 +4370,8 @@ GO
 -- ============================================================
 -- ksp_PO_GetAddresses
 -- Returns delivery or billing address lookup (Instructions tab).
--- @Kind = 'delivery' or 'billing'
--- ⚠ VERIFY: address lookup table name and column names.
---   Possible tables: PO_ADDMAS, FA_ADDMAS, IN_ADDRESS.
--- ⚠ VERIFY: KIND column/filter logic — how delivery vs billing is distinguished.
+-- @Kind = 'DELIVERY' → in_deladd | 'BILLING' → in_billadd
+-- Source: indenttopo.frm L12877 / L12899
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetAddresses
 (
@@ -4385,30 +4383,102 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT
-        RTRIM(a.ADDCODE) AS Code,   -- ⚠ VERIFY: column name ADDCODE
-        RTRIM(a.ADDNAME) AS Name    -- ⚠ VERIFY: column name ADDNAME
-    FROM dbo.PO_ADDMAS a            -- ⚠ VERIFY: table name PO_ADDMAS
-    WHERE RTRIM(ISNULL(a.divcode, '')) = @DivCode
-      AND UPPER(RTRIM(ISNULL(a.ADDTYPE, ''))) = UPPER(@Kind)  -- ⚠ VERIFY: KIND column ADDTYPE
-      AND (@Search IS NULL
-           OR RTRIM(a.ADDCODE) LIKE @Search + '%'
-           OR RTRIM(a.ADDNAME) LIKE '%' + @Search + '%')
-    ORDER BY a.ADDNAME;
+    IF UPPER(@Kind) = 'DELIVERY'
+    BEGIN
+        SELECT
+            RTRIM(a.slcode) AS Code,
+            RTRIM(a.slname) AS Name
+        FROM dbo.in_deladd a
+        WHERE RTRIM(a.divcode) = @DivCode
+          AND ISNULL(a.Active, 'N') = 'Y'
+          AND (@Search IS NULL
+               OR RTRIM(a.slcode) LIKE @Search + '%'
+               OR RTRIM(a.slname) LIKE '%' + @Search + '%')
+        ORDER BY a.slname;
+    END
+    ELSE IF UPPER(@Kind) = 'BILLING'
+    BEGIN
+        SELECT
+            RTRIM(a.slcode) AS Code,
+            RTRIM(a.slname) AS Name
+        FROM dbo.in_billadd a
+        WHERE RTRIM(a.divcode) = @DivCode
+          AND ISNULL(a.Active, 'N') = 'Y'
+          AND (@Search IS NULL
+               OR RTRIM(a.slcode) LIKE @Search + '%'
+               OR RTRIM(a.slname) LIKE '%' + @Search + '%')
+        ORDER BY a.slname;
+    END
 END;
 GO
 
 
 
 -- ============================================================
+-- ksp_PO_GetCurrencies
+-- Returns active currency list with latest conversion rate.
+-- Source: indenttopo.frm L12975; rate from PO_ConvFactT L12962
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetCurrencies
+(
+    @Search VARCHAR(100) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        RTRIM(c.currcode) AS CurrCode,
+        RTRIM(c.currname) AS CurrName,
+        ISNULL((
+            SELECT TOP 1 r.ConvFact
+            FROM dbo.PO_ConvFactT r
+            WHERE r.CurrCode = c.currcode
+            ORDER BY r.FromDate DESC
+        ), 0) AS CurrRate
+    FROM dbo.FA_CURRENCY c
+    WHERE ISNULL(c.Active, 'N') = 'Y'
+      AND (@Search IS NULL
+           OR RTRIM(c.currcode) LIKE @Search + '%'
+           OR RTRIM(c.currname) LIKE '%' + @Search + '%')
+    ORDER BY c.currcode;
+END;
+GO
+
+
+
+-- ============================================================
+-- ksp_PO_GetPricingTerms
+-- Returns pricing terms lookup for PO Instructions tab.
+-- Source: indenttopo.frm L12344
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPricingTerms
+(
+    @Search VARCHAR(100) = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        RTRIM(t.SCode) AS Code,
+        RTRIM(t.SName) AS Name
+    FROM dbo.Ex_ShipTerm t
+    WHERE (@Search IS NULL
+           OR RTRIM(t.SCode) LIKE @Search + '%'
+           OR RTRIM(t.SName) LIKE '%' + @Search + '%')
+    ORDER BY t.SCode;
+END;
+GO
+
+
+
 -- ksp_PO_GetPRLines
 -- Returns eligible PR lines for the PO PR Picker (BR-02).
 -- Filter: DirectApp='Y', Fclosed<>'Y', balance qty > 0,
 --         prstatus NOT IN ('O','E','C','Z','X'), PR not cancelled.
 -- Balance = QTYREQD - QTYORD - Enq_Qty
--- PO_PRL has NO GST columns — CgstPer/SgstPer/IgstPer default to 0.
--- User sets tax codes in the GST modal after loading lines.
--- ⚠ VERIFY: IN_ITEM.hsncode column — may differ.
+-- GST columns (CgstPer/SgstPer/IgstPer/GstTaxCode) sourced from IN_ITEM.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPRLines
 (
@@ -4436,11 +4506,11 @@ BEGIN
         RTRIM(ISNULL(d.depname, ''))                                    AS Department,
         RTRIM(ISNULL(scc.SCCNAME, ''))                                  AS SubCostCentre,
         RTRIM(ISNULL(l.remarks, ''))                                    AS Remarks,
-        RTRIM(ISNULL(i.hsncode, ''))                                    AS HsnCode,   -- ⚠ VERIFY: IN_ITEM.hsncode
-        CAST(0 AS DECIMAL(10,2))                                        AS CgstPer,   -- PO_PRL has no GST columns
-        CAST(0 AS DECIMAL(10,2))                                        AS SgstPer,
-        CAST(0 AS DECIMAL(10,2))                                        AS IgstPer,
-        ''                                                              AS GstTaxCode,
+        RTRIM(ISNULL(i.hsncode, ''))                                    AS HsnCode,
+        ISNULL(i.CGST_PER, 0)                                          AS CgstPer,
+        ISNULL(i.SGST_PER, 0)                                          AS SgstPer,
+        ISNULL(i.IGST_PER, 0)                                          AS IgstPer,
+        RTRIM(ISNULL(i.GSTTAXCODE, ''))                                AS GstTaxCode,
         RTRIM(ISNULL(h.REQNAME, ''))                                    AS RequesterId,
         RTRIM(ISNULL(e.ename, ''))                                      AS RequesterName
     FROM dbo.PO_PRL l
@@ -4519,7 +4589,7 @@ BEGIN
                NULL AS FreightAmt, NULL AS PackPer, NULL AS InsurPer,
                NULL AS SurchargePer, NULL AS AddTaxPer, NULL AS FileNo,
                NULL AS FcaFob, NULL AS FreightType, NULL AS DiscApp,
-               NULL AS PackApp, NULL AS FreightApp, NULL AS InsurApp, NULL AS CessApp, NULL AS PayMode,
+               NULL AS PackApp, NULL AS CessApp, NULL AS PayMode,
                NULL AS DirectInstr, NULL AS BankCode, NULL AS PaymentTerms,
                NULL AS AdvPer, NULL AS AdvAmt, NULL AS ModeOfPayment,
                NULL AS PayRef, NULL AS PayRefDate, NULL AS ChequeNo,
@@ -4561,11 +4631,11 @@ BEGIN
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         RTRIM(ISNULL(h.REMARKS, ''))                                AS Remarks,
-        -- Header GST %: PO_ORDH stores amounts only; derive % from first PO_ORDL line (P2-03)
-        ISNULL((SELECT TOP 1 cgstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS CgstPer,
-        ISNULL((SELECT TOP 1 sgstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS SgstPer,
-        ISNULL((SELECT TOP 1 igstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS IgstPer,
-        ISNULL((SELECT TOP 1 tcs_per FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS TcsPer,
+        -- Header GST: PO_ORDH stores amounts only (CGSTAMT/SGSTAMT/IGSTAMT), not percentages
+        CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS TcsPer,
         ISNULL(h.DISPER, 0)                                         AS DiscPer,
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
@@ -4577,11 +4647,9 @@ BEGIN
         RTRIM(ISNULL(h.FILENO, ''))                                 AS FileNo,
         ISNULL(h.FCACharg, 0)                                       AS FcaFob,
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
-        'BEFORE'                                                    AS DiscApp,
-        'BEFORE'                                                    AS PackApp,
-        CASE WHEN RTRIM(ISNULL(h.FRT_FLG, 'B')) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightApp,
-        CASE WHEN RTRIM(ISNULL(h.INS_FLG, 'B')) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurApp,
-        'BEFORE'                                                    AS CessApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
+        'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
@@ -4768,11 +4836,11 @@ BEGIN
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         RTRIM(ISNULL(h.REMARKS, ''))                                AS Remarks,
-        -- Header GST %: PO_ORDH stores amounts only; derive % from first PO_ORDL line (P2-03)
-        ISNULL((SELECT TOP 1 cgstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS CgstPer,
-        ISNULL((SELECT TOP 1 sgstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS SgstPer,
-        ISNULL((SELECT TOP 1 igstper FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS IgstPer,
-        ISNULL((SELECT TOP 1 tcs_per FROM dbo.PO_ORDL WHERE DIVCODE = h.DIVCODE AND PORDNO = h.PORDNO ORDER BY PORDSNO), 0) AS TcsPer,
+        -- Header GST: PO_ORDH stores amounts only (CGSTAMT/SGSTAMT/IGSTAMT), not percentages
+        CAST(0 AS DECIMAL(10,2))                                    AS CgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS SgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS IgstPer,
+        CAST(0 AS DECIMAL(10,2))                                    AS TcsPer,
         ISNULL(h.DISPER, 0)                                         AS DiscPer,
         ISNULL(h.Cessper, 0)                                        AS CessPer,
         CAST(0 AS DECIMAL(10,2))                                    AS AedPer,
@@ -4784,11 +4852,9 @@ BEGIN
         RTRIM(ISNULL(h.FILENO, ''))                                 AS FileNo,
         ISNULL(h.FCACharg, 0)                                       AS FcaFob,
         CASE WHEN RTRIM(ISNULL(h.FRTFLG,'')) = 'Y' THEN 'TOPAY' ELSE 'PAID' END AS FreightType,
-        'BEFORE'                                                    AS DiscApp,
-        'BEFORE'                                                    AS PackApp,
-        CASE WHEN RTRIM(ISNULL(h.FRT_FLG, 'B')) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS FreightApp,
-        CASE WHEN RTRIM(ISNULL(h.INS_FLG, 'B')) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS InsurApp,
-        'BEFORE'                                                    AS CessApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.disflg,   ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS DiscApp,
+        CASE WHEN UPPER(RTRIM(ISNULL(h.PACK_FLG, ''))) = 'A' THEN 'AFTER' ELSE 'BEFORE' END AS PackApp,
+        'BEFORE'                                                                              AS CessApp,  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026)
         -- Payment
         CASE WHEN RTRIM(ISNULL(h.PAYMENT, 'D')) = 'B' THEN 'BANK' ELSE 'DIRECT' END AS PayMode,
         RTRIM(ISNULL(h.DIRECT_INS, ''))                             AS DirectInstr,
@@ -4929,10 +4995,10 @@ GO
 -- Returns print data for a PO (PDF generation via QuestPDF).
 -- Returns 2 result sets: (1) header with division letterhead,
 --                        (2) PO lines.
--- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno.
--- FA_SLMAS confirmed columns: add1, add2, gstinno (lowercase).
+-- PP_DIVMAS confirmed columns: div_printname, PHONE1, gstinno,
+--   add1, add2, add3, pincode, email — all verified.
+-- FA_SLMAS confirmed columns: add1, add2, state, gstinno (lowercase). add3/city/pin unverified.
 -- PO_ORDH: GST % columns don't exist — amounts only.
--- ⚠ VERIFY: div.add1/add2/add3/pincode/email — column names.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPrint
 (
@@ -4947,16 +5013,19 @@ BEGIN
     -- ─── Result set 1: Print header (div letterhead + PO header) ──────────────
     SELECT
         -- Division letterhead
-        NULL                                                        AS DivLogo,
+        div.DIV_LOGO                                                AS DivLogo,
         RTRIM(ISNULL(div.divname, ''))                              AS DivName,
         RTRIM(ISNULL(div.div_printname, div.divname))               AS DivPrintName,
-        RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,   -- ⚠ VERIFY column
-        RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,   -- ⚠ VERIFY column
-        RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,   -- ⚠ VERIFY column
-        RTRIM(ISNULL(div.pincode, ''))                              AS DivPinCode,    -- ⚠ VERIFY column
+        RTRIM(ISNULL(div.div_unitname, ''))                         AS DivUnitName,
+        RTRIM(ISNULL(div.add1, ''))                                 AS DivAddress1,
+        RTRIM(ISNULL(div.add2, ''))                                 AS DivAddress2,
+        RTRIM(ISNULL(div.add3, ''))                                 AS DivAddress3,
+        RTRIM(ISNULL(div.pincode, ''))                              AS DivPinCode,
         RTRIM(ISNULL(div.PHONE1, ''))                               AS DivPhone,
-        RTRIM(ISNULL(div.email, ''))                                AS DivEmail,      -- ⚠ VERIFY column
+        RTRIM(ISNULL(div.email, ''))                                AS DivEmail,
         RTRIM(ISNULL(div.gstinno, ''))                              AS DivGstin,
+        RTRIM(ISNULL(div.PAN, ''))                                  AS DivPan,
+        RTRIM(ISNULL(div.WEBADDR, ''))                              AS DivWeb,
         -- PO header
         RTRIM(h.DIVCODE)                                            AS DivCode,
         h.PORDNO                                                    AS PoNo,
@@ -4964,11 +5033,14 @@ BEGIN
         RTRIM(ISNULL(h.SLCODE, ''))                                 AS SlCode,
         RTRIM(ISNULL(sl.slname, ''))                                AS SlName,
         RTRIM(ISNULL(sl.add1, '')) +
-            CASE WHEN RTRIM(ISNULL(sl.add2, '')) <> ''
-                 THEN ' ' + RTRIM(sl.add2) ELSE '' END              AS SlAddress,
+            CASE WHEN RTRIM(ISNULL(sl.add2,  '')) <> '' THEN ', ' + RTRIM(sl.add2)  ELSE '' END +
+            CASE WHEN RTRIM(ISNULL(sl.state, '')) <> '' THEN ', ' + RTRIM(sl.state) ELSE '' END
+                                                                     AS SlAddress,
         RTRIM(ISNULL(sl.gstinno, ''))                               AS SlGstin,
+        RTRIM(ISNULL(sl.phone1, ''))                                AS SlPhone,
+        RTRIM(ISNULL(sl.email, ''))                                 AS SlEmail,
         RTRIM(ISNULL(h.POGRP, ''))                                  AS OrderType,
-        RTRIM(ISNULL(h.CARCODE, ''))                                AS Carrier,
+        RTRIM(ISNULL(car.CARNAME, h.CARCODE))                       AS Carrier,
         RTRIM(ISNULL(h.CurrCode, ''))                               AS Currency,
         ISNULL(h.FCurRate, 1)                                       AS CurrRate,
         ISNULL(h.CRDDAYS, 0)                                        AS CreditDays,
@@ -4986,12 +5058,26 @@ BEGIN
         RTRIM(ISNULL(h.FirstlevelApp, 'N'))                         AS FirstLevelApp,
         RTRIM(ISNULL(h.Conflg, 'N'))                                AS Conflg,
         RTRIM(ISNULL(h.createdby, ''))                              AS CreatedBy,
-        ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt
+        ISNULL(CONVERT(varchar(19), h.createddt, 103), '')          AS CreatedDt,
+        -- Additional fields for V2 print
+        RTRIM(ISNULL(h.refno, ''))                                  AS RefNo,
+        CASE WHEN h.refDate IS NULL THEN ''
+             ELSE CONVERT(varchar(10), h.refDate, 103) END          AS RefDate,
+        CASE WHEN h.Duedate IS NULL THEN ''
+             ELSE CONVERT(varchar(10), h.Duedate, 103) END          AS DeliveryDate,
+        RTRIM(ISNULL(h.Note, ''))                                   AS Purpose,
+        RTRIM(ISNULL(h.paytermcode, ''))                            AS PayTerms,
+        ISNULL(h.Ins_Amt, 0)                                        AS InsAmt,
+        ISNULL(h.Pack_Amt, 0)                                       AS PackAmt,
+        LEFT(ISNULL(div.gstinno, ''), 2)                            AS DivStateCode,
+        LEFT(ISNULL(sl.gstinno, ''), 2)                             AS SlStateCode
     FROM dbo.PO_ORDH h
     LEFT JOIN dbo.pp_divmas div
         ON RTRIM(div.divcode) = RTRIM(h.DIVCODE)
     LEFT JOIN dbo.FA_SLMAS sl
         ON RTRIM(sl.slcode) = RTRIM(h.SLCODE)
+    LEFT JOIN dbo.PO_CAR car
+        ON RTRIM(car.CARCODE) = RTRIM(h.CARCODE)
     WHERE h.DIVCODE = @DivCode
       AND h.PORDNO  = @PoNo
       AND CAST(h.PORDDT AS DATE) = @PoDate;
@@ -5018,7 +5104,9 @@ BEGIN
         ISNULL(l.igstper, 0)                                        AS IgstPer,
         ISNULL(l.igstamt, 0)                                        AS IgstAmt,
         ISNULL(l.Tcs_per, 0)                                        AS TcsPer,
-        ISNULL(l.Tcs_amt, 0)                                        AS TcsAmt
+        ISNULL(l.Tcs_amt, 0)                                        AS TcsAmt,
+        ISNULL(l.disper, 0)                                         AS LineDis,
+        ISNULL(l.disamt, 0)                                         AS LineDisAmt
     FROM dbo.PO_ORDL l
     INNER JOIN dbo.IN_ITEM i
         ON i.itemcode = l.ITEMCODE
@@ -5086,11 +5174,9 @@ CREATE OR ALTER PROCEDURE dbo.ksp_PO_SaveEntry
     @FileNo           VARCHAR(20)    = NULL,
     @FcaFob           NUMERIC(13,2)  = 0,
     @FreightType      VARCHAR(10)    = 'PAID',
-    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- DISFLG: stored as LEFT(@DiscApp,1) → 'B'/'A'
-    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG
-    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg
-    @FrtFlg           VARCHAR(1)     = 'B',       -- FRT_FLG: 'B'=Before-tax / 'A'=After-tax
-    @InsFlg           VARCHAR(1)     = 'B',       -- INS_FLG: 'B'=Before-tax / 'A'=After-tax
+    @DiscApp          VARCHAR(10)    = 'BEFORE',  -- disflg: 'BEFORE'→'B', 'AFTER'→'A' (wired 16-Jun-2026)
+    @PackApp          VARCHAR(10)    = 'BEFORE',  -- PACK_FLG: 'BEFORE'→'B', 'AFTER'→'A' (wired 16-Jun-2026)
+    @CessApp          VARCHAR(10)    = 'BEFORE',  -- Cess_Flg excluded: pre-GST retired per FSD v3.1 Stage 3 IST directive (13-Jun-2026). Not wired in SPINRISE.
     -- Payment
     @PayMode          VARCHAR(10)    = 'DIRECT',
     @DirectInstr      VARCHAR(200)   = NULL,
@@ -5200,7 +5286,6 @@ BEGIN
             RTRIM(ISNULL(j.IgstCode,''))     AS IgstCode,
             RTRIM(ISNULL(j.RequesterId,''))  AS RequesterId,
             RTRIM(ISNULL(j.RequesterName,'')) AS RequesterName,
-            ISNULL(j.LandCost, 0)            AS LandCost,
             j.SlotsJson
         INTO #Lines
         FROM OPENJSON(@LinesJson)
@@ -5222,7 +5307,6 @@ BEGIN
             IgstCode      VARCHAR(10)    '$.igstCode',
             RequesterId   VARCHAR(20)    '$.requesterId',
             RequesterName VARCHAR(100)   '$.requesterName',
-            LandCost      DECIMAL(18,2)  '$.landCost',
             SlotsJson     NVARCHAR(MAX)  '$.slots' AS JSON
         ) j
         WHERE RTRIM(ISNULL(j.ItemCode, '')) <> '';
@@ -5352,8 +5436,7 @@ BEGIN
             CurrCode,  FCurRate, CARCODE, INSPECT,
             Form_type, refno,   refDate, REMARKS,
             DISPER, Cessper, FREIGHT, PCKPER, INSPER, SURPER, ADDTAXPER,
-            FILENO, FCACharg, FRTFLG,
-            DISFLG, PACK_FLG, FRT_FLG, INS_FLG, Cess_Flg,
+            FILENO, FCACharg, FRTFLG, disflg, PACK_FLG,
             PAYMENT, DIRECT_INS, BANK_CODE, PAYTERMS,
             ADV_PER, ADV_AMT, advpaymenttype,
             CHQNO, CHQDT, CRDDAYS,
@@ -5386,11 +5469,8 @@ BEGIN
             NULLIF(RTRIM(ISNULL(@FileNo,'')),       ''),
             ISNULL(@FcaFob, 0),
             CASE WHEN UPPER(RTRIM(ISNULL(@FreightType,''))) = 'TOPAY' THEN 'Y' ELSE '' END,
-            LEFT(ISNULL(UPPER(RTRIM(@DiscApp)),  'B'), 1),   -- DISFLG:    'B'=Before / 'A'=After
-            LEFT(ISNULL(UPPER(RTRIM(@PackApp)),  'B'), 1),   -- PACK_FLG:  'B'=Before / 'A'=After
-            ISNULL(@FrtFlg, 'B'),                            -- FRT_FLG:   'B'=Before / 'A'=After
-            ISNULL(@InsFlg, 'B'),                            -- INS_FLG:   'B'=Before / 'A'=After
-            LEFT(ISNULL(UPPER(RTRIM(@CessApp)),  'B'), 1),   -- Cess_Flg:  'B'=Before / 'A'=After
+            CASE WHEN UPPER(RTRIM(ISNULL(@DiscApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- disflg
+            CASE WHEN UPPER(RTRIM(ISNULL(@PackApp,'')))    = 'AFTER' THEN 'A' ELSE 'B' END,  -- PACK_FLG
             CASE WHEN UPPER(RTRIM(ISNULL(@PayMode,''))) = 'BANK' THEN 'B' ELSE 'D' END,
             NULLIF(RTRIM(ISNULL(@DirectInstr,'')),  ''),
             NULLIF(RTRIM(ISNULL(@BankCode,'')),     ''),
@@ -5450,8 +5530,7 @@ BEGIN
             sgstper,  sgstamt,  sgst_tax_code,
             igstper,  igstamt,  igst_tax_code,
             Tcs_per,  Tcs_amt,
-            reqidpo,  reqnamepo,
-            LandCost
+            reqidpo,  reqnamepo
         )
         SELECT
             @DivCode, @PoNo, @ActualPoDt, l.PORDSNO, @OrderType,
@@ -5478,8 +5557,7 @@ BEGIN
             l.TcsPer,
             ROUND((l.Rate * l.Qty) * l.TcsPer / 100.0, 2),
             NULLIF(l.RequesterId, ''),
-            NULLIF(l.RequesterName, ''),
-            l.LandCost
+            NULLIF(l.RequesterName, '')
         FROM #Lines l
         INNER JOIN dbo.PO_PRL prl
             ON prl.divcode = @DivCode AND prl.prno = l.PrNo
@@ -5759,3 +5837,107 @@ BEGIN
 END;
 GO
 
+
+
+-- ============================================================
+-- ksp_PR_DateWise_Report  (PR Report Integration — 18 Jun 2026)
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PR_DateWise_Report
+    @Divcode  varchar(2),
+    @FromDate datetime,
+    @ToDate   datetime,
+    @FrmDep   varchar(3) = NULL,
+    @ToDep    varchar(3) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT
+            h.prdate                                          AS PrDate,
+            l.prno                                            AS PrNo,
+            l.itemcode                                        AS ItemCode,
+            RTRIM(ISNULL(itm.ITEMNAME, ''))                  AS ItemName,
+            RTRIM(ISNULL(itm.UOM,      ''))                  AS Uom,
+            RTRIM(ISNULL(dep.DEPNAME,  ''))                  AS DepName,
+            ISNULL(l.qtyind,  0)                             AS QtyIndent,
+            ISNULL(l.qtyreqd, 0)                             AS QtyReqd,
+            ISNULL(l.qtyord,  0)                             AS QtyOrdered,
+            ISNULL(l.qtyrec,  0)                             AS QtyReceived,
+            l.prstatus                                        AS PrStatusCode,
+            l.SecondApp                                       AS SecondApp,
+            RTRIM(ISNULL(div.div_printname, div.DIVNAME))    AS DivPrintName,
+            RTRIM(ISNULL(div.div_unitname,  ''))             AS DivUnitName
+        FROM dbo.PO_PRH h
+        INNER JOIN dbo.PO_PRL l
+            ON  h.divcode = l.divcode
+            AND h.prno    = l.prno
+            AND h.prdate  = l.prdate
+        LEFT  JOIN dbo.IN_DEP dep
+            ON  h.depcode = dep.DEPCODE
+            AND h.divcode = dep.divcode
+        INNER JOIN dbo.PP_DIVMAS div
+            ON  h.divcode = div.DIVCODE
+        INNER JOIN dbo.IN_ITEM itm
+            ON  l.itemcode = itm.ITEMCODE
+        WHERE h.divcode = @Divcode
+          AND h.prdate  BETWEEN @FromDate AND @ToDate
+          AND (@FrmDep IS NULL OR h.depcode >= @FrmDep)
+          AND (@ToDep   IS NULL OR h.depcode <= @ToDep)
+        ORDER BY h.prdate, l.prno, l.itemcode;
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
+GO
+
+-- ============================================================
+-- ksp_PR_DeptWise_Report  (PR Report Integration — 18 Jun 2026)
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.ksp_PR_DeptWise_Report
+    @Divcode  varchar(2),
+    @FromDate datetime,
+    @ToDate   datetime,
+    @DepCode  varchar(3) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT
+            h.divcode                                         AS DivCode,
+            h.depcode                                         AS DepCode,
+            RTRIM(ISNULL(dep.DEPNAME, ''))                   AS DepName,
+            l.prno                                            AS PrNo,
+            l.prdate                                          AS PrDate,
+            l.itemcode                                        AS ItemCode,
+            RTRIM(ISNULL(itm.ITEMNAME, ''))                  AS ItemName,
+            RTRIM(ISNULL(itm.UOM,      ''))                  AS Uom,
+            ISNULL(l.qtyreqd, 0)                             AS QtyReqd,
+            ISNULL(l.qtyord,  0)                             AS QtyOrdered,
+            ISNULL(l.qtyrec,  0)                             AS QtyReceived,
+            l.prstatus                                        AS PrStatusCode,
+            l.SecondApp                                       AS SecondApp,
+            RTRIM(ISNULL(div.div_printname, div.DIVNAME))    AS DivPrintName,
+            RTRIM(ISNULL(div.div_unitname,  ''))             AS DivUnitName
+        FROM dbo.PO_PRH h
+        INNER JOIN dbo.PO_PRL l
+            ON  h.divcode = l.divcode
+            AND h.prno    = l.prno
+            AND h.prdate  = l.prdate
+        LEFT  JOIN dbo.IN_DEP dep
+            ON  h.depcode = dep.DEPCODE
+            AND h.divcode = dep.divcode
+        INNER JOIN dbo.PP_DIVMAS div
+            ON  h.divcode = div.DIVCODE
+        INNER JOIN dbo.IN_ITEM itm
+            ON  l.itemcode = itm.ITEMCODE
+        WHERE h.divcode = @Divcode
+          AND h.prdate  BETWEEN @FromDate AND @ToDate
+          AND (@DepCode IS NULL OR h.depcode = @DepCode)
+        ORDER BY dep.DEPNAME, l.prno, l.prdate, l.itemcode;
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
+GO

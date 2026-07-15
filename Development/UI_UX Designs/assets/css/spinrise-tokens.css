@@ -1,0 +1,55 @@
+/*
+  SpinRise Design Tokens
+  Source of truth: spinrise-web/src/shared/theme/themeConfig.ts
+  When themeConfig.ts changes, update this file to match.
+*/
+
+:root {
+  /* ── Brand ──────────────────────────────────────── */
+  --blue:          #185FA5;
+  --blue-dark:     #0C447C;
+  --blue-100:      #E6F1FB;
+
+  /* ── Surfaces ───────────────────────────────────── */
+  --bg:            #F5F5F3;   /* colorBgLayout */
+  --surface:       #FFFFFF;   /* colorBgContainer */
+  --surface-alt:   #FAFAF8;
+  --border:        #E2E2E2;   /* colorBorder */
+
+  /* ── Text ───────────────────────────────────────── */
+  --text-900:      #1A1A1A;   /* colorText */
+  --text-600:      #4A4A4A;   /* colorTextSecondary */
+  --text-400:      #888888;   /* colorTextPlaceholder */
+
+  /* ── Status ─────────────────────────────────────── */
+  --success:       #3B6D11;   /* colorSuccess */
+  --success-l:     #EAF3DE;
+  --warning:       #BA7517;   /* colorWarning */
+  --warning-l:     #FAEEDA;
+  --error:         #A32D2D;   /* colorError */
+  --error-l:       #FCEBEB;
+  --purple:        #722ED1;
+  --purple-l:      #F3EEFF;
+
+  /* ── Layout ─────────────────────────────────────── */
+  --sidebar-bg:    #1a2236;   /* AppShell sider background */
+
+  /* ── Typography ─────────────────────────────────── */
+  --font:          'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono:          'JetBrains Mono', 'Courier New', monospace;
+
+  /* ── Control sizing (Ant Design themeConfig) ─────── */
+  --ctrl-h:        32px;      /* controlHeight */
+  --ctrl-h-sm:     28px;      /* controlHeightSM */
+  --ctrl-h-lg:     40px;      /* controlHeightLG */
+
+  /* ── Border radius ──────────────────────────────── */
+  --radius:        6px;       /* borderRadius */
+  --radius-sm:     4px;       /* borderRadiusSM */
+  --radius-lg:     8px;       /* borderRadiusLG */
+
+  /* ── Shadows ────────────────────────────────────── */
+  --shadow-sm:     0 1px 4px rgba(0,0,0,.06);     /* boxShadow */
+  --shadow-md:     0 4px 16px rgba(0,0,0,.12);
+  --shadow-modal:  0 24px 60px rgba(15,23,42,.28);
+}

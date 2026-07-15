@@ -43,23 +43,26 @@ public class AddPoHeaderRequest
     public decimal CessPer      { get; init; }
     public decimal AedPer       { get; init; }
     public decimal FreightAmt   { get; init; }
+    public decimal FreightPer   { get; init; }
     public decimal PackPer      { get; init; }
     public decimal InsurPer     { get; init; }
     public decimal SurchargePer { get; init; }
     public decimal AddTaxPer    { get; init; }
+    public decimal RoundOff     { get; init; }
     public string  FileNo       { get; init; } = "";
     public decimal FcaFob       { get; init; }
-    public string  FreightType  { get; init; } = "PAID";
-    public string  DiscApp      { get; init; } = "BEFORE";
-    public string  PackApp      { get; init; } = "BEFORE";
-    public string  FreightApp   { get; init; } = "BEFORE";
-    public string  InsurApp     { get; init; } = "BEFORE";
-    public string  CessApp      { get; init; } = "BEFORE";
+    public string  FreightType          { get; init; } = "PAID";
+    public string  DiscApp              { get; init; } = "BEFORE";
+    public string  PackApp              { get; init; } = "BEFORE";
+    public string  FreightPosition      { get; init; } = "BEFORE";
+    public string  InsurancePosition    { get; init; } = "BEFORE";
+    public string  CessPosition         { get; init; } = "BEFORE";
     // Payment
     public string   PayMode       { get; init; } = "DIRECT";
     public string   DirectInstr   { get; init; } = "";
     public string   BankCode      { get; init; } = "";
     public string   PaymentTerms  { get; init; } = "";
+    public string   PaymentTermCode { get; init; } = "";
     public decimal  AdvPer        { get; init; }
     public decimal  AdvAmt        { get; init; }
     public string   ModeOfPayment { get; init; } = "";
@@ -102,7 +105,20 @@ public class AddPoLineRequest
     public string  Route         { get; init; } = "LOCAL";
     public string  RequesterId   { get; init; } = "";
     public string  RequesterName { get; init; } = "";
-    public decimal LandCost      { get; init; }
+    public decimal DiscPer       { get; init; }
+    public decimal PackingPer    { get; init; }
+    public decimal FreightPer    { get; init; }
+    public decimal InsurancePer  { get; init; }
+    public decimal CessPer       { get; init; }   // D-11 pass-through — column exists in DB
+    public decimal FcaFob        { get; init; }
+    public string  AddTaxCode    { get; init; } = "";
+    public decimal AddTaxPer     { get; init; }
+    public decimal OtherCharges  { get; init; }
+    public string  DiscApp       { get; init; } = "BEFORE";
+    public string  PackApp       { get; init; } = "BEFORE";
+    public string  FreightPos    { get; init; } = "BEFORE";
+    public string  InsuranceDuty { get; init; } = "BEFORE";
+    public string  CessTaxPos    { get; init; } = "BEFORE";
 
     [MinLength(0)]
     public List<DeliverySlotRequest> Slots { get; init; } = [];

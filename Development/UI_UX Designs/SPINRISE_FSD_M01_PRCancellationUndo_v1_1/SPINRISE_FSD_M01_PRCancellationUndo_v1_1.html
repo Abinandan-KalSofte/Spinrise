@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpinRise — PR Cancellation & Undo | SPINRISE_FSD_M01_PRCancellationUndo_v1_1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/prototype-system.css">
+<style>
+/* ══════════════════════════════════════════════════════
+   DESIGN TOKENS — SpinRise Blueprint v6 (exact match)
+══════════════════════════════════════════════════════ */
+:root {
+  --blue:#185FA5; --blue-dark:#0C447C; --blue-100:#E6F1FB;
+  --bg:#F5F5F3; --surface-alt:#FAFAF8; --border:#E2E2E2;
+  --text-900:#1A1A1A; --text-600:#4A4A4A; --text-400:#888888;
+  --success:#3B6D11; --success-l:#EAF3DE;
+  --warning:#BA7517; --warning-l:#FAEEDA;
+  --error:#A32D2D; --error-l:#FCEBEB;
+  --purple:#722ED1; --sidebar-bg:#1a2236;
+  --font:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:var(--font);font-size:13px;color:var(--text-900);}
+
+/* ── IST Control Bar (top strip for testers) ──────────────────────── */
+.ist-bar{
+  position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#0f172a;display:flex;align-items:center;gap:6px;padding:5px 14px;
+  font-size:11px;font-weight:600;color:rgba(255,255,255,.65);
+  border-bottom:2px solid #1e293b;
+}
+.ist-label{color:rgba(255,255,255,.35);font-size:10px;margin-right:2px;}
+.ist-btn{
+  padding:3px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.18);
+  background:transparent;color:rgba(255,255,255,.65);font-size:10px;font-weight:600;
+  cursor:pointer;font-family:var(--font);transition:.12s;
+}
+.ist-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.ist-btn:hover:not(.active){background:rgba(255,255,255,.08);}
+.ist-sep{width:1px;height:14px;background:rgba(255,255,255,.15);margin:0 4px;}
+.ist-badge{
+  font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700;
+  background:rgba(255,140,0,.2);color:#fb923c;border:1px solid rgba(255,140,0,.35);
+}
+.ist-back{margin-left:auto;color:rgba(255,255,255,.4);text-decoration:none;font-size:10px;}
+.ist-back:hover{color:#fff;}
+
+/* ── App Shell (exact AppShell.tsx dimensions) ────────────────────── */
+.app-root{display:flex;height:100vh;overflow:hidden;padding-top:30px;}
+
+/* ── Sider — exact AppShell.tsx ──────────────────────────────────── */
+.sider{
+  width:280px;min-width:280px;height:100%;background:var(--sidebar-bg);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;
+  transition:width .2s,min-width .2s;
+}
+.sider.collapsed{width:52px;min-width:52px;}
+
+/* Logo area — height:48, border-bottom rgba(255,255,255,0.08) */
+.sider-logo{
+  height:48px;display:flex;align-items:center;gap:10px;
+  padding:0 16px;border-bottom:1px solid rgba(255,255,255,.08);
+  flex-shrink:0;cursor:pointer;overflow:hidden;
+}
+.sider.collapsed .sider-logo{justify-content:center;padding:0;}
+.logo-mark{
+  width:28px;height:28px;border-radius:6px;flex-shrink:0;
+  background:linear-gradient(135deg,#185FA5,#1677ff);
+  display:flex;align-items:center;justify-content:center;
+}
+.logo-mark span{color:#fff;font-size:13px;font-weight:800;}
+.logo-text{color:#fff;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;}
+.sider.collapsed .logo-text{display:none;}
+
+/* Nav menu */
+.sider-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0;}
+.sider-nav::-webkit-scrollbar{width:0;}
+
+/* Group header (like Ant Design SubMenu title) */
+.menu-group{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 16px;color:rgba(255,255,255,.65);
+  font-size:13px;font-weight:500;cursor:pointer;
+  border-left:3px solid transparent;
+  user-select:none;transition:.15s;
+  white-space:nowrap;overflow:hidden;
+}
+.menu-group:hover{background:rgba(255,255,255,.05);color:#fff;}
+.menu-group.open{color:#fff;}
+.menu-group-icon{font-size:14px;flex-shrink:0;width:16px;text-align:center;}
+.menu-group-label{flex:1;white-space:nowrap;overflow:hidden;}
+.menu-chevron{font-size:10px;color:rgba(255,255,255,.35);transition:transform .2s;flex-shrink:0;}
+.menu-group.open .menu-chevron{transform:rotate(90deg);}
+.sider.collapsed .menu-group-label,.sider.collapsed .menu-chevron{display:none;}
+.sider.collapsed .menu-group{justify-content:center;padding:8px 0;}
+
+/* Sub-items */
+.menu-children{overflow:hidden;max-height:0;transition:max-height .2s ease;}
+.menu-children.open{max-height:200px;}
+.sider.collapsed .menu-children{display:none;}
+
+.menu-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 16px 7px 36px;
+  color:rgba(255,255,255,.55);font-size:12px;font-weight:400;
+  cursor:pointer;border-left:3px solid transparent;
+  white-space:nowrap;overflow:hidden;transition:.15s;
+}
+.menu-item:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.9);}
+/* Ant Design dark theme active: #1677ff bg with slight transparency */
+.menu-item.active{
+  background:#177ddc22;
+  color:#40a9ff;
+  border-left-color:#1677ff;
+  font-weight:500;
+}
+.menu-item-icon{font-size:12px;flex-shrink:0;width:14px;text-align:center;}
+
+/* Top-level solo item (Dashboard) */
+.menu-solo{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 16px;color:rgba(255,255,255,.65);
+  font-size:13px;font-weight:400;cursor:pointer;
+  border-left:3px solid transparent;white-space:nowrap;overflow:hidden;transition:.15s;
+}
+.menu-solo:hover{background:rgba(255,255,255,.05);color:#fff;}
+.menu-solo.active{background:#177ddc22;color:#40a9ff;border-left-color:#1677ff;font-weight:500;}
+.sider.collapsed .menu-solo{justify-content:center;padding:8px 0;}
+.sider-bottom{border-top:1px solid rgba(255,255,255,.08);padding:8px 0;flex-shrink:0;}
+.tb-print-tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:#1e293b;color:#fff;font-size:10px;font-weight:500;
+  padding:4px 9px;border-radius:4px;white-space:nowrap;z-index:100;pointer-events:none;}
+.tb-btn:hover .tb-print-tooltip{display:block;}
+
+/* ── Header — exact AppShell.tsx ──────────────────────────────────── */
+.app-header{
+  height:48px;padding:0 16px;background:#fff;
+  border-bottom:1px solid #e8e8e8;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.hdr-left{display:flex;align-items:center;gap:4px;}
+.hdr-toggle{
+  display:flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border-radius:6px;border:none;background:transparent;
+  color:#64748b;font-size:14px;cursor:pointer;transition:.12s;
+}
+.hdr-toggle:hover{background:#f1f5f9;}
+/* Company name centred — exact AppShell.tsx */
+.hdr-center{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;min-width:0;
+}
+.hdr-company{
+  font-size:14px;font-weight:700;color:#1e293b;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em;
+}
+/* User widget — exact AppShell.tsx */
+.hdr-user{display:flex;align-items:center;gap:8px;cursor:pointer;position:relative;}
+.user-avatar{
+  width:32px;height:32px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,#185FA5,#1677ff);
+  display:flex;align-items:center;justify-content:center;
+}
+.user-avatar svg{color:#fff;}
+.user-info{display:flex;flex-direction:column;line-height:1.2;}
+.user-name{font-size:13px;color:#1e293b;font-weight:600;}
+.user-div{font-size:11px;color:#64748b;font-weight:400;}
+.hdr-chevron{color:#94a3b8;font-size:10px;}
+/* Dropdown */
+.user-dropdown{
+  position:absolute;top:40px;right:0;width:160px;
+  background:#fff;border:1px solid var(--border);border-radius:8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;overflow:hidden;
+  display:none;
+}
+.user-dropdown.open{display:block;}
+.user-dropdown-item{
+  display:flex;align-items:center;gap:8px;padding:9px 14px;
+  font-size:12px;color:#ef4444;cursor:pointer;transition:.12s;
+}
+.user-dropdown-item:hover{background:#fff5f5;}
+
+/* ── Main layout ──────────────────────────────────────────────────── */
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.page-content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;background:var(--bg);}
+
+/* ── Doc Band — exact PRDocBand ──────────────────────────────────── */
+.doc-band{
+  background:linear-gradient(135deg,var(--blue-dark) 0%,var(--blue) 100%);
+  padding:6px 18px;display:flex;align-items:center;
+  justify-content:space-between;flex-shrink:0;
+}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:12px;}
+.bc-parent{color:rgba(255,255,255,.55);}
+.bc-sep{color:rgba(255,255,255,.35);}
+.bc-current{color:#fff;font-weight:600;letter-spacing:.2px;}
+.doc-band-right{text-align:right;}
+.doc-band-sublabel{font-size:10px;color:rgba(255,255,255,.6);margin-bottom:1px;}
+.doc-band-subvalue{font-size:11px;font-weight:600;color:#fff;font-family:var(--mono);}
+
+/* ── Toolbar — exact PRToolbar.tsx TbBtn ─────────────────────────── */
+.toolbar{
+  background:#fff;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:4px;padding:0 12px;height:44px;flex-shrink:0;
+}
+.tb-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 11px;border:1px solid #d0d0d0;border-radius:6px;
+  background:#fff;font-size:12px;font-weight:500;cursor:pointer;
+  color:var(--text-900);font-family:var(--font);white-space:nowrap;
+  transition:background .12s,opacity .12s;
+}
+.tb-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+.tb-btn.success{background:#185FA5;color:#fff;border-color:#185FA5;}
+.tb-btn.danger{color:var(--error);border-color:#E24B4A;}
+.tb-btn.danger-f{background:#dc2626;color:#fff;border-color:#dc2626;}
+.tb-btn.warn-f{background:var(--warning);color:#fff;border-color:var(--warning);}
+.tb-btn:disabled,.tb-btn.disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
+.tb-btn:not(:disabled):not(.disabled):hover{filter:brightness(.93);}
+.tb-sep{width:1px;height:22px;background:#d0d0d0;margin:0 3px;flex-shrink:0;}
+.kbd{
+  font-size:10px;padding:1px 4px;border:1px solid #d0d0d0;border-radius:3px;
+  color:var(--text-400);background:var(--bg);font-family:var(--mono);margin-left:2px;
+}
+
+/* ── Status banner ────────────────────────────────────────────────── */
+.banner{
+  padding:6px 16px;font-size:12px;font-weight:500;flex-shrink:0;
+  display:flex;align-items:flex-start;gap:8px;
+}
+.banner.info{background:#e6f4ff;color:#1677ff;border-bottom:1px solid #bae0ff;}
+.banner.warn{background:var(--warning-l);color:var(--warning);border-bottom:1px solid #fcd34d;}
+.banner.err{background:var(--error-l);color:var(--error);border-bottom:1px solid #fca5a5;}
+.banner-icon{flex-shrink:0;font-size:13px;margin-top:1px;}
+
+/* ══════════════════════════════════════════════════════
+   MODULE PANES
+══════════════════════════════════════════════════════ */
+.module-pane{display:none;flex-direction:column;flex:1;min-height:0;}
+.module-pane.active{display:flex;}
+
+/* ══════════════════════════════════════════════════════
+   PR FORECLOSURE
+══════════════════════════════════════════════════════ */
+.fc-filter-bar{
+  background:#fff;border-bottom:1px solid var(--border);
+  padding:7px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.filter-lbl{font-size:11px;font-weight:600;color:#475569;white-space:nowrap;}
+.filter-input{
+  height:30px;padding:0 9px;border:1px solid var(--border);border-radius:6px;
+  font-size:12px;font-family:var(--font);outline:none;width:150px;
+}
+.filter-input:focus{border-color:var(--blue);background:#F0F7FF;}
+.load-btn{
+  height:30px;padding:0 12px;background:var(--blue);color:#fff;
+  border:none;border-radius:6px;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:5px;
+}
+.load-btn:hover{background:var(--blue-dark);}
+.fc-filter-note{font-size:10px;color:var(--text-400);}
+.sel-badge{
+  display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+  padding:3px 10px;border-radius:20px;
+  background:var(--blue-100);color:var(--blue);border:1px solid #bfdbfe;
+  margin-left:auto;
+}
+.sel-badge.has{background:#dcfce7;color:#15803d;border-color:#86efac;}
+
+/* Grid */
+.grid-wrap{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.grid-scroll{flex:1;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;}
+.grid-tbl{width:100%;border-collapse:collapse;min-width:820px;}
+.grid-tbl th{
+  padding:6px 8px;font-size:10px;font-weight:700;letter-spacing:.06em;
+  color:#f1f5f9;background:#1e293b;border-bottom:2px solid #0f172a;
+  white-space:nowrap;position:sticky;top:0;z-index:10;text-align:left;
+}
+.grid-tbl th.r,.grid-tbl td.r{text-align:right;}
+.grid-tbl th.c,.grid-tbl td.c{text-align:center;}
+.grid-tbl td{
+  padding:4px 8px;vertical-align:middle;border-bottom:1px solid #f0f0f0;
+  height:30px;font-size:11px;color:#1e293b;
+}
+.grid-tbl tr.even td{background:#f0f5ff;}
+.grid-tbl tr:hover td{background:var(--blue-100);}
+.grid-tbl tr.sel td{background:#dbeafe!important;border-left:3px solid var(--blue);}
+.grid-tbl tr.sel td:first-child{padding-left:5px;}
+.row-chk{width:15px;height:15px;accent-color:var(--blue);cursor:pointer;}
+.mono{font-family:var(--mono);}
+.fw7{font-weight:700;}
+.col-blue{color:var(--blue-dark);}
+.col-green{color:#15803d;font-weight:700;}
+
+/* Status badges */
+.badge{
+  display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;
+  border-radius:10px;white-space:nowrap;
+}
+.bg-requested{background:#dcfce7;color:#15803d;border:1px solid #86efac;}
+.bg-partial{background:var(--warning-l);color:var(--warning);border:1px solid #fcd34d;}
+.bg-enquired{background:var(--blue-100);color:var(--blue);border:1px solid #bfdbfe;}
+.bg-ordered{background:#f3e8ff;color:#7c3aed;border:1px solid #ddd6fe;}
+.bg-cancelled{background:var(--error-l);color:var(--error);border:1px solid #fca5a5;}
+
+/* FC footer */
+.fc-footer{
+  background:var(--surface-alt);border-top:2px solid var(--blue);
+  padding:7px 16px;display:flex;align-items:center;gap:20px;flex-shrink:0;
+}
+.ft-stat{font-size:11px;color:var(--text-600);display:flex;align-items:center;gap:5px;}
+.ft-stat .val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--blue);}
+
+/* Empty state */
+.empty{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;color:var(--text-400);padding:40px;
+}
+.empty-icon{font-size:40px;}
+.empty-title{font-size:13px;font-weight:600;}
+.empty-sub{font-size:11px;text-align:center;max-width:300px;line-height:1.6;}
+
+/* ══════════════════════════════════════════════════════
+   PR CANCELLATION
+══════════════════════════════════════════════════════ */
+/* Sub-tab bar */
+.sub-tabs{
+  background:var(--surface-alt);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;flex-shrink:0;gap:2px;
+}
+.sub-tab{
+  padding:9px 16px;border:1px solid transparent;border-bottom:none;
+  border-radius:6px 6px 0 0;margin-bottom:-1px;
+  font-size:12px;font-weight:600;cursor:pointer;
+  color:var(--text-400);background:transparent;font-family:var(--font);transition:.15s;
+}
+.sub-tab.active{background:#fff;border-color:var(--border);color:var(--blue);}
+.sub-tab:hover:not(.active){color:var(--text-600);}
+
+/* Sub bodies */
+.sub-body{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+.sub-body.active{display:flex;}
+
+.req{color:#ef4444;margin-left:2px;}
+
+/* ── Cancel mode banner — exact PurchaseRequisitionPage.tsx isDeleteMode bar ─ */
+.del-banner{
+  background:#FCEBEB;border-bottom:1px solid #fca5a5;
+  padding:6px 16px;color:#A32D2D;font-weight:500;font-size:12px;flex-shrink:0;
+}
+
+/* ── PRHeaderV1 view mode (disabled=true) exact clone ─────────────────────── */
+.view-hdr{
+  background:#fff;border-bottom:1px solid #e2e2e2;
+  padding:8px 18px 10px;flex-shrink:0;
+}
+.view-hdr-meta{
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;
+}
+.view-hdr-left{display:flex;align-items:center;gap:8px;}
+.view-section-lbl{font-size:10px;font-weight:700;color:#185FA5;letter-spacing:.06em;}
+.view-date-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  background:linear-gradient(135deg,#eff6ff,#dbeafe);
+  border:1px solid #bfdbfe;border-radius:20px;padding:1px 8px;
+}
+.view-date-badge span{font-size:10px;font-weight:700;color:#1e40af;}
+.view-hdr-right{display:flex;align-items:center;gap:8px;}
+.view-created{font-size:11px;color:#94A3B8;}
+.view-created strong{color:#475569;}
+.view-prno-tag{
+  font-size:12px;font-weight:700;font-family:var(--mono);
+  padding:2px 10px;border-radius:4px;
+  background:#e6f4ff;color:#0958d9;border:1px solid #91caff;
+}
+/* 6-column field grid — col widths match PRHeaderV1 md={3,5,4,5,4,3} */
+.view-field-grid{
+  display:grid;
+  grid-template-columns:3fr 5fr 4fr 5fr 4fr 3fr;
+  gap:6px 10px;padding-bottom:4px;
+}
+.view-lbl{font-size:11px;font-weight:600;color:#475569;letter-spacing:.01em;margin-bottom:2px;}
+.view-val{font-size:12px;color:#1e293b;font-weight:500;line-height:1.4;}
+.view-type-tag{
+  display:inline-block;font-size:11px;font-weight:700;
+  padding:1px 8px;border-radius:4px;
+  background:#fff1f0;color:#a61d24;border:1px solid #ffccc7;
+}
+
+/* ── Reason strip (compact bar between header and grid) ──────────────────── */
+.reason-strip{
+  background:#fff;border-bottom:1px solid var(--border);
+  padding:7px 18px;flex-shrink:0;display:flex;align-items:flex-start;gap:12px;
+}
+.reason-strip-lbl{font-size:11px;font-weight:600;color:#475569;white-space:nowrap;padding-top:5px;min-width:150px;}
+.reason-strip-body{flex:1;display:flex;flex-direction:column;gap:3px;}
+.reason-strip textarea{
+  width:100%;min-height:48px;max-height:72px;padding:5px 9px;
+  border:1px solid var(--border);border-radius:6px;
+  font-size:12px;font-family:var(--font);color:var(--text-900);
+  resize:vertical;outline:none;
+}
+.reason-strip textarea:focus{border-color:var(--error);}
+.reason-strip textarea.invalid{border-color:var(--error);background:#fff9f9;}
+.reason-strip-meta{display:flex;justify-content:space-between;}
+
+/* ── Items section — exact PRLineItemsTable disabled (view) mode ─────────── */
+.items-section{
+  flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+  background:#fff;border-radius:4px;border:1px solid #e2e2e2;
+}
+.items-bar{
+  display:flex;align-items:center;padding:8px 14px;
+  border-bottom:1px solid #e2e2e2;background:#fafaf8;flex-shrink:0;gap:8px;
+}
+.items-bar-lbl{font-size:11px;font-weight:600;color:#185FA5;letter-spacing:.3px;}
+.items-ct{font-size:11px;padding:2px 8px;background:#E6F1FB;color:#185FA5;border-radius:20px;}
+.items-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;}
+.items-tbl{width:100%;border-collapse:collapse;min-width:960px;}
+.items-tbl th{
+  padding:6px 8px;font-size:10px;font-weight:700;letter-spacing:.06em;
+  color:#f1f5f9;background:#1e293b;border-bottom:2px solid #0f172a;
+  white-space:nowrap;position:sticky;top:0;z-index:10;text-align:left;
+}
+.items-tbl th.r,.items-tbl td.r{text-align:right;}
+.items-tbl th.c,.items-tbl td.c{text-align:center;}
+.items-tbl td{
+  padding:4px 8px;vertical-align:middle;border-bottom:1px solid #f0f0f0;
+  height:28px;font-size:11px;color:#1e293b;
+}
+.items-tbl tr:nth-child(even) td{background:#fafafa;}
+.items-tbl tr:hover td{background:var(--blue-100);}
+.items-dash{color:#d1d5db;}
+
+/* ── KPI strip — exact PRKPIStrip ────────────────────────────────────────── */
+.kpi-strip{
+  background:#fafaf8;border-top:1px solid var(--border);
+  padding:8px 16px;flex-shrink:0;
+}
+.kpi-appr-bar{
+  display:flex;align-items:center;
+  padding:5px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px;
+}
+.kpi-stage{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:84px;}
+.kpi-dot{
+  width:10px;height:10px;border-radius:50%;flex-shrink:0;
+  border:2px solid #d1d5db;background:transparent;transition:all .2s;
+}
+.kpi-dot.cur{background:#185FA5;border-color:#185FA5;box-shadow:0 0 0 3px #E6F1FB;}
+.kpi-dot.done{background:#3B6D11;border-color:#3B6D11;}
+.kpi-stage-lbl{font-size:9px;font-weight:500;color:#888;white-space:nowrap;}
+.kpi-stage-lbl.cur{font-weight:700;color:#185FA5;}
+.kpi-stage-lbl.done{color:#3B6D11;}
+.kpi-stage-line{flex:1;height:2px;margin-bottom:13px;background:#e2e2e2;}
+.kpi-stage-line.done{background:#3B6D11;}
+.kpi-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.kpi-card{
+  background:#fff;border:1px solid var(--border);border-radius:8px;
+  padding:7px 12px;min-width:0;
+}
+.kpi-card.acc-blue{border-left:3px solid #185FA5;}
+.kpi-card.acc-amber{border-left:3px solid #BA7517;}
+.kpi-card.acc-red{border-left:3px solid #A32D2D;}
+.kpi-card-lbl{font-size:10px;font-weight:600;color:#888;letter-spacing:.3px;margin-bottom:2px;}
+.kpi-card-val{
+  font-size:15px;font-weight:700;color:#1a1a1a;line-height:1.2;
+  font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.kpi-card-val.blue{color:#185FA5;}
+.kpi-card-val.amber{color:#BA7517;}
+.kpi-card-val.red{color:#A32D2D;}
+.kpi-card-val.green{color:#3B6D11;}
+.kpi-card-val.mono12{font-size:12px;font-family:var(--mono);}
+.kpi-card-sub{font-size:10px;color:#888;margin-top:2px;white-space:nowrap;}
+
+/* Undo card */
+.undo-card{
+  margin:10px 16px 0;background:#fff;border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;flex-shrink:0;
+}
+.undo-card-hdr{
+  background:var(--warning-l);padding:7px 14px;border-bottom:1px solid #fcd34d;
+  display:flex;align-items:center;gap:6px;
+}
+.undo-card-hdr-title{font-size:11px;font-weight:700;color:var(--warning);}
+.undo-card-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+.undo-reason-box{
+  padding:8px 10px;background:var(--bg);border:1px solid var(--border);
+  border-radius:6px;font-size:12px;color:var(--text-600);font-style:italic;
+  line-height:1.5;
+}
+.undo-info{
+  display:flex;gap:8px;padding:8px 10px;background:#e6f4ff;
+  border:1px solid #bae0ff;border-radius:6px;font-size:11px;color:#1677ff;
+  line-height:1.5;
+}
+
+/* ══════════════════════════════════════════════════════
+   MODAL (PR Lookup)
+══════════════════════════════════════════════════════ */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;
+  display:flex;align-items:center;justify-content:center;
+}
+.overlay.hidden{display:none;}
+.modal{
+  background:#fff;border-radius:10px;width:780px;max-height:560px;
+  display:flex;flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,.28);overflow:hidden;
+}
+.modal-hdr{
+  padding:12px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;
+}
+.modal-title{font-size:14px;font-weight:700;color:var(--text-900);}
+.modal-sub{font-size:11px;color:var(--text-400);margin-top:2px;}
+.modal-x{
+  width:28px;height:28px;border-radius:6px;border:1px solid var(--border);
+  background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--text-400);flex-shrink:0;transition:.12s;
+}
+.modal-x:hover{background:var(--error-l);color:var(--error);border-color:var(--error);}
+.modal-search{
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  display:flex;gap:8px;align-items:center;flex-shrink:0;
+}
+.modal-search-input{
+  flex:1;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;
+  font-size:12px;font-family:var(--font);outline:none;
+}
+.modal-search-input:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(24,95,165,.15);}
+.modal-body{flex:1;overflow-y:auto;}
+.m-tbl{width:100%;border-collapse:collapse;}
+.m-tbl th{
+  padding:8px 10px;font-size:10px;font-weight:700;color:#64748b;
+  text-transform:uppercase;letter-spacing:.05em;
+  background:#f8fafc;border-bottom:2px solid #e2e8f0;
+  white-space:nowrap;position:sticky;top:0;z-index:1;text-align:left;
+}
+.m-tbl th.r,.m-tbl td.r{text-align:right;}
+.m-tbl td{
+  padding:8px 10px;border-bottom:1px solid #f1f5f9;
+  vertical-align:middle;font-size:12px;
+}
+.m-tbl tr:hover td{background:var(--blue-100);cursor:pointer;}
+.m-tbl tr.row-sel td{background:#eff6ff;}
+.modal-ftr{
+  padding:10px 16px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--surface-alt);flex-shrink:0;
+}
+.modal-count{font-size:12px;font-weight:600;color:var(--text-600);}
+.m-btn-sel{
+  padding:6px 18px;background:var(--blue);color:#fff;
+  border:none;border-radius:6px;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:var(--font);
+}
+.m-btn-sel:hover{background:var(--blue-dark);}
+.m-btn-sel:disabled{opacity:.4;cursor:not-allowed;}
+.m-btn-close{
+  padding:6px 14px;background:#fff;color:var(--text-600);
+  border:1px solid var(--border);border-radius:6px;
+  font-size:12px;cursor:pointer;font-family:var(--font);
+}
+
+/* ══════════════════════════════════════════════════════
+   CONFIRM DIALOG
+══════════════════════════════════════════════════════ */
+.confirm-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;
+  display:flex;align-items:center;justify-content:center;
+}
+.confirm-overlay.hidden{display:none;}
+.confirm-box{
+  background:#fff;border-radius:10px;width:420px;overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.28);
+}
+.confirm-hdr{
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.confirm-icon{font-size:20px;}
+.confirm-title{font-size:14px;font-weight:700;color:var(--text-900);}
+.confirm-body{padding:16px 20px;font-size:12px;color:var(--text-600);line-height:1.7;}
+.confirm-body strong{color:var(--text-900);}
+.confirm-body code{font-family:var(--mono);font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px;}
+.confirm-ftr{
+  padding:12px 20px;border-top:1px solid var(--border);
+  display:flex;justify-content:flex-end;gap:8px;background:var(--surface-alt);
+}
+.btn-ghost{padding:6px 14px;background:#fff;color:var(--text-600);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);}
+.btn-danger{padding:6px 16px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.btn-warn{padding:6px 16px;background:var(--warning);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+
+/* ── Toast ────────────────────────────────────────────────────────── */
+.toasts{position:fixed;bottom:20px;right:20px;z-index:5000;display:flex;flex-direction:column;gap:8px;}
+.toast{
+  padding:10px 16px;border-radius:8px;font-size:12px;font-weight:500;
+  display:flex;align-items:center;gap:8px;min-width:260px;max-width:380px;
+  box-shadow:0 4px 16px rgba(0,0,0,.12);animation:tIn .25s ease;
+}
+.toast.ok{background:#dcfce7;color:#15803d;border:1px solid #86efac;}
+.toast.er{background:var(--error-l);color:var(--error);border:1px solid #fca5a5;}
+.toast.wn{background:var(--warning-l);color:var(--warning);border:1px solid #fcd34d;}
+.toast.if{background:#e6f4ff;color:#1677ff;border:1px solid #bae0ff;}
+@keyframes tIn{from{transform:translateX(110%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+@keyframes tOut{from{opacity:1;}to{opacity:0;transform:translateX(110%);}}
+
+/* Utility */
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     IST TESTER CONTROL BAR
+═══════════════════════════════════════════════════ -->
+<div class="ist-bar">
+  <span class="ist-label">IST Prototype</span>
+  <span class="ist-badge">FSD v1.1 · TL-IST Cleared · 23 May 2026</span>
+  <div class="ist-sep"></div>
+  <span class="ist-label">State:</span>
+  <button class="ist-btn active" id="ist-cn-none" onclick="setCNState('none')">CN: None</button>
+  <button class="ist-btn" id="ist-cn-sel" onclick="setCNState('selected')">CN: PR Selected</button>
+  <div class="ist-sep"></div>
+  <button class="ist-btn" id="ist-undo-none" onclick="setUndoState('none')">Undo: None</button>
+  <button class="ist-btn" id="ist-undo-sel" onclick="setUndoState('selected')">Undo: PR Selected</button>
+  
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     APP SHELL
+═══════════════════════════════════════════════════ -->
+<div class="app-root">
+
+  <!-- ── Sider (exact AppShell.tsx) ──────────────────────────────── -->
+  <div class="sider" id="sider">
+
+    <!-- Logo -->
+    <div class="sider-logo">
+      <div class="logo-mark"><span>S</span></div>
+      <span class="logo-text">Spinrise ERP</span>
+    </div>
+
+    <!-- Nav -->
+    <div class="sider-nav">
+
+      <!-- Purchase Order group -->
+      <div class="menu-group open" id="grp-po" onclick="toggleGroup('grp-po-children','grp-po')">
+        <span class="menu-group-icon">🛒</span>
+        <span class="menu-group-label">Purchase Order</span>
+        <span class="menu-chevron">›</span>
+      </div>
+      <div class="menu-children open" id="grp-po-children">
+        <div class="menu-item" id="nav-pr" onclick="navigate('pr')">
+          <span class="menu-item-icon">📋</span>Purchase Requisition
+        </div>
+        <div class="menu-item" id="nav-foreclosure" onclick="navigate('foreclosure')">
+          <span class="menu-item-icon">⚡</span>Purchase Requisition Foreclosure
+        </div>
+        <div class="menu-item active" id="nav-cancellation" onclick="navigate('cancellation')">
+          <span class="menu-item-icon">🚫</span>Purchase Requisition Cancellation
+        </div>
+        <div class="menu-item" id="nav-amendment" onclick="navigate('amendment')">
+          <span class="menu-item-icon">✏️</span>Purchase Requisition Amendment
+        </div>
+        <div class="menu-item" id="nav-first-approval" onclick="navigate('first-approval')">
+          <span class="menu-item-icon">✅</span>PR First Level Approval
+        </div>
+        <div class="menu-item" onclick="navigate('PRFinalLevelApproval')">
+          <span class="menu-item-icon">✅</span>Purchase Requisition Final Level Approval
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /sider -->
+
+  <!-- ── Main Area ─────────────────────────────────────────────────── -->
+  <div class="main-area">
+
+    <!-- Header (exact AppShell.tsx) -->
+    <div class="app-header">
+      <div class="hdr-left">
+        <button class="hdr-toggle" id="toggle-btn" onclick="toggleSider()" title="Toggle sidebar">
+          <svg id="toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/>
+            <line x1="1" y1="12" x2="15" y2="12"/>
+            <polyline points="10,5 13,8 10,11" stroke-width="1.4"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Company name centred — divName from auth store -->
+      <div class="hdr-center">
+        <span class="hdr-company">KALPATHARU SPINNERS PVT. LTD.</span>
+      </div>
+
+      <!-- User widget -->
+      <div class="hdr-user" onclick="toggleUserMenu()">
+        <div class="user-avatar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+        </div>
+        <div class="user-info">
+          <span class="user-name">Abinandan</span>
+          <span class="user-div">KALPATHARU SPINNERS</span>
+        </div>
+        <span class="hdr-chevron">▾</span>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-item" onclick="void 0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+          </div>
+        </div>
+      </div>
+    </div><!-- /header -->
+
+    <!-- Page content -->
+    <div class="page-content">
+
+      <!-- ══════════════════════════════════════════════
+           MODULE: PR CANCELLATION
+      ══════════════════════════════════════════════ -->
+      <div class="module-pane active" id="pane-cancellation">
+
+        <!-- Doc Band -->
+        <div class="doc-band">
+          <div class="breadcrumb">
+            <span class="bc-parent">Purchase Order</span>
+            <span class="bc-sep">›</span>
+            <span class="bc-current">PR Cancellation</span>
+          </div>
+          <div class="doc-band-right">
+            <div class="doc-band-sublabel" id="cn-band-sublabel">Processing Date</div>
+            <div class="doc-band-subvalue" id="cn-band-subvalue">25 May 2026</div>
+          </div>
+        </div>
+
+        <!-- Toolbar (changes based on sub-tab) -->
+        <div class="toolbar" id="cn-toolbar">
+          <!-- Cancel sub-tab buttons -->
+          <button class="tb-btn primary" id="btn-find-cn" onclick="openCancelModal()">
+            🔍 <span>Find PR to Cancel</span><span class="kbd">F3</span>
+          </button>
+          <div class="tb-sep" id="cn-sep1"></div>
+          <button class="tb-btn danger-f disabled" id="btn-do-cancel" onclick="doCancel()" disabled>
+            🚫 <span>Cancel PR</span><span class="kbd">Ctrl+S</span>
+          </button>
+          <!-- Undo sub-tab buttons (hidden by default) -->
+          <button class="tb-btn primary hidden" id="btn-find-undo" onclick="openUndoModal()">
+            🔍 <span>Find Cancelled PR</span>
+          </button>
+          <div class="tb-sep hidden" id="undo-sep1"></div>
+          <button class="tb-btn warn-f disabled hidden" id="btn-do-undo" onclick="doUndo()" disabled>
+            ↩ <span>Undo Cancellation</span><span class="kbd">Ctrl+S</span>
+          </button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn disabled" disabled style="position:relative;">
+            🖨 <span>Print</span><span class="kbd">Ctrl+P</span>
+            <span class="tb-print-tooltip">Not implemented — UI/UX design only</span>
+          </button>
+          <button class="tb-btn" onclick="resetCN()">✕ <span>Cancel</span><span class="kbd">Alt+X</span></button>
+        </div>
+
+        <!-- Sub-tabs: Cancel / Undo -->
+        <div class="sub-tabs">
+          <button class="sub-tab active" id="sub-cancel-btn" onclick="switchSubTab('cancel')">
+            🚫 Cancel PR
+          </button>
+          <button class="sub-tab" id="sub-undo-btn" onclick="switchSubTab('undo')">
+            ↩ Undo Cancellation
+          </button>
+        </div>
+
+        <!-- ─── CANCEL body ──────────────────────────────────────── -->
+        <div class="sub-body active" id="body-cancel">
+
+          <!-- Delete/Cancel mode banner (hidden until PR selected) -->
+          <div class="del-banner hidden" id="cn-del-banner">
+            Cancel mode —
+            <span id="cn-banner-prno" style="font-family:var(--mono);font-weight:700">PR-00000</span>
+            · Enter a cancellation reason and click <strong>Cancel PR</strong> to proceed.
+            Sets CANCELFLAG = 'Y' on PO_PRH and all PO_PRL lines.
+          </div>
+
+          <!-- PRHeaderV1 view mode (hidden until PR selected) -->
+          <div class="view-hdr hidden" id="cn-view-hdr">
+            <div class="view-hdr-meta">
+              <div class="view-hdr-left">
+                <span class="view-section-lbl">Requisition Details</span>
+                <div class="view-date-badge">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  <span>25 May 2026</span>
+                </div>
+              </div>
+              <div class="view-hdr-right">
+                <span class="view-created">Created by <strong id="cn-h-createdby">—</strong></span>
+                <span class="view-prno-tag" id="cn-h-prno-tag">PR-00000</span>
+              </div>
+            </div>
+            <div class="view-field-grid">
+              <div>
+                <div class="view-lbl">PR Date</div>
+                <div class="view-val" id="cn-h-prdate">—</div>
+              </div>
+              <div>
+                <div class="view-lbl">Department</div>
+                <div class="view-val" id="cn-h-dept">—</div>
+              </div>
+              <div>
+                <div class="view-lbl">Section</div>
+                <div class="view-val" id="cn-h-section">—</div>
+              </div>
+              <div>
+                <div class="view-lbl">Requested By</div>
+                <div class="view-val" id="cn-h-reqby">—</div>
+              </div>
+              <div>
+                <div class="view-lbl">Requisition Type</div>
+                <div class="view-val" id="cn-h-itype">—</div>
+              </div>
+              <div>
+                <div class="view-lbl">Reference No.</div>
+                <div class="view-val" id="cn-h-refno">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reason strip — compact bar between header and items grid -->
+          <div class="reason-strip hidden" id="cn-reason-strip">
+            <span class="reason-strip-lbl">Cancellation Reason<span class="req">*</span></span>
+            <div class="reason-strip-body">
+              <textarea id="cn-reason" maxlength="200"
+                placeholder="Enter reason for cancellation… (stored in PO_PRH.CANREASON — required before save)"
+                oninput="onReasonInput()"></textarea>
+              <div class="reason-strip-meta">
+                <span style="font-size:10px;color:#A32D2D;font-weight:600;display:none;" id="cn-reason-err">⚠ Cancellation reason is required.</span>
+                <span style="font-size:10px;color:#888;margin-left:auto;" id="cn-reason-ct">0 / 200</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PRLineItemsTable view mode (hidden until PR selected) -->
+          <div class="items-section hidden" id="cn-items-section">
+            <div class="items-bar">
+              <svg width="13" height="13" viewBox="0 0 16 16" style="stroke:#185FA5;fill:none;stroke-width:1.8">
+                <rect x="2" y="2" width="12" height="12" rx="1.5"/>
+                <line x1="5" y1="6" x2="11" y2="6"/>
+                <line x1="5" y1="9" x2="11" y2="9"/>
+              </svg>
+              <span class="items-bar-lbl">Item Lines</span>
+              <span class="items-ct" id="cn-items-ct">0 items</span>
+            </div>
+            <div class="items-scroll">
+              <table class="items-tbl">
+                <thead>
+                  <tr>
+                    <th style="width:30px">#</th>
+                    <th style="width:88px">Item Id</th>
+                    <th style="min-width:160px">Item Name</th>
+                    <th class="c" style="width:46px">Unit</th>
+                    <th class="r" style="width:90px">Required Quantity</th>
+                    <th class="r" style="width:110px">Rate</th>
+                    <th class="r" style="width:120px">₹ Approx. Value</th>
+                    <th style="width:110px">Required Date</th>
+                    <th style="width:90px">Machine</th>
+                    <th style="width:130px">Sub Cost Centre</th>
+                    <th style="min-width:110px">Remarks</th>
+                    <th class="c" style="width:52px">Sample</th>
+                  </tr>
+                </thead>
+                <tbody id="cn-items-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- KPI strip (hidden until PR selected) -->
+          <div class="kpi-strip hidden" id="cn-kpi-strip">
+            <div class="kpi-appr-bar">
+              <div class="kpi-stage">
+                <div class="kpi-dot cur" id="kd-0"></div>
+                <span class="kpi-stage-lbl cur" id="kl-0">Requested</span>
+              </div>
+              <div class="kpi-stage-line" id="kline-0"></div>
+              <div class="kpi-stage">
+                <div class="kpi-dot" id="kd-1"></div>
+                <span class="kpi-stage-lbl" id="kl-1">L1 Approved</span>
+              </div>
+              <div class="kpi-stage-line" id="kline-1"></div>
+              <div class="kpi-stage">
+                <div class="kpi-dot" id="kd-2"></div>
+                <span class="kpi-stage-lbl" id="kl-2">L2 Approved</span>
+              </div>
+              <div class="kpi-stage-line" id="kline-2"></div>
+              <div class="kpi-stage">
+                <div class="kpi-dot" id="kd-3"></div>
+                <span class="kpi-stage-lbl" id="kl-3">Final</span>
+              </div>
+            </div>
+            <div class="kpi-cards">
+              <div class="kpi-card acc-blue">
+                <div class="kpi-card-lbl">Total Lines</div>
+                <div class="kpi-card-val blue" id="cn-kpi-lines">0</div>
+                <div class="kpi-card-sub" id="cn-kpi-lines-sub">Items in this PR</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-card-lbl">Total Quantity</div>
+                <div class="kpi-card-val mono12" id="cn-kpi-qty">—</div>
+                <div class="kpi-card-sub">By Unit of Measure</div>
+              </div>
+              <div class="kpi-card" id="cn-kpi-budget-card">
+                <div class="kpi-card-lbl">Approx. Budget</div>
+                <div class="kpi-card-val amber" id="cn-kpi-budget">—</div>
+                <div class="kpi-card-sub">Indicative Cost</div>
+              </div>
+              <div class="kpi-card" id="cn-kpi-days-card">
+                <div class="kpi-card-lbl">Days Open</div>
+                <div class="kpi-card-val" id="cn-kpi-days">—</div>
+                <div class="kpi-card-sub" id="cn-kpi-days-sub">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state (visible until PR selected) -->
+          <div class="empty" id="cn-empty">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-title">No PR selected for cancellation</div>
+            <div class="empty-sub">Click <strong>Find PR</strong> (F3) in the toolbar to select a PR eligible for cancellation.</div>
+          </div>
+
+        </div><!-- /body-cancel -->
+
+        <!-- ─── UNDO body ─────────────────────────────────────────── -->
+        <div class="sub-body" id="body-undo">
+
+          <!-- Undo mode banner (hidden until PR selected) -->
+          <div class="del-banner hidden" id="undo-del-banner" style="background:#FAEEDA;border-color:#fcd34d;color:#BA7517;">
+            Undo mode —
+            <span id="undo-banner-prno" style="font-family:var(--mono);font-weight:700">PR-00000</span>
+            · Click <strong>Undo Cancellation</strong> to restore this PR.
+            Clears CANCELFLAG on PO_PRH and all PO_PRL lines (current FY only).
+          </div>
+
+          <!-- View-mode header for Undo — 4 key fields -->
+          <div class="view-hdr hidden" id="undo-view-hdr">
+            <div class="view-hdr-meta">
+              <div class="view-hdr-left">
+                <span class="view-section-lbl">Cancelled Requisition</span>
+                <div class="view-date-badge" style="background:linear-gradient(135deg,#fefce8,#fef9c3);border-color:#fde68a;">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#BA7517" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  <span style="color:#92400e;">Cancelled · Current FY only</span>
+                </div>
+              </div>
+              <div class="view-hdr-right">
+                <span class="view-created">Requested by <strong id="undo-h-reqby">—</strong></span>
+                <span class="view-prno-tag" style="background:#fef3c7;color:#92400e;border-color:#fcd34d;" id="undo-h-prno-tag">PR-00000</span>
+              </div>
+            </div>
+            <!-- 4-col field grid for undo header -->
+            <div style="display:grid;grid-template-columns:2fr 2fr 4fr 2fr;gap:6px 10px;padding-bottom:4px;">
+              <div>
+                <div class="view-lbl">PR Date</div>
+                <div class="view-val" id="undo-h-prdate">—</div>
+              </div>
+              <div>
+                <div class="view-lbl">Cancelled On</div>
+                <div class="view-val" style="color:#A32D2D;font-weight:600;" id="undo-h-canceldt">—</div>
+              </div>
+              <div>
+                <div class="view-lbl">Department</div>
+                <div class="view-val" id="undo-h-dept">—</div>
+              </div>
+              <div>
+                <div class="view-lbl">Lines Restore To</div>
+                <div class="view-val" id="undo-h-prevstatus">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cancellation detail panel (hidden until PR selected) -->
+          <div class="view-hdr hidden" id="undo-detail-card" style="border-top:none;">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div>
+                <div class="view-lbl" style="margin-bottom:5px;">Original Cancellation Reason</div>
+                <div class="undo-reason-box" id="undo-d-reason">—</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="view-lbl">Line Status After Undo</div>
+                <span style="font-size:10px;color:var(--text-400);">(restored to previous status)</span>
+                <div id="undo-d-lines" style="font-size:12px;color:var(--text-600);">—</div>
+              </div>
+              <div class="undo-info">
+                <span>ℹ</span>
+                <span>Undo clears <code style="font-family:var(--mono);font-size:10px">CANCELFLAG</code> on
+                <code style="font-family:var(--mono);font-size:10px">PO_PRH</code> and all
+                <code style="font-family:var(--mono);font-size:10px">PO_PRL</code> lines inside a single BeginTrans block.
+                Each line restores to its previous status. Audit entry written to LogDet_PO.
+                Restricted to current FY 2025–26.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Undo empty state (visible until PR selected) -->
+          <div class="empty" id="undo-empty">
+            <div class="empty-icon">↩</div>
+            <div class="empty-title">No cancelled PR selected</div>
+            <div class="empty-sub">Click <strong>Find Cancelled PR</strong> (F3) in the toolbar. Only cancelled PRs within FY 2025–26 are eligible for undo.</div>
+          </div>
+
+        </div><!-- /body-undo -->
+
+      </div><!-- /pane-cancellation -->
+
+    </div><!-- /page-content -->
+  </div><!-- /main-area -->
+</div><!-- /app-root -->
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL — Cancel PR Lookup  (exact PRPickerModal style, danger mode)
+     sp_PR_GetCancellablePRs: not approved, not cancelled,
+     QTYORD=0, not in PO_ENQL, not in PO_ORD, within FY
+═══════════════════════════════════════════════════ -->
+<div class="overlay hidden" id="overlay-cancel">
+  <div class="modal" style="width:820px;">
+    <!-- Header with danger-red icon — matches PRPickerModal isDelete -->
+    <div class="modal-hdr">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="
+          width:38px;height:38px;border-radius:10px;flex-shrink:0;
+          background:linear-gradient(135deg,#fff1f0,#fde8e8);
+          display:flex;align-items:center;justify-content:center;
+          box-shadow:0 2px 8px rgba(220,38,38,.18);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#1e293b;line-height:1.3;">Select PR to Cancel</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">
+            Purchase Requisition
+            <span style="margin-left:8px;color:#94a3b8;" id="cancel-modal-count"></span>
+          </div>
+        </div>
+      </div>
+      <button class="modal-x" onclick="closeOverlay('overlay-cancel')">✕</button>
+    </div>
+    <!-- Search -->
+    <div class="modal-search">
+      <input class="modal-search-input" id="cancel-search"
+        placeholder="Search by PR number, department or requester…"
+        style="border-radius:8px;background:#f8fafc;font-size:13px;"
+        oninput="filterCancelRows(this.value)">
+    </div>
+    <!-- Table -->
+    <div class="modal-body" style="max-height:380px;">
+      <table class="m-tbl">
+        <thead>
+          <tr>
+            <th style="width:105px">PR No</th>
+            <th style="width:100px">PR Date</th>
+            <th>Department</th>
+            <th>Requester</th>
+            <th class="r" style="width:72px">Items</th>
+          </tr>
+        </thead>
+        <tbody id="cancel-modal-tbody"></tbody>
+      </table>
+    </div>
+    <!-- Footer — matches PRPickerModal footer -->
+    <div class="modal-ftr" style="border-top:2px solid #f0f0f0;border-radius:0 0 8px 8px;">
+      <div style="flex:1;" id="cancel-modal-sel-info">
+        <span style="font-size:12px;color:#94a3b8;">Click to select · Double-click to confirm immediately</span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="m-btn-close" onclick="closeOverlay('overlay-cancel')">Cancel</button>
+        <button id="cancel-modal-sel-btn" onclick="selectCancelPR()" disabled
+          style="padding:6px 24px;background:#dc2626;color:#fff;border:none;border-radius:6px;
+                 font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);opacity:.4;">
+          Select to Cancel →
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL — Undo Cancellation Lookup  (PRPickerModal style, amber)
+     sp_PR_GetCancelledPRsForUndo: CANCELFLAG='Y', within FY
+═══════════════════════════════════════════════════ -->
+<div class="overlay hidden" id="overlay-undo">
+  <div class="modal" style="width:820px;">
+    <div class="modal-hdr">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="
+          width:38px;height:38px;border-radius:10px;flex-shrink:0;
+          background:linear-gradient(135deg,#fefce8,#fef3c7);
+          display:flex;align-items:center;justify-content:center;
+          box-shadow:0 2px 8px rgba(186,117,23,.18);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#BA7517" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 .49-4.2"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#1e293b;line-height:1.3;">Select Cancelled PR to Undo</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">
+            Cancelled PRs · FY 2025–26 only
+            <span style="margin-left:8px;color:#94a3b8;" id="undo-modal-count"></span>
+          </div>
+        </div>
+      </div>
+      <button class="modal-x" onclick="closeOverlay('overlay-undo')">✕</button>
+    </div>
+    <div class="modal-search">
+      <input class="modal-search-input" id="undo-search"
+        placeholder="Search by PR number, department or requester…"
+        style="border-radius:8px;background:#f8fafc;font-size:13px;"
+        oninput="filterUndoRows(this.value)">
+    </div>
+    <div class="modal-body" style="max-height:380px;">
+      <table class="m-tbl">
+        <thead>
+          <tr>
+            <th style="width:105px">PR No</th>
+            <th style="width:100px">PR Date</th>
+            <th>Department</th>
+            <th>Requested By</th>
+            <th style="width:110px">Cancelled On</th>
+            <th style="width:90px">Prev. Status</th>
+          </tr>
+        </thead>
+        <tbody id="undo-modal-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-ftr" style="border-top:2px solid #f0f0f0;border-radius:0 0 8px 8px;">
+      <div style="flex:1;" id="undo-modal-sel-info">
+        <span style="font-size:12px;color:#94a3b8;">Click to select · Double-click to confirm immediately</span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="m-btn-close" onclick="closeOverlay('overlay-undo')">Cancel</button>
+        <button id="undo-modal-sel-btn" onclick="selectUndoPR()" disabled
+          style="padding:6px 24px;background:#BA7517;color:#fff;border:none;border-radius:6px;
+                 font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);opacity:.4;">
+          ↩ Undo This PR →
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     CONFIRM DIALOG
+═══════════════════════════════════════════════════ -->
+<div class="confirm-overlay hidden" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-hdr">
+      <span class="confirm-icon" id="c-icon">⚡</span>
+      <span class="confirm-title" id="c-title">Confirm</span>
+    </div>
+    <div class="confirm-body" id="c-body"></div>
+    <div class="confirm-ftr">
+      <button class="btn-ghost" onclick="closeConfirm()">Cancel</button>
+      <button class="btn-danger" id="c-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div class="toasts" id="toasts"></div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════ -->
+<script>
+const CANCEL_DATA = [
+  { prno:10061, prdate:'22-May-2026', section:'Ring Frame',   typeDesc:'Stores Purchase',
+    dept:'MEC-001 – Mechanical',  reqby:'E001 – Suresh Kumar', refNo:'—', createdBy:'Suresh Kumar', status:'REQUESTED',
+    lineItems:[
+      {sno:1,code:'MEC01205',name:'Spindle Whorl Ring Frame 40mm',uom:'Nos',qty:200,rate:185.5,appCost:37100,reqdDate:'01-Jun-2026',machine:'RF-001',cc:'Production',remarks:'Urgent',sample:'N'},
+      {sno:2,code:'MEC00950',name:'V-Belt A-60 Twin',            uom:'Nos',qty:30, rate:145.0,appCost:4350, reqdDate:'01-Jun-2026',machine:'—',     cc:'—',          remarks:'',      sample:'N'},
+      {sno:3,code:'MEC01080',name:'Bearing 6205 ZZ',             uom:'Nos',qty:50, rate:87.0, appCost:4350, reqdDate:'01-Jun-2026',machine:'RF-002',cc:'Production',remarks:'',      sample:'N'},
+    ]},
+  { prno:10059, prdate:'20-May-2026', section:'—',            typeDesc:'Overhaul Purchase',
+    dept:'ELE-001 – Electrical',  reqby:'E002 – Arumugam',      refNo:'—', createdBy:'Arumugam',     status:'REQUESTED',
+    lineItems:[
+      {sno:1,code:'ELE00412',name:'3-Phase Motor Contactor 16A', uom:'Nos',qty:10, rate:1250.0,appCost:12500,reqdDate:'05-Jun-2026',machine:'MT-005',cc:'Electrical',remarks:'Overhaul',sample:'N'},
+      {sno:2,code:'ELE00318',name:'MCB 32A DP Schneider',        uom:'Nos',qty:8,  rate:718.0, appCost:5744, reqdDate:'05-Jun-2026',machine:'—',     cc:'Electrical',remarks:'',        sample:'N'},
+    ]},
+  { prno:10055, prdate:'18-May-2026', section:'Draw Frame',   typeDesc:'Stores Purchase',
+    dept:'RNG-001 – Ring Frame',  reqby:'E003 – Murugan',       refNo:'REF-22', createdBy:'Murugan',  status:'REQUESTED',
+    lineItems:[
+      {sno:1,code:'RNG00101',name:'Draw Frame Drafting Roller',  uom:'Nos',qty:12, rate:2200.0,appCost:26400,reqdDate:'10-Jun-2026',machine:'DF-001',cc:'Draw Frame',remarks:'',       sample:'N'},
+      {sno:2,code:'RNG00205',name:'Suction Tube Draw Frame',     uom:'Nos',qty:6,  rate:890.0, appCost:5340, reqdDate:'10-Jun-2026',machine:'DF-002',cc:'Draw Frame',remarks:'',       sample:'N'},
+      {sno:3,code:'MEC01080',name:'Bearing 6205 ZZ',             uom:'Nos',qty:24, rate:87.0,  appCost:2088, reqdDate:'10-Jun-2026',machine:'DF-001',cc:'Draw Frame',remarks:'',       sample:'N'},
+      {sno:4,code:'STO00102',name:'Cotton Waste Bale Standard',  uom:'Bale',qty:20,rate:1950.0,appCost:39000,reqdDate:'15-Jun-2026',machine:'—',     cc:'Stores',    remarks:'',       sample:'N'},
+      {sno:5,code:'ELE00500',name:'Capacitor 50µF 480V APFC',   uom:'Nos',qty:5,  rate:0,     appCost:0,    reqdDate:'15-Jun-2026',machine:'—',     cc:'Electrical',remarks:'',       sample:'Y'},
+    ]},
+  { prno:10048, prdate:'06-May-2026', section:'—',            typeDesc:'Stores Purchase',
+    dept:'WND-001 – Winding',     reqby:'E004 – Selvan',        refNo:'—', createdBy:'Selvan',       status:'REQUESTED',
+    lineItems:[
+      {sno:1,code:'WND00220',name:'Winding Drum Felt Pad',       uom:'Nos',qty:40, rate:135.0, appCost:5400, reqdDate:'20-May-2026',machine:'WD-003',cc:'Winding',   remarks:'',       sample:'N'},
+    ]},
+  { prno:10043, prdate:'01-May-2026', section:'Admin',        typeDesc:'Capital Purchase',
+    dept:'STO-001 – Stores',      reqby:'E005 – Ramesh',        refNo:'CAP-07', createdBy:'Ramesh',   status:'REQUESTED',
+    lineItems:[
+      {sno:1,code:'CAP00101',name:'Industrial Air Compressor 50HP',uom:'Nos',qty:1,  rate:125000,appCost:125000,reqdDate:'30-Jun-2026',machine:'—',cc:'Capital',remarks:'New machine',sample:'N'},
+      {sno:2,code:'CAP00205',name:'Air Dryer Unit Refrigerant',    uom:'Nos',qty:1,  rate:35000, appCost:35000, reqdDate:'30-Jun-2026',machine:'—',cc:'Capital',remarks:'Accessory',  sample:'N'},
+      {sno:3,code:'CAP00302',name:'Air Pipeline 1.5" SS 316L',     uom:'Mtr',qty:100,rate:250,   appCost:25000, reqdDate:'30-Jun-2026',machine:'—',cc:'Capital',remarks:'',           sample:'N'},
+      {sno:4,code:'CAP00401',name:'Pressure Regulator 10 Bar',     uom:'Nos',qty:5,  rate:0,     appCost:0,     reqdDate:'30-Jun-2026',machine:'—',cc:'Capital',remarks:'Quote req',  sample:'N'},
+    ]},
+  { prno:10040, prdate:'28-Apr-2026', section:'Blow Room',    typeDesc:'Stores Purchase',
+    dept:'MEC-001 – Mechanical',  reqby:'E006 – Karthik',       refNo:'—', createdBy:'Karthik',      status:'REQUESTED',
+    lineItems:[
+      {sno:1,code:'MEC01300',name:'Beater Blade Blow Room 18"',   uom:'Nos',qty:20, rate:950.0, appCost:19000,reqdDate:'08-May-2026',machine:'BR-001',cc:'Blow Room',remarks:'',       sample:'N'},
+      {sno:2,code:'MEC01205',name:'Spindle Whorl Ring Frame 40mm',uom:'Nos',qty:15, rate:868.0, appCost:13020,reqdDate:'08-May-2026',machine:'BR-002',cc:'Blow Room',remarks:'',       sample:'N'},
+    ]},
+  { prno:10036, prdate:'24-Apr-2026', section:'—',            typeDesc:'Overhaul Purchase',
+    dept:'ELE-001 – Electrical',  reqby:'E002 – Arumugam',      refNo:'—', createdBy:'Arumugam',     status:'REQUESTED',
+    lineItems:[
+      {sno:1,code:'ELE00412',name:'3-Phase Motor Contactor 16A', uom:'Nos',qty:5,  rate:1250.0,appCost:6250, reqdDate:'05-May-2026',machine:'MT-010',cc:'Electrical',remarks:'Overhaul',sample:'N'},
+      {sno:2,code:'ELE00318',name:'MCB 32A DP Schneider',        uom:'Nos',qty:4,  rate:718.0, appCost:2872, reqdDate:'05-May-2026',machine:'—',     cc:'Electrical',remarks:'',        sample:'N'},
+      {sno:3,code:'ELE00601',name:'MCCB 100A 3P Schneider',      uom:'Nos',qty:2,  rate:0,     appCost:0,    reqdDate:'05-May-2026',machine:'—',     cc:'Electrical',remarks:'Quote req',sample:'N'},
+    ]},
+  { prno:10028, prdate:'16-Apr-2026', section:'—',            typeDesc:'Stores Purchase',
+    dept:'RNG-001 – Ring Frame',  reqby:'E003 – Murugan',       refNo:'—', createdBy:'Murugan',      status:'REQUESTED',
+    lineItems:[
+      {sno:1,code:'RNG00101',name:'Draw Frame Drafting Roller',  uom:'Nos',qty:8,  rate:2200.0,appCost:17600,reqdDate:'28-Apr-2026',machine:'DF-003',cc:'Draw Frame',remarks:'',       sample:'N'},
+      {sno:2,code:'RNG00205',name:'Suction Tube Draw Frame',     uom:'Nos',qty:4,  rate:890.0, appCost:3560, reqdDate:'28-Apr-2026',machine:'DF-004',cc:'Draw Frame',remarks:'',       sample:'N'},
+      {sno:3,code:'MEC01080',name:'Bearing 6205 ZZ',             uom:'Nos',qty:16, rate:87.0,  appCost:1392, reqdDate:'28-Apr-2026',machine:'DF-003',cc:'Draw Frame',remarks:'',       sample:'N'},
+      {sno:4,code:'STO00102',name:'Cotton Waste Bale Standard',  uom:'Bale',qty:10,rate:1950.0,appCost:19500,reqdDate:'30-Apr-2026',machine:'—',     cc:'Stores',    remarks:'',       sample:'N'},
+      {sno:5,code:'ELE00500',name:'Capacitor 50µF 480V APFC',   uom:'Nos',qty:3,  rate:0,     appCost:0,    reqdDate:'30-Apr-2026',machine:'—',     cc:'Electrical',remarks:'',       sample:'N'},
+      {sno:6,code:'RNG00401',name:'Separator Box Cover Ring Frame',uom:'Nos',qty:12,rate:0,    appCost:0,    reqdDate:'30-Apr-2026',machine:'RF-005',cc:'Ring Frame', remarks:'',      sample:'N'},
+    ]},
+];
+
+const UNDO_DATA = [
+  { prno:10015, prdate:'05-Apr-2026', dept:'STO – Stores',     reqby:'Ramesh',       canceldt:'10-Apr-2026', reason:'Budget freeze — Q1 capital expenditure suspended.', prevStatus:'Requested' },
+  { prno:10008, prdate:'29-Mar-2026', dept:'ELE – Electrical', reqby:'Arumugam',     canceldt:'02-Apr-2026', reason:'Item available in store — stock recounted.',        prevStatus:'Requested' },
+  { prno:10002, prdate:'22-Mar-2026', dept:'MEC – Mechanical', reqby:'Suresh Kumar', canceldt:'25-Mar-2026', reason:'Requirement withdrawn — machine retired.',          prevStatus:'Partial'   },
+];
+
+let activeModule   = 'cancellation';
+let activeSubTab   = 'cancel';
+let siderCollapsed = false;
+
+let cancelModalSel = null;
+let selectedCancelPR = null;
+
+let undoModalSel   = null;
+let selectedUndoPR = null;
+
+let confirmCb      = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  renderCancelModal(CANCEL_DATA);
+  renderUndoModal(UNDO_DATA);
+  document.querySelectorAll('.menu-item,.menu-solo').forEach(el => el.classList.remove('active'));
+  document.getElementById('nav-cancellation').classList.add('active');
+  setTimeout(() => openCancelModal(), 150);
+});
+
+function navigate(target) {
+  const links = {
+    hub             : '../index.html',
+    foreclosure     : '../SPINRISE_FSD_M01_PRForeclosure_v1_1/SPINRISE_FSD_M01_PRForeclosure_v1_1.html',
+    cancellation    : 'SPINRISE_FSD_M01_PRCancellationUndo_v1_1.html',
+    amendment       : '../SPINRISE_FSD_M01_PRAmendment_v2_3/SPINRISE_FSD_M01_PRAmendment_v2_3.html',
+    'first-approval'     : '../SPINRISE_FSD_M01_PRFirstLevelApproval_v1_1/SPINRISE_FSD_M01_PRFirstLevelApproval_v1_1.html',
+    PRFinalLevelApproval : '../SPINRISE_FSD_M01_PRFinalLevelApproval_v1_1/SPINRISE_FSD_M01_PRFinalLevelApproval_v1_2.html'
+  };
+  if (links[target]) window.location.href = links[target];
+}
+
+function toggleGroup(childrenId, groupId) {
+  const ch  = document.getElementById(childrenId);
+  const grp = document.getElementById(groupId);
+  const open = ch.classList.contains('open');
+  ch.classList.toggle('open', !open);
+  grp.classList.toggle('open', !open);
+}
+
+function toggleSider() {
+  siderCollapsed = !siderCollapsed;
+  document.getElementById('sider').classList.toggle('collapsed', siderCollapsed);
+  const icon = document.getElementById('toggle-icon');
+  if (siderCollapsed) {
+    icon.innerHTML = `<line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/><line x1="1" y1="12" x2="15" y2="12"/><polyline points="6,5 3,8 6,11" stroke-width="1.4"/>`;
+  } else {
+    icon.innerHTML = `<line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/><line x1="1" y1="12" x2="15" y2="12"/><polyline points="10,5 13,8 10,11" stroke-width="1.4"/>`;
+  }
+}
+
+function toggleUserMenu() {
+  document.getElementById('user-dropdown').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.hdr-user')) {
+    document.getElementById('user-dropdown').classList.remove('open');
+  }
+});
+
+function switchSubTab(tab) {
+  activeSubTab = tab;
+  document.getElementById('sub-cancel-btn').classList.toggle('active', tab === 'cancel');
+  document.getElementById('sub-undo-btn').classList.toggle('active', tab === 'undo');
+  document.getElementById('body-cancel').classList.toggle('active', tab === 'cancel');
+  document.getElementById('body-undo').classList.toggle('active', tab === 'undo');
+
+  const cancelBtns = ['btn-find-cn','cn-sep1','btn-do-cancel'];
+  const undoBtns   = ['btn-find-undo','undo-sep1','btn-do-undo'];
+  cancelBtns.forEach(id => document.getElementById(id)?.classList.toggle('hidden', tab !== 'cancel'));
+  undoBtns.forEach(id   => document.getElementById(id)?.classList.toggle('hidden', tab !== 'undo'));
+
+  if (tab === 'undo' && !selectedUndoPR)     setTimeout(() => openUndoModal(),   120);
+  if (tab === 'cancel' && !selectedCancelPR) setTimeout(() => openCancelModal(), 120);
+}
+
+function renderCancelModal(data) {
+  const tbody = document.getElementById('cancel-modal-tbody');
+  tbody.innerHTML = '';
+  data.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i;
+    tr.innerHTML = `
+      <td><span style="font-family:var(--mono);font-weight:700;font-size:12px;color:#1e293b;">PR-${String(r.prno).padStart(5,'0')}</span></td>
+      <td style="font-size:12px;color:#475569;">${r.prdate}</td>
+      <td><div style="font-weight:500;font-size:13px;color:#1e293b;">${r.dept}</div></td>
+      <td style="font-size:12px;color:#475569;">${r.reqby}</td>
+      <td class="r" style="font-size:12px;color:#64748b;">${r.lineItems.length}</td>
+    `;
+    const sel = () => {
+      cancelModalSel = i;
+      document.querySelectorAll('#cancel-modal-tbody tr').forEach((t,j) => {
+        t.style.background = j===i ? '#eff6ff' : j%2===0 ? '#fff' : '#fafafa';
+        t.style.outline    = j===i ? '2px solid #dc2626' : 'none';
+        t.style.outlineOffset = '-1px';
+      });
+      const prno = 'PR-' + String(r.prno).padStart(5,'0');
+      document.getElementById('cancel-modal-sel-info').innerHTML =
+        `<span style="font-size:12px;color:#dc2626;font-weight:600;">
+           <span style="font-family:var(--mono);">${prno}</span>
+           &nbsp;—&nbsp;<span style="color:#475569;font-weight:400;">${r.dept}</span>
+           <span style="color:#94a3b8;"> · ${r.reqby}</span>
+         </span>`;
+      const btn = document.getElementById('cancel-modal-sel-btn');
+      btn.disabled = false; btn.style.opacity = '1';
+    };
+    tr.style.cursor = 'pointer'; tr.style.transition = 'background .1s';
+    tr.addEventListener('click', sel);
+    tr.addEventListener('dblclick', () => { sel(); selectCancelPR(); });
+    tbody.appendChild(tr);
+  });
+  const cnt = data.length;
+  document.getElementById('cancel-modal-count').textContent =
+    `(${cnt} record${cnt!==1?'s':''})`;
+}
+
+function filterCancelRows(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#cancel-modal-tbody tr').forEach((tr, i) => {
+    const r = CANCEL_DATA[i];
+    tr.style.display = (!q || JSON.stringify(r).toLowerCase().includes(q)) ? '' : 'none';
+  });
+}
+
+function openCancelModal() {
+  cancelModalSel = null;
+  const btn = document.getElementById('cancel-modal-sel-btn');
+  btn.disabled = true; btn.style.opacity = '.4';
+  document.getElementById('cancel-modal-sel-info').innerHTML =
+    `<span style="font-size:12px;color:#94a3b8;">Click to select · Double-click to confirm immediately</span>`;
+  document.querySelectorAll('#cancel-modal-tbody tr').forEach((t,j) => {
+    t.style.background = j%2===0 ? '#fff' : '#fafafa';
+    t.style.outline = 'none';
+  });
+  document.getElementById('cancel-search').value = '';
+  filterCancelRows('');
+  document.getElementById('overlay-cancel').classList.remove('hidden');
+  setTimeout(() => document.getElementById('cancel-search').focus(), 80);
+}
+
+function selectCancelPR() {
+  if (cancelModalSel === null) return;
+  closeOverlay('overlay-cancel');
+  populateCancelForm(CANCEL_DATA[cancelModalSel]);
+}
+
+function populateCancelForm(pr) {
+  selectedCancelPR = pr;
+  const prTag = 'PR-' + String(pr.prno).padStart(5,'0');
+
+  document.getElementById('cn-band-sublabel').textContent = 'PR Number';
+  document.getElementById('cn-band-subvalue').textContent = prTag;
+
+  document.getElementById('cn-banner-prno').textContent = prTag;
+  document.getElementById('cn-del-banner').classList.remove('hidden');
+
+  document.getElementById('cn-h-prno-tag').textContent  = prTag;
+  document.getElementById('cn-h-createdby').textContent = pr.createdBy;
+  document.getElementById('cn-h-prdate').textContent    = pr.prdate;
+  document.getElementById('cn-h-dept').textContent      = pr.dept;
+  document.getElementById('cn-h-section').textContent   = pr.section || '—';
+  document.getElementById('cn-h-reqby').textContent     = pr.reqby;
+  const itEl = document.getElementById('cn-h-itype');
+  if (pr.typeDesc === 'Capital Purchase') {
+    itEl.innerHTML = `<span class="view-type-tag">${pr.typeDesc}</span>`;
+  } else {
+    itEl.textContent = pr.typeDesc;
+  }
+  document.getElementById('cn-h-refno').textContent = pr.refNo || '—';
+  document.getElementById('cn-view-hdr').classList.remove('hidden');
+
+  document.getElementById('cn-reason').value = '';
+  document.getElementById('cn-reason-ct').textContent = '0 / 200';
+  document.getElementById('cn-reason-err').style.display = 'none';
+  document.getElementById('cn-reason').classList.remove('invalid');
+  document.getElementById('cn-reason-strip').classList.remove('hidden');
+
+  const tbody = document.getElementById('cn-items-tbody');
+  tbody.innerHTML = '';
+  pr.lineItems.forEach((l, i) => {
+    const tr = document.createElement('tr');
+    const dash = `<span class="items-dash">—</span>`;
+    const fmtNum = (v, dp) => v > 0
+      ? `<span style="font-variant-numeric:tabular-nums">${Number(v).toLocaleString('en-IN',{minimumFractionDigits:dp,maximumFractionDigits:dp})}</span>`
+      : dash;
+    tr.innerHTML = `
+      <td style="text-align:center;color:#94a3b8;">${i+1}</td>
+      <td style="font-family:var(--mono);font-weight:700;">${l.code}</td>
+      <td>${l.name}</td>
+      <td style="text-align:center;">${l.uom || dash}</td>
+      <td style="text-align:right;">${fmtNum(l.qty,3)}</td>
+      <td style="text-align:right;">${fmtNum(l.rate,4)}</td>
+      <td style="text-align:right;">${l.appCost>0?fmtNum(l.appCost,2):dash}</td>
+      <td>${l.reqdDate||dash}</td>
+      <td style="font-family:var(--mono);font-size:10px;">${l.machine&&l.machine!=='—'?l.machine:dash}</td>
+      <td style="font-size:10px;">${l.cc&&l.cc!=='—'?l.cc:dash}</td>
+      <td style="font-size:10px;">${l.remarks||dash}</td>
+      <td style="text-align:center;">${l.sample==='Y'?'✓':''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  const n = pr.lineItems.length;
+  document.getElementById('cn-items-ct').textContent = n + ' ' + (n===1?'item':'items');
+  document.getElementById('cn-items-section').classList.remove('hidden');
+
+  const totalCost = pr.lineItems.reduce((s,l)=>s+(l.appCost||0),0);
+  const totalQty  = pr.lineItems.reduce((s,l)=>s+(l.qty||0),0);
+  const prDateParts = pr.prdate.split('-');
+  const monthMap   = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const prDateObj  = new Date(+prDateParts[2], monthMap[prDateParts[1]], +prDateParts[0]);
+  const daysOpen   = Math.floor((new Date('2026-05-25') - prDateObj) / 86400000);
+  const daysColor  = daysOpen < 5 ? 'green' : daysOpen <= 14 ? 'amber' : 'red';
+
+  document.getElementById('cn-kpi-lines').textContent      = n;
+  document.getElementById('cn-kpi-lines-sub').textContent  = n===1?'Item in this PR':'Items in this PR';
+  document.getElementById('cn-kpi-qty').textContent        = totalQty.toFixed(3);
+  document.getElementById('cn-kpi-budget').textContent     = totalCost>0
+    ? '₹ '+totalCost.toLocaleString('en-IN',{minimumFractionDigits:2}) : '—';
+  document.getElementById('cn-kpi-days').className         = 'kpi-card-val '+daysColor;
+  document.getElementById('cn-kpi-days').textContent       = daysOpen;
+  document.getElementById('cn-kpi-days-sub').textContent   = daysOpen===0?'Created today':`${daysOpen} day${daysOpen!==1?'s':''} since creation`;
+  if(totalCost>0) document.getElementById('cn-kpi-budget-card').classList.add('acc-amber');
+  if(daysOpen>14) document.getElementById('cn-kpi-days-card').classList.add('acc-red');
+  else if(daysOpen>=5) document.getElementById('cn-kpi-days-card').classList.add('acc-amber');
+  document.getElementById('cn-kpi-strip').classList.remove('hidden');
+
+  document.getElementById('cn-empty').classList.add('hidden');
+
+  document.getElementById('btn-do-cancel').disabled = false;
+  document.getElementById('btn-do-cancel').classList.remove('disabled');
+}
+
+function onReasonInput() {
+  const v = document.getElementById('cn-reason').value;
+  document.getElementById('cn-reason-ct').textContent = v.length + ' / 200';
+  if (v.trim()) {
+    document.getElementById('cn-reason').classList.remove('invalid');
+    document.getElementById('cn-reason-err').style.display = 'none';
+  }
+}
+
+function doCancel() {
+  if (!selectedCancelPR) return;
+  const reason = document.getElementById('cn-reason').value.trim();
+  if (!reason) {
+    document.getElementById('cn-reason').classList.add('invalid');
+    document.getElementById('cn-reason-err').style.display = 'block';
+    document.getElementById('cn-reason').focus();
+    toast('Cancellation reason is required.', 'er');
+    return;
+  }
+  const pr = selectedCancelPR;
+  const n  = pr.lineItems.length;
+  const totalCost = pr.lineItems.reduce((s,l)=>s+(l.appCost||0),0);
+  showConfirm({
+    icon:'🚫',
+    title:'Confirm PR Cancellation',
+    body:`Cancelling <strong>PR-${String(pr.prno).padStart(5,'0')}</strong>
+         (${pr.dept} · ${n} item${n>1?'s':''} · ₹${totalCost.toLocaleString('en-IN',{minimumFractionDigits:2})}).<br><br>
+         Reason: <em>"${reason}"</em><br><br>
+         BeginTrans → UPDATE PO_PRH (CANCELFLAG='Y', CANCELDT, CANREASON) →
+         UPDATE PO_PRL (all lines) → INSERT LogDet_PO → CommitTrans.<br><br>
+         <strong>Excluded from Modify and Delete lookups permanently.</strong>`,
+    okLabel:'🚫 Cancel This PR',
+    okClass:'btn-danger',
+    onOk: () => {
+      const t = toast('Cancelling PR…', 'if', 0);
+      setTimeout(() => {
+        removeToast(t);
+        const today = '25-May-2026';
+        UNDO_DATA.unshift({ prno:pr.prno, prdate:pr.prdate, dept:pr.dept, reqby:pr.reqby,
+          canceldt:today, reason, prevStatus:pr.status });
+        const idx = CANCEL_DATA.findIndex(p => p.prno === pr.prno);
+        if (idx > -1) CANCEL_DATA.splice(idx, 1);
+        renderCancelModal(CANCEL_DATA);
+        renderUndoModal(UNDO_DATA);
+        resetCN();
+        toast(`✔ PR-${String(pr.prno).padStart(5,'0')} cancelled. LogDet_PO entry written.`, 'ok');
+      }, 800);
+    }
+  });
+}
+
+function resetCN() {
+  selectedCancelPR = null;
+  selectedUndoPR   = null;
+
+  ['cn-del-banner','cn-view-hdr','cn-reason-strip','cn-items-section','cn-kpi-strip'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById('cn-empty').classList.remove('hidden');
+  document.getElementById('cn-reason').value = '';
+  document.getElementById('cn-reason-ct').textContent = '0 / 200';
+  document.getElementById('cn-reason-err').style.display = 'none';
+  document.getElementById('cn-band-sublabel').textContent = 'Processing Date';
+  document.getElementById('cn-band-subvalue').textContent = '25 May 2026';
+  ['cn-kpi-budget-card','cn-kpi-days-card'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('acc-amber','acc-red');
+  });
+  document.getElementById('btn-do-cancel').disabled = true;
+  document.getElementById('btn-do-cancel').classList.add('disabled');
+
+  ['undo-del-banner','undo-view-hdr','undo-detail-card'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById('undo-empty').classList.remove('hidden');
+  document.getElementById('btn-do-undo').disabled = true;
+  document.getElementById('btn-do-undo').classList.add('disabled');
+}
+
+function renderUndoModal(data) {
+  const tbody = document.getElementById('undo-modal-tbody');
+  tbody.innerHTML = '';
+  data.forEach((r, i) => {
+    const sc = {Requested:'bg-requested',Partial:'bg-partial',Enquired:'bg-enquired',Ordered:'bg-ordered'}[r.prevStatus]||'bg-requested';
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i;
+    tr.innerHTML = `
+      <td><span style="font-family:var(--mono);font-weight:700;font-size:12px;color:#A32D2D;">PR-${String(r.prno).padStart(5,'0')}</span></td>
+      <td style="font-size:12px;color:#475569;">${r.prdate}</td>
+      <td><div style="font-weight:500;font-size:13px;color:#1e293b;">${r.dept}</div></td>
+      <td style="font-size:12px;color:#475569;">${r.reqby}</td>
+      <td style="font-size:12px;color:#A32D2D;font-weight:500;">${r.canceldt}</td>
+      <td><span class="badge ${sc}">${r.prevStatus}</span></td>
+    `;
+    const sel = () => {
+      undoModalSel = i;
+      document.querySelectorAll('#undo-modal-tbody tr').forEach((t,j) => {
+        t.style.background    = j===i ? '#fefce8' : j%2===0 ? '#fff' : '#fafafa';
+        t.style.outline       = j===i ? '2px solid #BA7517' : 'none';
+        t.style.outlineOffset = '-1px';
+      });
+      const prno = 'PR-' + String(r.prno).padStart(5,'0');
+      document.getElementById('undo-modal-sel-info').innerHTML =
+        `<span style="font-size:12px;color:#BA7517;font-weight:600;">
+           <span style="font-family:var(--mono);">${prno}</span>
+           &nbsp;—&nbsp;<span style="color:#475569;font-weight:400;">${r.dept}</span>
+           <span style="color:#94a3b8;"> · Cancelled ${r.canceldt}</span>
+         </span>`;
+      const btn = document.getElementById('undo-modal-sel-btn');
+      btn.disabled = false; btn.style.opacity = '1';
+    };
+    tr.style.cursor = 'pointer'; tr.style.transition = 'background .1s';
+    tr.addEventListener('click', sel);
+    tr.addEventListener('dblclick', () => { sel(); selectUndoPR(); });
+    tbody.appendChild(tr);
+  });
+  const cnt = data.length;
+  document.getElementById('undo-modal-count').textContent =
+    `(${cnt} cancelled PR${cnt!==1?'s':''})`;
+}
+
+function filterUndoRows(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#undo-modal-tbody tr').forEach((tr, i) => {
+    tr.style.display = (!q || JSON.stringify(UNDO_DATA[i]).toLowerCase().includes(q)) ? '' : 'none';
+  });
+}
+
+function openUndoModal() {
+  undoModalSel = null;
+  const btn = document.getElementById('undo-modal-sel-btn');
+  btn.disabled = true; btn.style.opacity = '.4';
+  document.getElementById('undo-modal-sel-info').innerHTML =
+    `<span style="font-size:12px;color:#94a3b8;">Click to select · Double-click to confirm immediately</span>`;
+  document.querySelectorAll('#undo-modal-tbody tr').forEach((t,j) => {
+    t.style.background = j%2===0 ? '#fff' : '#fafafa';
+    t.style.outline = 'none';
+  });
+  document.getElementById('undo-search').value = '';
+  filterUndoRows('');
+  document.getElementById('overlay-undo').classList.remove('hidden');
+  setTimeout(() => document.getElementById('undo-search').focus(), 80);
+}
+
+function selectUndoPR() {
+  if (undoModalSel === null) return;
+  closeOverlay('overlay-undo');
+  populateUndoForm(UNDO_DATA[undoModalSel]);
+}
+
+function populateUndoForm(pr) {
+  selectedUndoPR = pr;
+  const prTag = 'PR-' + String(pr.prno).padStart(5,'0');
+  const sc    = {Requested:'bg-requested',Partial:'bg-partial',Enquired:'bg-enquired',Ordered:'bg-ordered'}[pr.prevStatus]||'bg-requested';
+
+  document.getElementById('undo-banner-prno').textContent = prTag;
+  document.getElementById('undo-del-banner').classList.remove('hidden');
+
+  document.getElementById('undo-h-prno-tag').textContent  = prTag;
+  document.getElementById('undo-h-reqby').textContent     = pr.reqby;
+  document.getElementById('undo-h-prdate').textContent    = pr.prdate;
+  document.getElementById('undo-h-canceldt').textContent  = pr.canceldt;
+  document.getElementById('undo-h-dept').textContent      = pr.dept;
+  document.getElementById('undo-h-prevstatus').innerHTML  =
+    `<span class="badge ${sc}">${pr.prevStatus}</span>`;
+  document.getElementById('undo-view-hdr').classList.remove('hidden');
+
+  document.getElementById('undo-d-reason').textContent = pr.reason;
+  document.getElementById('undo-d-lines').innerHTML    =
+    `Lines will be restored to: <span class="badge ${sc}">${pr.prevStatus}</span>`;
+  document.getElementById('undo-detail-card').classList.remove('hidden');
+
+  document.getElementById('undo-empty').classList.add('hidden');
+
+  document.getElementById('btn-do-undo').disabled = false;
+  document.getElementById('btn-do-undo').classList.remove('disabled');
+}
+
+function doUndo() {
+  if (!selectedUndoPR) return;
+  const pr = selectedUndoPR;
+  showConfirm({
+    icon:'↩',
+    title:'Confirm Undo Cancellation',
+    body:`Restoring <strong>PR-${String(pr.prno).padStart(5,'0')}</strong> (${pr.dept}) from Cancelled
+         back to <strong>${pr.prevStatus}</strong> status.<br><br>
+         BeginTrans → UPDATE PO_PRH (clear CANCELFLAG) → UPDATE PO_PRL (all lines) →
+         INSERT LogDet_PO → CommitTrans. Restricted to current FY 2025–26.`,
+    okLabel:'↩ Restore PR',
+    okClass:'btn-warn',
+    onOk: () => {
+      const t = toast('Restoring PR…', 'if', 0);
+      setTimeout(() => {
+        removeToast(t);
+        const idx = UNDO_DATA.findIndex(p => p.prno === pr.prno);
+        if (idx > -1) UNDO_DATA.splice(idx, 1);
+        CANCEL_DATA.unshift({ prno:pr.prno, prdate:pr.prdate, typeCode:'S', typeDesc:'Stores Purchase',
+          dept:pr.dept, reqby:pr.reqby, lines:2, value:0, status:pr.prevStatus,
+          createdBy:pr.reqby, ref:'—', appr:'None' });
+        renderCancelModal(CANCEL_DATA);
+        renderUndoModal(UNDO_DATA);
+        resetCN();
+        toast(`✔ PR-${String(pr.prno).padStart(5,'0')} restored to ${pr.prevStatus}.`, 'ok');
+      }, 800);
+    }
+  });
+}
+
+function setCNState(s) {
+  document.getElementById('ist-cn-none').classList.toggle('active', s==='none');
+  document.getElementById('ist-cn-sel').classList.toggle('active',  s==='selected');
+  document.querySelectorAll('.menu-item,.menu-solo').forEach(el => el.classList.remove('active'));
+  document.getElementById('nav-cancellation').classList.add('active');
+  switchSubTab('cancel');
+  if (s === 'selected') { if (CANCEL_DATA[0]) populateCancelForm(CANCEL_DATA[0]); }
+  else resetCN();
+}
+
+function setUndoState(s) {
+  document.getElementById('ist-undo-none').classList.toggle('active', s==='none');
+  document.getElementById('ist-undo-sel').classList.toggle('active',  s==='selected');
+  activeSubTab = 'undo';
+  document.querySelectorAll('.menu-item,.menu-solo').forEach(el => el.classList.remove('active'));
+  document.getElementById('nav-cancellation').classList.add('active');
+  document.getElementById('sub-cancel-btn').classList.remove('active');
+  document.getElementById('sub-undo-btn').classList.add('active');
+  document.getElementById('body-cancel').classList.remove('active');
+  document.getElementById('body-undo').classList.add('active');
+  ['btn-find-cn','cn-sep1','btn-do-cancel'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+  ['btn-find-undo','undo-sep1','btn-do-undo'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+  if (s === 'selected') { if (UNDO_DATA[0]) populateUndoForm(UNDO_DATA[0]); }
+  else resetCN();
+}
+
+function showConfirm({icon,title,body,okLabel,okClass,onOk}) {
+  document.getElementById('c-icon').textContent  = icon;
+  document.getElementById('c-title').textContent = title;
+  document.getElementById('c-body').innerHTML    = window.SpinRiseProto ? window.SpinRiseProto.sanitizeConfirmHtml(body) : body;
+  const btn = document.getElementById('c-ok');
+  btn.textContent = okLabel;
+  btn.className   = okClass;
+  btn.onclick     = () => { closeConfirm(); onOk && onOk(); };
+  document.getElementById('confirm-overlay').classList.remove('hidden');
+}
+function closeConfirm() {
+  document.getElementById('confirm-overlay').classList.add('hidden');
+}
+
+function closeOverlay(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+let _tid = 0;
+function toast(msg, type='if', dur=3500) {
+  const id = ++_tid;
+  const el = document.createElement('div');
+  el.id = 'toast-' + id;
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  if (dur > 0) setTimeout(() => removeToast(id), dur);
+  return id;
+}
+function removeToast(id) {
+  const el = document.getElementById('toast-' + id);
+  if (el) { el.style.animation = 'tOut .25s ease forwards'; setTimeout(() => el.remove(), 260); }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeOverlay('overlay-cancel');
+    closeOverlay('overlay-undo');
+    closeConfirm();
+  }
+  if (e.ctrlKey && e.key === 's') {
+    e.preventDefault();
+    if (activeSubTab === 'cancel') doCancel();
+    else doUndo();
+  }
+  if (e.key === 'F3') {
+    e.preventDefault();
+    if (activeSubTab === 'cancel') openCancelModal();
+    else openUndoModal();
+  }
+  if (e.altKey && e.key === 'x') { e.preventDefault(); resetCN(); }
+});
+</script>
+<script src="../assets/js/prototype-system.js"></script>
+</body>
+</html>

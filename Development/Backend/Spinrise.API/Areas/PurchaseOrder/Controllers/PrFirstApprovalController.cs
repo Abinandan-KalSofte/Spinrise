@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Spinrise.API.Areas.PurchaseOrder.Print;
+using Spinrise.Reports.Areas.PurchaseOrder.Documents;
 using Spinrise.API.Controllers;
 using Spinrise.Application.Areas.PurchaseOrder.FirstLevelApproval.DTOs;
 using Spinrise.Application.Areas.PurchaseOrder.FirstLevelApproval.Interfaces;

@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpinRise — PR Amendment Entry | SPINRISE_FSD_M01_PRAmendment_v2_3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/prototype-system.css">
+<style>
+:root {
+  --blue:#185FA5; --blue-dark:#0C447C; --blue-100:#E6F1FB;
+  --bg:#F5F5F3; --surface-alt:#FAFAF8; --border:#E2E2E2;
+  --text-900:#1A1A1A; --text-600:#4A4A4A; --text-400:#888888;
+  --success:#3B6D11; --success-l:#EAF3DE;
+  --warning:#BA7517; --warning-l:#FAEEDA;
+  --error:#A32D2D; --error-l:#FCEBEB;
+  --sidebar-bg:#1a2236;
+  --font:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:var(--font);font-size:13px;color:var(--text-900);}
+
+/* ── IST Bar ── */
+.ist-bar{
+  position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#0f172a;display:flex;align-items:center;gap:6px;padding:5px 14px;
+  font-size:11px;font-weight:600;color:rgba(255,255,255,.65);
+  border-bottom:2px solid #1e293b;
+}
+.ist-label{color:rgba(255,255,255,.35);font-size:10px;margin-right:2px;}
+.ist-btn{
+  padding:3px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.18);
+  background:transparent;color:rgba(255,255,255,.65);font-size:10px;font-weight:600;
+  cursor:pointer;font-family:var(--font);transition:.12s;
+}
+.ist-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.ist-btn:hover:not(.active){background:rgba(255,255,255,.08);}
+.ist-sep{width:1px;height:14px;background:rgba(255,255,255,.15);margin:0 4px;}
+.ist-badge{
+  font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700;
+  background:rgba(255,140,0,.2);color:#fb923c;border:1px solid rgba(255,140,0,.35);
+}
+
+/* ── App Shell ── */
+.app-root{display:flex;height:100vh;overflow:hidden;padding-top:30px;}
+
+/* ── Sider ── */
+.sider{width:280px;min-width:280px;height:100%;background:var(--sidebar-bg);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;transition:width .2s,min-width .2s;}
+.sider.collapsed{width:52px;min-width:52px;}
+.sider-logo{height:48px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;overflow:hidden;}
+.sider.collapsed .sider-logo{justify-content:center;padding:0;}
+.logo-mark{width:28px;height:28px;border-radius:6px;flex-shrink:0;background:linear-gradient(135deg,#185FA5,#1677ff);display:flex;align-items:center;justify-content:center;}
+.logo-mark span{color:#fff;font-size:13px;font-weight:800;}
+.logo-text{color:#fff;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;}
+.sider.collapsed .logo-text{display:none;}
+.sider-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0;}
+.sider-nav::-webkit-scrollbar{width:0;}
+.menu-group{display:flex;align-items:center;gap:8px;padding:8px 16px;color:rgba(255,255,255,.65);font-size:13px;font-weight:500;cursor:pointer;border-left:3px solid transparent;user-select:none;transition:.15s;white-space:nowrap;overflow:hidden;}
+.menu-group:hover{background:rgba(255,255,255,.05);color:#fff;}
+.menu-group.open{color:#fff;}
+.menu-group-icon{font-size:14px;flex-shrink:0;width:16px;text-align:center;}
+.menu-group-label{flex:1;white-space:nowrap;overflow:hidden;}
+.menu-chevron{font-size:10px;color:rgba(255,255,255,.35);transition:transform .2s;flex-shrink:0;}
+.menu-group.open .menu-chevron{transform:rotate(90deg);}
+.sider.collapsed .menu-group-label,.sider.collapsed .menu-chevron{display:none;}
+.sider.collapsed .menu-group{justify-content:center;padding:8px 0;}
+.menu-children{overflow:hidden;max-height:0;transition:max-height .2s ease;}
+.menu-children.open{max-height:400px;}
+.menu-item{display:flex;align-items:center;gap:8px;padding:7px 16px 7px 36px;color:rgba(255,255,255,.55);font-size:12px;font-weight:500;cursor:pointer;border-left:3px solid transparent;transition:.12s;white-space:nowrap;overflow:hidden;}
+.menu-item:hover{background:rgba(255,255,255,.05);color:#fff;}
+.menu-item.active{background:rgba(24,95,165,.25);color:#fff;border-left-color:var(--blue);font-weight:600;}
+.menu-item-icon{font-size:12px;flex-shrink:0;}
+.sider.collapsed .menu-item{display:none;}
+
+/* ── Main Area ── */
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.app-header{height:48px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;position:relative;}
+.hdr-toggle{background:none;border:none;cursor:pointer;padding:6px;border-radius:6px;color:var(--text-600);display:flex;}
+.hdr-toggle:hover{background:var(--bg);}
+.hdr-left{display:flex;align-items:center;gap:8px;}
+.hdr-center{position:absolute;left:50%;transform:translateX(-50%);}
+.hdr-company{font-size:13px;font-weight:700;color:var(--text-900);letter-spacing:.01em;}
+.hdr-user{margin-left:auto;display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:6px;position:relative;}
+.hdr-user:hover{background:var(--bg);}
+.user-avatar{width:28px;height:28px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;}
+.user-info{display:flex;flex-direction:column;}
+.user-name{font-size:12px;font-weight:600;color:var(--text-900);line-height:1.2;}
+.user-div{font-size:10px;color:var(--text-400);}
+.hdr-chevron{font-size:10px;color:var(--text-400);}
+.user-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.10);min-width:160px;z-index:500;display:none;overflow:hidden;}
+.user-dropdown.open{display:block;}
+.user-dropdown-item{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:12px;color:var(--text-600);cursor:pointer;}
+.user-dropdown-item:hover{background:var(--bg);}
+
+/* ── Page structure ── */
+.page-content{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
+
+/* ── Doc Band ── */
+.doc-band{background:linear-gradient(90deg,var(--blue-dark) 0%,var(--blue) 100%);padding:0 20px;height:30px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.breadcrumb{display:flex;align-items:center;gap:6px;}
+.bc-parent{font-size:11px;color:rgba(255,255,255,.65);}
+.bc-sep{font-size:11px;color:rgba(255,255,255,.35);}
+.bc-current{font-size:11px;font-weight:600;color:#fff;}
+.band-right{display:flex;align-items:center;gap:6px;}
+.band-sublabel{font-size:10px;color:rgba(255,255,255,.5);}
+.band-subvalue{font-size:11px;font-weight:700;color:#fff;font-family:var(--mono);}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;gap:4px;padding:6px 16px;background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tb-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:5px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-600);font-family:var(--font);transition:.12s;white-space:nowrap;position:relative;}
+.tb-btn:hover:not(:disabled){background:var(--bg);border-color:#ccc;color:var(--text-900);}
+.tb-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+.tb-btn.primary:hover:not(:disabled){background:var(--blue-dark);}
+.tb-btn.danger{color:var(--error);border-color:var(--error);}
+.tb-btn.danger:hover:not(:disabled){background:var(--error-l);}
+.tb-btn.danger-f{background:var(--error);color:#fff;border-color:var(--error);}
+.tb-btn.danger-f:hover:not(:disabled){background:#8a2020;}
+.tb-btn.active-mode{background:var(--blue-100);color:var(--blue);border-color:#a8c8ea;font-weight:600;}
+.tb-btn:disabled{opacity:.4;cursor:not-allowed;}
+.tb-btn .kbd{font-family:var(--mono);font-size:9px;font-weight:700;background:rgba(0,0,0,.07);padding:1px 4px;border-radius:3px;color:inherit;margin-left:2px;}
+.tb-btn.primary .kbd,.tb-btn.danger-f .kbd{background:rgba(255,255,255,.2);}
+.tb-sep{width:1px;height:20px;background:var(--border);margin:0 4px;}
+.tb-nav{display:flex;}
+.tb-nav-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--text-600);font-size:13px;transition:.12s;font-family:var(--font);}
+.tb-nav-btn:not(:first-child){border-left:none;}
+.tb-nav-btn:first-child{border-radius:5px 0 0 5px;}
+.tb-nav-btn:last-child{border-radius:0 5px 5px 0;}
+.tb-nav-btn:hover:not(:disabled){background:var(--bg);}
+.tb-nav-btn:disabled{opacity:.35;cursor:not-allowed;}
+.tb-print-tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;font-size:10px;font-weight:500;padding:4px 9px;border-radius:4px;white-space:nowrap;z-index:100;pointer-events:none;}
+.tb-btn:hover .tb-print-tooltip{display:block;}
+
+/* ── Delete banner ── */
+.del-banner{background:var(--error-l);border-bottom:2px solid var(--error);padding:8px 16px;font-size:12px;color:var(--error);font-weight:500;flex-shrink:0;}
+
+/* ── Form Section (Amendment Details header) ── */
+.form-section{background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;}
+.form-sec-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--border);}
+.form-sec-hdr-left{display:flex;align-items:center;gap:8px;}
+.form-sec-title{font-size:13px;font-weight:600;color:var(--text-900);}
+.form-date-pill{background:var(--blue-100);color:var(--blue);font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;}
+.form-created-by{font-size:11px;color:var(--text-400);}
+.form-created-by strong{color:var(--text-600);}
+/* Fields layout — labels above, PR Form style */
+.form-fields{padding:12px 16px 8px;}
+.fields-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px;}
+.fields-row:last-of-type{margin-bottom:4px;}
+.fg{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.fg-s{flex:0 0 128px;}
+.fg-m{flex:0 0 148px;}
+.fg-ml{flex:0 0 175px;}
+.fg-l{flex:1 1 190px;}
+.fg-xl{flex:2 1 260px;}
+.fld-lbl{font-size:11px;font-weight:500;color:var(--text-400);line-height:1;}
+.fld-lbl .req{color:var(--error);margin-left:1px;}
+.fld-ctrl{height:30px;border:1px solid var(--border);border-radius:4px;padding:0 8px;font-size:12px;font-family:var(--font);color:var(--text-900);background:#fff;width:100%;outline:none;transition:border-color .15s;}
+.fld-ctrl:focus{border-color:var(--blue);}
+.fld-ctrl:disabled{background:var(--bg);color:var(--text-600);}
+.fld-ctrl.mono{font-family:var(--mono);font-weight:600;}
+.fld-ctrl.blue{color:var(--blue);}
+.fld-grp{display:flex;gap:3px;}
+.fld-grp .fld-ctrl{flex:1;}
+.fld-find{height:30px;padding:0 10px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:var(--font);flex-shrink:0;}
+.fld-find:hover:not(:disabled){background:var(--blue-100);}
+.fld-find:disabled{opacity:.38;cursor:not-allowed;}
+.fld-hint{font-size:10px;color:var(--text-400);margin-top:4px;}
+.fld-hint span{margin-right:12px;}
+
+/* ── Grid section ── */
+.grid-section{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#fff;}
+.grid-bar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface-alt);flex-shrink:0;}
+.grid-bar-lbl{font-size:12px;font-weight:600;color:var(--text-600);}
+.grid-ct{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--blue-100);color:var(--blue);}
+.grid-wrap{overflow:auto;flex:1;}
+/* Grid table */
+.amend-tbl{border-collapse:collapse;font-size:12px;width:max-content;min-width:100%;}
+.amend-tbl thead tr{background:#1e293b;color:#fff;position:sticky;top:0;z-index:2;}
+.amend-tbl th{padding:8px 8px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.07);}
+.amend-tbl th.r{text-align:right;}
+.amend-tbl th.c{text-align:center;}
+.amend-tbl td{padding:3px 6px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+.amend-tbl tbody tr:hover td{background:#f0f6ff;}
+/* Cell types */
+.c-no{width:36px;text-align:center;font-size:11px;color:var(--text-400);padding:0 8px;}
+.c-id{font-weight:700;font-family:var(--mono);font-size:11px;white-space:nowrap;padding:0 8px;}
+.c-ro{font-family:var(--mono);font-size:11px;color:var(--text-400);text-align:right;padding:0 8px;}
+.cell-inp{height:26px;border:1px solid var(--border);border-radius:3px;padding:0 6px;font-size:11px;font-family:var(--mono);color:var(--text-900);background:#fff;outline:none;transition:border-color .12s;}
+.cell-inp:focus{border-color:var(--blue);background:#f8fbff;}
+.cell-inp:disabled{background:var(--bg);color:var(--text-400);border-color:transparent;}
+.cell-inp.txt{font-family:var(--font);}
+.sc{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;display:inline-block;}
+.sc-req{background:var(--blue-100);color:var(--blue);}
+.sc-app{background:var(--success-l);color:var(--success);}
+.sc-ord{background:var(--warning-l);color:var(--warning);}
+.cell-del{width:26px;height:26px;border:none;background:none;cursor:pointer;color:var(--text-400);font-size:13px;display:flex;align-items:center;justify-content:center;border-radius:3px;}
+.cell-del:hover{background:var(--error-l);color:var(--error);}
+.cell-del:disabled{opacity:0;cursor:default;}
+/* Inline add row */
+.add-row td{background:var(--bg);padding:5px 8px;}
+.add-row:hover td{background:#eef3fb!important;}
+.add-row-inner{display:flex;align-items:center;gap:8px;height:26px;border:1px dashed #bbb;border-radius:4px;padding:0 10px;cursor:text;color:var(--text-400);font-size:12px;font-style:italic;background:#fff;}
+/* Empty state (inside grid area) */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:10px;flex:1;}
+.empty-icon{font-size:36px;opacity:.3;}
+.empty-title{font-size:14px;font-weight:600;color:var(--text-400);}
+.empty-sub{font-size:12px;color:var(--text-400);text-align:center;max-width:400px;line-height:1.7;}
+/* Footer summary */
+.form-footer{background:#fff;border-top:1px solid var(--border);display:flex;flex-shrink:0;}
+.footer-card{flex:1;padding:10px 20px;border-right:1px solid var(--border);}
+.footer-card:last-child{border-right:none;}
+.footer-card-lbl{font-size:10px;font-weight:600;color:var(--text-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}
+.footer-card-val{font-size:18px;font-weight:700;color:var(--text-900);line-height:1.1;}
+.footer-card-sub{font-size:10px;color:var(--text-400);margin-top:1px;}
+
+/* ── Modals ── */
+.overlay{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;}
+.modal{background:#fff;border-radius:10px;box-shadow:0 24px 48px rgba(0,0,0,.22);display:flex;flex-direction:column;max-height:90vh;}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.modal-x{background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-400);padding:2px 6px;border-radius:4px;font-family:var(--font);}
+.modal-x:hover{background:var(--bg);}
+.modal-search{padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.modal-search-inp{width:100%;height:34px;border:1px solid var(--border);border-radius:6px;padding:0 12px;font-size:13px;font-family:var(--font);outline:none;}
+.modal-search-inp:focus{border-color:var(--blue);}
+.modal-body{overflow:auto;}
+.m-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.m-tbl thead tr{background:var(--surface-alt);position:sticky;top:0;}
+.m-tbl th{padding:8px 12px;font-size:11px;font-weight:700;text-align:left;border-bottom:2px solid var(--border);}
+.m-tbl th.r{text-align:right;}
+.m-tbl td{padding:7px 12px;border-bottom:1px solid #f5f5f5;}
+.m-tbl tbody tr{cursor:pointer;transition:.1s;}
+.m-tbl tbody tr:hover{background:var(--blue-100);}
+.m-tbl tbody tr.sel{background:#dbeafe;}
+.m-tbl td.r{text-align:right;font-family:var(--mono);font-size:11px;}
+.modal-ftr{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;}
+.m-btn-cls{padding:6px 14px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;cursor:pointer;font-family:var(--font);}
+.m-btn-cls:hover{background:var(--bg);}
+.m-btn-sel{padding:6px 22px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.m-btn-sel:disabled{opacity:.38;cursor:not-allowed;}
+
+/* ── Confirm ── */
+.confirm-overlay{position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;}
+.confirm-box{background:#fff;border-radius:10px;width:420px;box-shadow:0 24px 48px rgba(0,0,0,.25);overflow:hidden;}
+.confirm-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);}
+.confirm-icon{font-size:22px;}
+.confirm-title{font-size:15px;font-weight:700;}
+.confirm-body{padding:16px 20px;font-size:13px;color:var(--text-600);line-height:1.6;}
+.confirm-ftr{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;background:var(--surface-alt);border-top:1px solid var(--border);}
+.btn-ghost{padding:6px 16px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);}
+.btn-ghost:hover{background:var(--bg);}
+.btn-prim{padding:6px 20px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.btn-danger{padding:6px 20px;background:var(--error);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);}
+
+/* ── Toasts ── */
+.toasts{position:fixed;bottom:24px;right:24px;z-index:9998;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);font-size:12px;font-weight:500;min-width:220px;max-width:360px;animation:slideIn .2s ease;pointer-events:auto;}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+.toast.success{background:var(--success-l);color:var(--success);border:1px solid #c3e4a0;}
+.toast.error{background:var(--error-l);color:var(--error);border:1px solid #f5c0c0;}
+.toast.info{background:var(--blue-100);color:var(--blue);border:1px solid #a8c8ea;}
+
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+
+<!-- IST Control Bar -->
+<div class="ist-bar">
+  <span class="ist-label">IST Prototype</span>
+  <span class="ist-badge">FSD v2.3 · CEO Countersigned 23 May 2026</span>
+  <div class="ist-sep"></div>
+  <span class="ist-label">State:</span>
+  <button class="ist-btn active" onclick="setAMDState('add-sel')">Add: PR Selected</button>
+  <div class="ist-sep"></div>
+  <button class="ist-btn"        onclick="setAMDState('find-view')">Find: View Only</button>
+  <div class="ist-sep"></div>
+  <button class="ist-btn"        onclick="setAMDState('mod-loaded')">Modify: Loaded</button>
+  <button class="ist-btn"        onclick="setAMDState('del-loaded')">Delete: Loaded</button>
+</div>
+
+<!-- App Shell -->
+<div class="app-root">
+
+  <!-- Sider -->
+  <div class="sider" id="sider">
+    <div class="sider-logo">
+      <div class="logo-mark"><span>S</span></div>
+      <span class="logo-text">Spinrise ERP</span>
+    </div>
+    <div class="sider-nav">
+      <div class="menu-group open" id="grp-po" onclick="toggleGroup('grp-po-children','grp-po')">
+        <span class="menu-group-icon">🛒</span>
+        <span class="menu-group-label">Purchase Order</span>
+        <span class="menu-chevron">›</span>
+      </div>
+      <div class="menu-children open" id="grp-po-children">
+        <div class="menu-item" id="nav-pr" onclick="navigate('pr')">
+          <span class="menu-item-icon">📋</span>Purchase Requisition
+        </div>
+        <div class="menu-item" onclick="navigate('foreclosure')">
+          <span class="menu-item-icon">⚡</span>Purchase Requisition Foreclosure
+        </div>
+        <div class="menu-item" onclick="navigate('cancellation')">
+          <span class="menu-item-icon">🚫</span>Purchase Requisition Cancellation
+        </div>
+        <div class="menu-item active" onclick="navigate('amendment')">
+          <span class="menu-item-icon">✏️</span>Purchase Requisition Amendment
+        </div>
+        <div class="menu-item" onclick="navigate('first-approval')">
+          <span class="menu-item-icon">✅</span>PR First Level Approval
+        </div>
+        <div class="menu-item" onclick="navigate('PRFinalLevelApproval')">
+          <span class="menu-item-icon">✅</span>Purchase Requisition Final Level Approval
+        </div>
+      </div>
+    </div>
+  </div><!-- /sider -->
+
+  <!-- Main Area -->
+  <div class="main-area">
+
+    <!-- App Header -->
+    <div class="app-header">
+      <div class="hdr-left">
+        <button class="hdr-toggle" id="toggle-btn" onclick="toggleSider()" title="Toggle sidebar">
+          <svg id="toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/>
+            <line x1="1" y1="12" x2="15" y2="12"/>
+            <polyline points="10,5 13,8 10,11" stroke-width="1.4"/>
+          </svg>
+        </button>
+      </div>
+      <div class="hdr-center">
+        <span class="hdr-company">KALPATHARU SPINNERS PVT. LTD.</span>
+      </div>
+      <div class="hdr-user" onclick="toggleUserMenu()">
+        <div class="user-avatar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+        </div>
+        <div class="user-info">
+          <span class="user-name">KALSOFTE</span>
+          <span class="user-div">KALPATHARU SPINNERS</span>
+        </div>
+        <span class="hdr-chevron">▾</span>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-item">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Content -->
+    <div class="page-content">
+
+      <!-- Doc Band -->
+      <div class="doc-band">
+        <div class="breadcrumb">
+          <span class="bc-parent">Purchase Order</span>
+          <span class="bc-sep">›</span>
+          <span class="bc-current">PR Amendment Entry</span>
+        </div>
+        <div class="band-right">
+          <span class="band-sublabel">Amendment No.</span>
+          <span class="band-subvalue" id="band-amendno">Auto-generated on save</span>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button class="tb-btn" id="btn-new" onclick="enterNewMode()">
+          + <span>New</span><span class="kbd">F3</span>
+        </button>
+        <button class="tb-btn" id="btn-modify" onclick="enterModifyMode()">
+          ✎ <span>Modify</span>
+        </button>
+        <button class="tb-btn danger" id="btn-delete" onclick="enterDeleteMode()">
+          🗑 <span>Delete</span>
+        </button>
+        <button class="tb-btn" id="btn-find" onclick="doFind()">
+          ≡ <span>Find</span>
+        </button>
+        <div class="tb-sep"></div>
+        <div class="tb-nav">
+          <button class="tb-nav-btn" id="nav-first" title="First"    onclick="navFirst()">«</button>
+          <button class="tb-nav-btn" id="nav-prev"  title="Previous" onclick="navPrev()">‹</button>
+          <button class="tb-nav-btn" id="nav-next"  title="Next"     onclick="navNext()">›</button>
+          <button class="tb-nav-btn" id="nav-last"  title="Last"     onclick="navLast()">»</button>
+        </div>
+        <div class="tb-sep"></div>
+        <button class="tb-btn primary" id="btn-save" onclick="doSave()" disabled>
+          ✓ <span id="btn-save-lbl">Save</span><span class="kbd">Ctrl+S</span>
+        </button>
+        <button class="tb-btn" id="btn-print" onclick="doPrint()">
+          🖨 <span>Print</span>
+        </button>
+        <button class="tb-btn" id="btn-cancel" onclick="doCancel()">
+          ✕ <span>Cancel</span><span class="kbd">Alt+X</span>
+        </button>
+      </div>
+
+      <!-- Delete Banner -->
+      <div class="del-banner hidden" id="del-banner">
+        ⚠ Delete mode — Amendment <strong id="del-amendno-lbl"></strong> · All fields are read-only. Click <strong>Save</strong> to confirm deletion.
+      </div>
+
+      <!-- Amendment Details (always visible) -->
+      <div class="form-section">
+        <div class="form-sec-hdr">
+          <div class="form-sec-hdr-left">
+            <span style="font-size:14px;">📅</span>
+            <span class="form-sec-title">Amendment Details</span>
+            <span class="form-date-pill" id="form-date-pill">25 May 2026</span>
+          </div>
+          <span class="form-created-by">Created by <strong>KALSOFTE</strong></span>
+        </div>
+        <div class="form-fields">
+
+          <!-- Row 1: Amendment No | Amendment Date | PR No (Find) | PR Date -->
+          <div class="fields-row">
+            <div class="fg fg-s">
+              <span class="fld-lbl">Amendment No.</span>
+              <input class="fld-ctrl mono" id="fld-amendno" disabled placeholder="Auto-generated">
+            </div>
+            <div class="fg fg-m">
+              <span class="fld-lbl">Amendment Date</span>
+              <input class="fld-ctrl" id="fld-amenddate" type="date" value="2026-05-25" disabled>
+            </div>
+            <div class="fg fg-ml">
+              <span class="fld-lbl">PR No. <span class="req">*</span></span>
+              <div class="fld-grp">
+                <input class="fld-ctrl mono blue" id="fld-prno" disabled placeholder="PR number">
+              </div>
+            </div>
+            <div class="fg fg-m">
+              <span class="fld-lbl">PR Date</span>
+              <input class="fld-ctrl" id="fld-prdate" disabled placeholder="—">
+            </div>
+          </div>
+
+          <!-- Row 2: Department | PR Type | Requester Name | Section -->
+          <div class="fields-row">
+            <div class="fg fg-l">
+              <span class="fld-lbl">Department</span>
+              <input class="fld-ctrl" id="fld-dept" disabled placeholder="—">
+            </div>
+            <div class="fg fg-s">
+              <span class="fld-lbl">PR Type</span>
+              <input class="fld-ctrl" id="fld-prtype" disabled placeholder="—">
+            </div>
+            <div class="fg fg-l">
+              <span class="fld-lbl">Requester Name</span>
+              <input class="fld-ctrl" id="fld-requester" disabled placeholder="—">
+            </div>
+            <div class="fg fg-m">
+              <span class="fld-lbl">Section</span>
+              <input class="fld-ctrl" id="fld-section" disabled placeholder="—">
+            </div>
+          </div>
+
+          <!-- Row 3: Reference No | Amendment reason -->
+          <div class="fields-row">
+            <div class="fg fg-m">
+              <span class="fld-lbl">Reference No.</span>
+              <input class="fld-ctrl" id="fld-refno" disabled placeholder="Optional" maxlength="30">
+            </div>
+            <div class="fg fg-xl">
+              <span class="fld-lbl">Amendment Reason <span class="req">*</span></span>
+              <input class="fld-ctrl" id="fld-amendment" disabled placeholder="Enter amendment reason…" maxlength="200">
+            </div>
+          </div>
+
+          <div class="fld-hint">
+            <span>Tab — move between fields</span><span>Ctrl+S — save</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid Section -->
+      <div class="grid-section" id="grid-section">
+        <div class="grid-bar">
+          <svg width="13" height="13" viewBox="0 0 16 16" style="stroke:#185FA5;fill:none;stroke-width:1.8">
+            <rect x="2" y="2" width="12" height="12" rx="1.5"/>
+            <line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="11" y2="9"/>
+          </svg>
+          <span class="grid-bar-lbl">Item Lines</span>
+          <span class="grid-ct" id="grid-ct">0 items</span>
+        </div>
+
+        <!-- Empty hint (shown when no PR selected yet) -->
+        <div class="empty" id="grid-empty">
+          <div class="empty-icon">✏️</div>
+          <div class="empty-title" id="grid-empty-title">No amendment loaded</div>
+          <div class="empty-sub" id="grid-empty-sub">
+            Click <strong>New</strong> (F3) to create a new amendment,
+            or <strong>Modify</strong> / <strong>Delete</strong> to load an existing one.
+          </div>
+        </div>
+
+        <!-- Grid table (hidden until data loaded) -->
+        <div class="grid-wrap hidden" id="grid-wrap">
+          <table class="amend-tbl" id="amend-tbl">
+            <thead>
+              <tr>
+                <th class="c" style="width:36px">#</th>
+                <th style="width:88px">Item Id</th>
+                <th style="min-width:175px">Item Name</th>
+                <th class="c" style="width:48px">Unit</th>
+                <th class="r" style="width:82px">Curr. Stock</th>
+                <th class="r" style="width:100px">Qty Required <span style="color:#f87171">*</span></th>
+                <th class="r" style="width:88px">Rate</th>
+                <th class="r" style="width:95px">₹ Approx. Value</th>
+                <th class="r" style="width:88px">Qty Approved</th>
+                <th class="r" style="width:88px">Qty Ordered</th>
+                <th class="r" style="width:88px">Qty Received</th>
+                <th style="width:112px">Required Date</th>
+                <th style="min-width:115px">Machine</th>
+                <th style="min-width:135px">Sub Cost Centre</th>
+                <th style="min-width:105px">Remarks</th>
+                <th class="c" style="width:88px">PR Status</th>
+                <th style="width:32px"></th>
+              </tr>
+            </thead>
+            <tbody id="amend-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Footer summary -->
+        <div class="form-footer hidden" id="form-footer">
+          <div class="footer-card">
+            <div class="footer-card-lbl">Total Lines</div>
+            <div class="footer-card-val" id="footer-lines">0</div>
+            <div class="footer-card-sub">Items in this amendment</div>
+          </div>
+          <div class="footer-card">
+            <div class="footer-card-lbl">Total Quantity</div>
+            <div class="footer-card-val" id="footer-qty">—</div>
+            <div class="footer-card-sub">By Unit of Measure</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /page-content -->
+  </div><!-- /main-area -->
+</div><!-- /app-root -->
+
+
+<!-- Modal: Find PR -->
+<div class="overlay hidden" id="overlay-find-pr">
+  <div class="modal" style="width:820px;">
+    <div class="modal-hdr">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:38px;height:38px;border-radius:10px;flex-shrink:0;background:linear-gradient(135deg,#eff6ff,#dbeafe);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(24,95,165,.18);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#1e293b;">Select PR to Amend</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">Purchase Requisitions · Requested status only · FY 2025–26</div>
+        </div>
+      </div>
+      <button class="modal-x" onclick="closeOverlay('overlay-find-pr')">✕</button>
+    </div>
+    <div class="modal-search">
+      <input class="modal-search-inp" id="find-pr-search" placeholder="Search by PR number, department or requester…" oninput="filterModal('find-pr-tbody', this.value)">
+    </div>
+    <div class="modal-body" style="max-height:380px;">
+      <table class="m-tbl">
+        <thead>
+          <tr>
+            <th class="r" style="width:75px">PR No.</th>
+            <th style="width:105px">PR Date</th>
+            <th>Department</th>
+            <th>Requester</th>
+            <th style="width:80px">PR Type</th>
+            <th class="r" style="width:50px">Lines</th>
+            <th class="r" style="width:110px">Prior Amendments</th>
+          </tr>
+        </thead>
+        <tbody id="find-pr-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-ftr">
+      <span style="flex:1;font-size:12px;color:#94a3b8;">Click to select · Double-click to confirm immediately</span>
+      <button class="m-btn-cls" onclick="closeOverlay('overlay-find-pr')">Cancel</button>
+      <button class="m-btn-sel" id="find-pr-sel-btn" onclick="confirmFindPR()" disabled>Select →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Find Amendment (Modify / Delete) -->
+<div class="overlay hidden" id="overlay-find-amend">
+  <div class="modal" style="width:820px;">
+    <div class="modal-hdr">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:38px;height:38px;border-radius:10px;flex-shrink:0;background:linear-gradient(135deg,#fefce8,#fef3c7);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(186,117,23,.18);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#BA7517" stroke-width="2">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#1e293b;">Select Amendment to Load</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">Existing PR amendments · FY 2025–26</div>
+        </div>
+      </div>
+      <button class="modal-x" onclick="closeOverlay('overlay-find-amend')">✕</button>
+    </div>
+    <div class="modal-search">
+      <input class="modal-search-inp" id="find-amend-search" placeholder="Search by amendment no, PR no, department or reason…" oninput="filterModal('find-amend-tbody', this.value)">
+    </div>
+    <div class="modal-body" style="max-height:380px;">
+      <table class="m-tbl">
+        <thead>
+          <tr>
+            <th style="width:90px">Amend No.</th>
+            <th class="r" style="width:70px">PR No.</th>
+            <th style="width:105px">Amend Date</th>
+            <th>Department</th>
+            <th>Reason</th>
+            <th class="r" style="width:50px">Lines</th>
+          </tr>
+        </thead>
+        <tbody id="find-amend-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-ftr">
+      <span style="flex:1;font-size:12px;color:#94a3b8;">Click to select · Double-click to confirm immediately</span>
+      <button class="m-btn-cls" onclick="closeOverlay('overlay-find-amend')">Cancel</button>
+      <button class="m-btn-sel" id="find-amend-sel-btn" onclick="confirmFindAmend()" disabled>Load →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Item Picker -->
+<div class="overlay hidden" id="overlay-item-picker">
+  <div class="modal" style="width:720px;">
+    <div class="modal-hdr">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:38px;height:38px;border-radius:10px;flex-shrink:0;background:linear-gradient(135deg,#eff6ff,#dbeafe);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(24,95,165,.15);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#1e293b;">Select Item</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">Item catalog · Double-click to add immediately</div>
+        </div>
+      </div>
+      <button class="modal-x" onclick="closeOverlay('overlay-item-picker')">✕</button>
+    </div>
+    <div class="modal-search">
+      <input class="modal-search-inp" id="item-search" placeholder="Search by item code or name…" oninput="filterModal('item-picker-tbody', this.value)">
+    </div>
+    <div class="modal-body" style="max-height:360px;">
+      <table class="m-tbl">
+        <thead>
+          <tr>
+            <th style="width:90px">Item Id</th>
+            <th>Item Name</th>
+            <th style="width:55px;text-align:center">UOM</th>
+            <th class="r" style="width:100px">Curr. Stock</th>
+          </tr>
+        </thead>
+        <tbody id="item-picker-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-ftr">
+      <span style="flex:1;font-size:12px;color:#94a3b8;">Click to select · Double-click to confirm immediately</span>
+      <button class="m-btn-cls" onclick="closeOverlay('overlay-item-picker')">Cancel</button>
+      <button class="m-btn-sel" id="item-sel-btn" onclick="confirmItemPick()" disabled>Add Item →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="confirm-overlay hidden" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-hdr">
+      <span class="confirm-icon" id="c-icon">✏️</span>
+      <span class="confirm-title" id="c-title">Confirm</span>
+    </div>
+    <div class="confirm-body" id="c-body"></div>
+    <div class="confirm-ftr">
+      <button class="btn-ghost" onclick="closeConfirm()">Cancel</button>
+      <button id="c-ok" class="btn-prim">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ── MOCK DATA ─────────────────────────────────────────────── */
+const PR_DATA = [
+  { prno:46, prdate:'25/05/2026', deptCode:'105', deptName:'BUFFING',
+    reqCode:'10', reqName:'SARANYA S', section:'', prtype:'ASSET', status:'Requested', lines:2, priorAmends:0,
+    lineItems:[
+      { sno:1, code:'1104001', name:'WOVEN SACK PP 48"X108" PLAIN',
+        uom:'NOS', curStock:'0.000', qtyReq:'0.001', rate:'0.0000', appCost:'0.00',
+        qtyApproved:'0.000', qtyOrdered:'0.000', qtyReceived:'0.000',
+        reqDate:'28/05/2026', machine:'', costCentre:'', remarks:'', status:'Requested' },
+      { sno:2, code:'1205001', name:'3/4" STAR SCREW',
+        uom:'NOS', curStock:'0.000', qtyReq:'3.000', rate:'0.0000', appCost:'0.00',
+        qtyApproved:'', qtyOrdered:'', qtyReceived:'',
+        reqDate:'27/05/2026', machine:'', costCentre:'', remarks:'', status:'Requested' },
+    ] },
+  { prno:43, prdate:'20/05/2026', deptCode:'201', deptName:'WINDING',
+    reqCode:'12', reqName:'SELVAN', section:'', prtype:'STORES', status:'Requested', lines:3, priorAmends:1,
+    lineItems:[
+      { sno:1, code:'3101008', name:'V-BELT A-45',
+        uom:'NOS', curStock:'25.000', qtyReq:'5.000', rate:'120.0000', appCost:'600.00',
+        qtyApproved:'', qtyOrdered:'', qtyReceived:'',
+        reqDate:'30/05/2026', machine:'M-12', costCentre:'', remarks:'', status:'Requested' },
+      { sno:2, code:'3205004', name:'BALL BEARING 6205',
+        uom:'NOS', curStock:'18.000', qtyReq:'10.000', rate:'85.0000', appCost:'850.00',
+        qtyApproved:'', qtyOrdered:'', qtyReceived:'',
+        reqDate:'30/05/2026', machine:'M-12', costCentre:'', remarks:'', status:'Requested' },
+      { sno:3, code:'2301005', name:'GREASE LITHIUM EP2',
+        uom:'KG',  curStock:'32.000', qtyReq:'2.000', rate:'250.0000', appCost:'500.00',
+        qtyApproved:'', qtyOrdered:'', qtyReceived:'',
+        reqDate:'01/06/2026', machine:'', costCentre:'', remarks:'', status:'Requested' },
+    ] },
+  { prno:39, prdate:'14/05/2026', deptCode:'310', deptName:'STORES DEPT',
+    reqCode:'15', reqName:'RAMESH', section:'', prtype:'STORES', status:'Approved', lines:5, priorAmends:0 },
+  { prno:35, prdate:'08/05/2026', deptCode:'402', deptName:'ELECTRICAL',
+    reqCode:'8',  reqName:'ARUMUGAM', section:'', prtype:'OVERHAUL', status:'Approved', lines:4, priorAmends:2 },
+];
+
+const AMEND_DATA = [
+  {
+    amendno:1, amenddate:'25/05/2026',
+    prno:46, prdate:'25/05/2026',
+    deptCode:'105', deptName:'BUFFING',
+    reqCode:'10', reqName:'SARANYA S',
+    section:'', prtype:'ASSET', refno:'', amendment:'Require additional quantity due to production increase',
+    lineItems:[
+      { sno:1, code:'1104001', name:'WOVEN SACK PP 48"X108" PLAIN',
+        uom:'NOS', curStock:'0.000', qtyReq:'0.001', rate:'0.0000', appCost:'0.00',
+        qtyApproved:'0.000', qtyOrdered:'0.000', qtyReceived:'0.000',
+        reqDate:'28/05/2026', machine:'', costCentre:'', remarks:'', status:'Requested' },
+      { sno:2, code:'1205001', name:'3/4" STAR SCREW',
+        uom:'NOS', curStock:'0.000', qtyReq:'3.000', rate:'0.0000', appCost:'0.00',
+        qtyApproved:'', qtyOrdered:'', qtyReceived:'',
+        reqDate:'27/05/2026', machine:'', costCentre:'', remarks:'', status:'Requested' },
+    ]
+  },
+];
+
+const ITEM_CATALOG = [
+  { code:'1104001', name:'WOVEN SACK PP 48"X108" PLAIN', uom:'NOS', curStock:'120.000' },
+  { code:'1205001', name:'3/4" STAR SCREW',              uom:'NOS', curStock:'450.000' },
+  { code:'1108003', name:'COTTON WASTE',                 uom:'KG',  curStock:'85.500'  },
+  { code:'2301005', name:'GREASE LITHIUM EP2',           uom:'KG',  curStock:'32.000'  },
+  { code:'2401002', name:'SYNTHETIC OIL SAE 90',         uom:'LTR', curStock:'48.000'  },
+  { code:'3101008', name:'V-BELT A-45',                  uom:'NOS', curStock:'25.000'  },
+  { code:'3205004', name:'BALL BEARING 6205',            uom:'NOS', curStock:'18.000'  },
+];
+
+/* ── STATE ─────────────────────────────────────────────────── */
+let currentMode    = 'none';
+let currentAmend   = null;   // amendment object currently on screen
+let currentNavIdx  = -1;     // index into AMEND_DATA for nav buttons
+let findPRSel      = null;
+let findAmendSel   = null;
+let siderCollapsed = false;
+let confirmCb      = null;
+let workingLines   = [];
+let isReadOnly     = false;
+
+/* ── INIT ──────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  buildFindPRModal();
+  buildFindAmendModal();
+  buildItemPickerModal();
+  loadDefaultState();
+});
+
+function loadDefaultState() {
+  if (AMEND_DATA.length > 0) {
+    const last = AMEND_DATA[AMEND_DATA.length - 1];
+    currentMode = 'view';
+    isReadOnly  = true;
+    clearHeaderFields();
+    loadAmend(last);
+    workingLines = last.lineItems.map(l => Object.assign({}, l));
+    showGrid(true);
+    document.getElementById('band-amendno').textContent =
+      'AMD-' + String(last.amendno).padStart(4, '0');
+  } else {
+    currentMode = 'none';
+    clearHeaderFields();
+    show('grid-empty',   true);
+    show('grid-wrap',    false);
+    show('form-footer',  false);
+    document.getElementById('grid-empty-title').textContent = 'No records available';
+    document.getElementById('grid-empty-sub').textContent   =
+      'No amendment records found for this division and financial year. Click New (F3) to create the first amendment.';
+  }
+  updateToolbar();
+}
+
+/* ── IST STATE SWITCHER ────────────────────────────────────── */
+function setAMDState(state) {
+  document.querySelectorAll('.ist-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[onclick="setAMDState('${state}')"]`).classList.add('active');
+
+  // full reset first
+  currentMode   = 'none';
+  currentAmend  = null;
+  currentNavIdx = -1;
+  workingLines  = [];
+  isReadOnly    = false;
+  clearHeaderFields();
+  show('del-banner', false);
+  show('grid-empty', true);
+  show('grid-wrap',  false);
+  show('form-footer', false);
+  document.getElementById('grid-empty-sub').innerHTML =
+    'Click <strong>Modify</strong> or <strong>Delete</strong> to load an existing amendment.';
+
+  if (state === 'add-sel') {
+    currentMode = 'new';
+    enableNewModeFields();
+    loadPR(PR_DATA[0]);
+    workingLines = (PR_DATA[0].lineItems || []).map(l => Object.assign({}, l));
+    showGrid(false);
+  }
+  else if (state === 'find-view') {
+    currentMode = 'view';
+    loadAmend(AMEND_DATA[0]);
+    isReadOnly = true;
+    showGrid(true);
+    document.getElementById('band-amendno').textContent = 'AMD-0001';
+  }
+  else if (state === 'mod-loaded') {
+    currentMode = 'modify';
+    loadAmend(AMEND_DATA[0]);
+    isReadOnly = false;
+    enableModifyModeFields();
+    showGrid(false);
+    document.getElementById('band-amendno').textContent = 'AMD-0001';
+  }
+  else if (state === 'del-loaded') {
+    currentMode = 'delete';
+    loadAmend(AMEND_DATA[0]);
+    isReadOnly = true;
+    enableDeleteModeFields();
+    showGrid(true);
+    document.getElementById('del-amendno-lbl').textContent =
+      'AMD-' + String(AMEND_DATA[0].amendno).padStart(4, '0');
+    show('del-banner', true);
+    document.getElementById('band-amendno').textContent =
+      'AMD-' + String(AMEND_DATA[0].amendno).padStart(4, '0');
+  }
+
+  updateToolbar();
+}
+
+/* ── FIELD ENABLE HELPERS ──────────────────────────────────── */
+function enableNewModeFields() {
+  // fld-amenddate stays locked to processing date — Amendment Date must equal pdate (FSD §5 BackDate rule)
+  document.getElementById('fld-prno').disabled = false;
+}
+
+function enableModifyModeFields() {
+  // fld-amenddate stays locked — Amendment Date cannot be changed after creation (FSD §5)
+  document.getElementById('fld-refno').disabled     = false;
+  document.getElementById('fld-amendment').disabled = false;
+}
+
+function enableDeleteModeFields() {
+  // delete = fully read-only, nothing editable
+}
+
+/* ── CLEAR HEADER ──────────────────────────────────────────── */
+function clearHeaderFields() {
+  const ids = ['fld-amendno','fld-prno','fld-prdate','fld-dept',
+               'fld-prtype','fld-requester','fld-section','fld-refno','fld-amendment'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.disabled = true; }
+  });
+  const ad = document.getElementById('fld-amenddate');
+  ad.value = '2026-05-25'; ad.disabled = true;
+  const fp = document.getElementById('btn-prno-find');
+  if (fp) fp.disabled = true;
+  document.getElementById('band-amendno').textContent = 'Auto-generated on save';
+  updateFooter(0, null);
+}
+
+/* ── LOAD HELPERS ──────────────────────────────────────────── */
+function loadPR(pr) {
+  set('fld-prno',      pr.prno);
+  set('fld-prdate',    pr.prdate);
+  set('fld-dept',      pr.deptCode + ' – ' + pr.deptName);
+  set('fld-prtype',    pr.prtype);
+  set('fld-requester', pr.reqCode + ' – ' + pr.reqName);
+  set('fld-section',   pr.section);
+  document.getElementById('fld-refno').disabled     = false;
+  document.getElementById('fld-amendment').disabled = false;
+}
+
+function loadAmend(a) {
+  currentAmend  = a;
+  currentNavIdx = AMEND_DATA.findIndex(x => x.amendno === a.amendno);
+  set('fld-amendno',   'AMD-' + String(a.amendno).padStart(4, '0'));
+  set('fld-amenddate', a.amenddate);
+  set('fld-prno',      a.prno);
+  set('fld-prdate',    a.prdate);
+  set('fld-dept',      a.deptCode + ' – ' + a.deptName);
+  set('fld-prtype',    a.prtype);
+  set('fld-requester', a.reqCode + ' – ' + a.reqName);
+  set('fld-section',   a.section);
+  set('fld-refno',     a.refno);
+  set('fld-amendment', a.amendment);
+  workingLines = a.lineItems.map(l => Object.assign({}, l));
+}
+
+function set(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val || '';
+}
+
+/* ── GRID SHOW/RENDER ──────────────────────────────────────── */
+function showGrid(readOnly) {
+  show('grid-empty', false);
+  show('grid-wrap', true);
+  show('form-footer', true);
+  renderGrid(readOnly);
+}
+
+function renderGrid(readOnly) {
+  const tbody = document.getElementById('amend-tbody');
+  tbody.innerHTML = '';
+  workingLines.forEach((ln, i) => {
+    const dis = readOnly ? 'disabled' : '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="c-no">${i + 1}</td>
+      <td class="c-id">${esc(ln.code)}</td>
+      <td style="min-width:175px;font-size:12px;padding:0 8px">${esc(ln.name)}</td>
+      <td style="text-align:center;font-size:11px;color:var(--text-400);padding:0 8px">${esc(ln.uom)}</td>
+      <td class="c-ro">${esc(ln.curStock)}</td>
+      <td><input class="cell-inp" style="width:88px;text-align:right" type="number" step="0.001" value="${esc(ln.qtyReq)}" ${dis} oninput="recalc(this,${i})"></td>
+      <td><input class="cell-inp" style="width:80px;text-align:right" type="number" step="0.0001" value="${esc(ln.rate)}" ${dis} oninput="recalc(this,${i})"></td>
+      <td id="ac-${i}" style="text-align:right;font-family:var(--mono);font-size:11px;padding:0 8px;color:var(--text-900)">${esc(ln.appCost)}</td>
+      <td class="c-ro">${ln.qtyApproved || '—'}</td>
+      <td class="c-ro">${ln.qtyOrdered  || '—'}</td>
+      <td class="c-ro">${ln.qtyReceived || '—'}</td>
+      <td><input class="cell-inp txt" style="width:105px" value="${esc(ln.reqDate)}" placeholder="DD/MM/YYYY" ${dis}></td>
+      <td><input class="cell-inp txt" style="min-width:106px" value="${esc(ln.machine)}" placeholder="Machine…" ${dis}></td>
+      <td><input class="cell-inp txt" style="min-width:124px" value="${esc(ln.costCentre)}" placeholder="Cost Centre…" ${dis}></td>
+      <td><input class="cell-inp txt" style="min-width:96px" value="${esc(ln.remarks)}" placeholder="Remarks…" ${dis}></td>
+      <td style="text-align:center;padding:0 6px"><span class="sc ${scClass(ln.status)}">${esc(ln.status)}</span></td>
+      <td style="text-align:center;padding:0 4px">
+        <button class="cell-del" ${readOnly ? 'disabled' : ''} onclick="removeRow(${i})" title="Remove row">✕</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  if (!readOnly) {
+    const addTr = document.createElement('tr');
+    addTr.className = 'add-row';
+    addTr.innerHTML = `
+      <td class="c-no" style="color:var(--text-400)">${workingLines.length + 1}</td>
+      <td colspan="16">
+        <div class="add-row-inner" onclick="handleAddRowClick()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          Click or Tab here to add items…
+        </div>
+      </td>`;
+    tbody.appendChild(addTr);
+  }
+
+  document.getElementById('grid-ct').textContent =
+    workingLines.length + (workingLines.length === 1 ? ' item' : ' items');
+  const totalQty = workingLines.reduce((s, l) => s + (parseFloat(l.qtyReq) || 0), 0);
+  updateFooter(workingLines.length, totalQty);
+}
+
+function syncFromDOM() {
+  const rows = document.querySelectorAll('#amend-tbody tr:not(.add-row)');
+  rows.forEach((tr, i) => {
+    if (!workingLines[i]) return;
+    const inps = tr.querySelectorAll('input[type=number]');
+    const txts = tr.querySelectorAll('input.txt');
+    if (inps[0]) workingLines[i].qtyReq    = inps[0].value;
+    if (inps[1]) workingLines[i].rate       = inps[1].value;
+    if (txts[0]) workingLines[i].reqDate    = txts[0].value;
+    if (txts[1]) workingLines[i].machine    = txts[1].value;
+    if (txts[2]) workingLines[i].costCentre = txts[2].value;
+    if (txts[3]) workingLines[i].remarks    = txts[3].value;
+    const ac = document.getElementById('ac-' + i);
+    if (ac) workingLines[i].appCost = ac.textContent;
+  });
+}
+
+function recalc(inp, idx) {
+  const tr   = inp.closest('tr');
+  const inps = tr.querySelectorAll('input[type=number]');
+  const val  = ((parseFloat(inps[0].value) || 0) * (parseFloat(inps[1].value) || 0)).toFixed(2);
+  document.getElementById('ac-' + idx).textContent = val;
+  let totalQty = 0;
+  document.querySelectorAll('#amend-tbody tr:not(.add-row)').forEach(r => {
+    const n = r.querySelectorAll('input[type=number]');
+    if (n[0]) totalQty += parseFloat(n[0].value) || 0;
+  });
+  updateFooter(workingLines.length, totalQty);
+}
+
+function removeRow(idx) {
+  syncFromDOM();
+  workingLines.splice(idx, 1);
+  renderGrid(isReadOnly);
+}
+
+function handleAddRowClick() {
+  openItemPickerModal();
+}
+
+function scClass(s) {
+  if (s === 'Approved') return 'sc-app';
+  if (s === 'Ordered')  return 'sc-ord';
+  return 'sc-req';
+}
+
+function updateFooter(lines, qty) {
+  document.getElementById('footer-lines').textContent = lines;
+  document.getElementById('footer-qty').textContent   =
+    qty !== null ? 'Nos: ' + qty.toFixed(3) : '—';
+}
+
+/* ── TOOLBAR ──────────────────────────────────────────────── */
+function updateToolbar() {
+  const isNew  = currentMode === 'new';
+  const isView = currentMode === 'view';
+  const isMod  = currentMode === 'modify';
+  const isDel  = currentMode === 'delete';
+  const hasRec = AMEND_DATA.length > 0;
+  const editing = isNew || isMod || isDel;
+
+  // View mode  : all enabled except Save + Cancel
+  // New / Modify / Delete : only Save + Cancel enabled
+  setBtn('btn-new',    isView,            false);
+  setBtn('btn-modify', isView && hasRec,  isMod);
+  setBtn('btn-delete', isView && hasRec,  isDel);
+  setBtn('btn-find',   isView,            isView);
+  setBtn('btn-print',  isView,            false);
+  setBtn('btn-save',   editing,           false);
+
+  const cancelEl = document.getElementById('btn-cancel');
+  if (cancelEl) cancelEl.disabled = !editing;
+
+  // Nav buttons — enabled in view only
+  ['nav-first', 'nav-prev', 'nav-next', 'nav-last'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !isView;
+  });
+
+  // Save button colour: red in delete mode, blue otherwise
+  const saveBtn = document.getElementById('btn-save');
+  const saveLbl = document.getElementById('btn-save-lbl');
+  if (saveLbl) saveLbl.textContent = 'Save';
+  if (saveBtn) {
+    if (isDel) {
+      saveBtn.className = saveBtn.className.replace(/\bprimary\b/g, '').trim() + ' danger-f';
+    } else {
+      saveBtn.className = saveBtn.className.replace(/\bdanger-f\b/g, '').trim() + ' primary';
+    }
+  }
+}
+
+function setBtn(id, enabled, activeMode) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.disabled = !enabled;
+  if (activeMode !== undefined) el.classList.toggle('active-mode', !!activeMode);
+}
+
+/* ── MODE ACTIONS ─────────────────────────────────────────── */
+function resetForm() {
+  currentMode   = 'none';
+  currentAmend  = null;
+  currentNavIdx = -1;
+  workingLines  = [];
+  isReadOnly    = false;
+  clearHeaderFields();
+  show('del-banner',  false);
+  show('grid-empty',  true);
+  show('grid-wrap',   false);
+  show('form-footer', false);
+}
+
+function enterNewMode() {
+  resetForm();
+  currentMode = 'new';
+  enableNewModeFields();
+  document.getElementById('grid-empty-title').textContent = 'No PR selected';
+  document.getElementById('grid-empty-sub').innerHTML =
+    'Select a PR from the popup to create a new amendment.';
+  updateToolbar();
+  openFindPRModal();
+}
+
+function enterViewMode() {
+  resetForm();
+  currentMode = 'view';
+  isReadOnly = true;
+  document.getElementById('grid-empty-title').textContent = 'No amendment selected';
+  document.getElementById('grid-empty-sub').innerHTML =
+    'Select an amendment from the popup to view it.';
+  updateToolbar();
+  openFindAmendModal();
+}
+
+function enterModifyMode() {
+  resetForm();
+  currentMode = 'modify';
+  document.getElementById('grid-empty-title').textContent = 'No amendment selected';
+  document.getElementById('grid-empty-sub').innerHTML =
+    'Select an amendment from the popup to modify it.';
+  updateToolbar();
+  openFindAmendModal();
+}
+
+function enterDeleteMode() {
+  resetForm();
+  currentMode = 'delete';
+  isReadOnly  = true;
+  document.getElementById('grid-empty-title').textContent = 'No amendment selected';
+  document.getElementById('grid-empty-sub').innerHTML =
+    'Select an amendment from the popup to delete it.';
+  updateToolbar();
+  openFindAmendModal();
+}
+
+function doFind() {
+  enterViewMode();
+}
+
+function doPrint() {
+  toast('Print: Not implemented — will implement backend', 'info');
+}
+
+/* ── RECORD NAVIGATION (toolbar ◄ ► buttons) ─────────────────── */
+function navTo(idx) {
+  if (idx < 0 || idx >= AMEND_DATA.length) return;
+  const a = AMEND_DATA[idx];
+  clearHeaderFields();
+  loadAmend(a);                             // sets currentAmend + currentNavIdx
+  workingLines = a.lineItems.map(l => Object.assign({}, l));
+  showGrid(true);
+  document.getElementById('band-amendno').textContent =
+    'AMD-' + String(a.amendno).padStart(4, '0');
+  toast('Record ' + (idx + 1) + ' of ' + AMEND_DATA.length, 'info');
+}
+function navFirst() { navTo(0); }
+function navPrev()  { navTo(currentNavIdx - 1); }
+function navNext()  { navTo(currentNavIdx + 1); }
+function navLast()  { navTo(AMEND_DATA.length - 1); }
+
+function doCancel() {
+  if (currentAmend) {
+    currentMode = 'view';
+    isReadOnly  = true;
+    clearHeaderFields();
+    const saved = currentAmend;
+    loadAmend(saved);
+    workingLines = saved.lineItems.map(l => Object.assign({}, l));
+    show('del-banner', false);
+    showGrid(true);
+    document.getElementById('band-amendno').textContent =
+      'AMD-' + String(saved.amendno).padStart(4, '0');
+    updateToolbar();
+    toast('Changes cancelled', 'info');
+  } else {
+    loadDefaultState();
+    toast('Form cleared', 'info');
+  }
+}
+
+function doSave() {
+  if (currentMode === 'delete') {
+    const lbl = currentAmend
+      ? 'AMD-' + String(currentAmend.amendno).padStart(4, '0')
+      : 'this amendment';
+    showConfirm('🗑', 'Confirm Delete',
+      'This will permanently delete Amendment <strong>' + lbl + '</strong> and all its line items. This cannot be undone.',
+      'btn-danger', 'Confirm Delete',
+      () => { currentAmend = null; currentNavIdx = -1; loadDefaultState(); toast('Amendment deleted', 'error'); });
+  } else {
+    if (!validateAmendmentBeforeSave()) return;
+    showConfirm('✓', 'Save Amendment',
+      'Save this amendment? The amendment number will be assigned automatically on save.',
+      'btn-prim', 'Save',
+      () => { doCancel(); toast('Amendment saved successfully', 'success'); });
+  }
+}
+
+function validateAmendmentBeforeSave() {
+  const prNo = document.getElementById('fld-prno');
+  const reason = document.getElementById('fld-amendment');
+  const invalid = [];
+
+  [prNo, reason].forEach(el => el && el.classList.remove('fld-error'));
+  document.querySelectorAll('#amend-tbody .cell-inp').forEach(el => el.classList.remove('cell-error'));
+
+  if (!prNo || !prNo.value.trim()) {
+    invalid.push('Select a PR before saving the amendment.');
+    if (prNo) prNo.classList.add('fld-error');
+  }
+
+  if (!reason || !reason.value.trim()) {
+    invalid.push('Enter an amendment reason.');
+    if (reason) reason.classList.add('fld-error');
+  }
+
+  if (!workingLines.length) invalid.push('Add at least one line item.');
+
+  document.querySelectorAll('#amend-tbody tr:not(.add-row)').forEach((row, idx) => {
+    const qty = row.querySelector('input[type=number][step="0.001"]');
+    const rate = row.querySelector('input[type=number][step="0.0001"]');
+    const reqDate = row.querySelector('input[placeholder="DD/MM/YYYY"]');
+    const qtyVal = qty ? Number(qty.value) : 0;
+    const rateVal = rate ? Number(rate.value) : 0;
+
+    if (!Number.isFinite(qtyVal) || qtyVal <= 0) {
+      invalid.push('Line ' + (idx + 1) + ': quantity must be greater than zero.');
+      if (qty) qty.classList.add('cell-error');
+    }
+    if (!Number.isFinite(rateVal) || rateVal < 0) {
+      invalid.push('Line ' + (idx + 1) + ': rate cannot be negative.');
+      if (rate) rate.classList.add('cell-error');
+    }
+    if (reqDate && reqDate.value.trim() && !/^\d{2}\/\d{2}\/\d{4}$/.test(reqDate.value.trim())) {
+      invalid.push('Line ' + (idx + 1) + ': required date must use DD/MM/YYYY.');
+      reqDate.classList.add('cell-error');
+    }
+  });
+
+  if (invalid.length) {
+    toast(invalid[0], 'error');
+    return false;
+  }
+  return true;
+}
+
+/* ── FIND PR MODAL ────────────────────────────────────────── */
+function buildFindPRModal() {
+  const tbody = document.getElementById('find-pr-tbody');
+  PR_DATA.filter(pr => pr.status === 'Requested').forEach(pr => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="r" style="font-family:var(--mono);font-weight:700">${pr.prno}</td>
+      <td>${pr.prdate}</td>
+      <td>${pr.deptCode} – ${pr.deptName}</td>
+      <td>${pr.reqCode} – ${pr.reqName}</td>
+      <td>${pr.prtype}</td>
+      <td class="r">${pr.lines}</td>
+      <td class="r">${pr.priorAmends || '<span style="color:#94a3b8">None</span>'}</td>`;
+    tr.onclick    = () => selectPRRow(tr, pr);
+    tr.ondblclick = () => { selectPRRow(tr, pr); confirmFindPR(); };
+    tbody.appendChild(tr);
+  });
+}
+
+function openFindPRModal() {
+  document.getElementById('find-pr-search').value = '';
+  filterModal('find-pr-tbody','');
+  findPRSel = null;
+  const btn = document.getElementById('find-pr-sel-btn');
+  btn.disabled = true;
+  document.querySelectorAll('#find-pr-tbody tr').forEach(r => r.classList.remove('sel'));
+  show('overlay-find-pr', true);
+}
+
+function selectPRRow(tr, pr) {
+  document.querySelectorAll('#find-pr-tbody tr').forEach(r => r.classList.remove('sel'));
+  tr.classList.add('sel');
+  findPRSel = pr;
+  document.getElementById('find-pr-sel-btn').disabled = false;
+}
+
+function confirmFindPR() {
+  if (!findPRSel) return;
+  closeOverlay('overlay-find-pr');
+  loadPR(findPRSel);
+  workingLines = (findPRSel.lineItems || []).map(l => Object.assign({}, l));
+  showGrid(false);
+  toast('PR ' + findPRSel.prno + ' loaded — ' + workingLines.length + ' item(s)', 'success');
+}
+
+/* ── FIND AMENDMENT MODAL ─────────────────────────────────── */
+function buildFindAmendModal() {
+  const tbody = document.getElementById('find-amend-tbody');
+  AMEND_DATA.forEach(a => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-family:var(--mono);font-weight:700">AMD-000${a.amendno}</td>
+      <td class="r" style="font-family:var(--mono)">${a.prno}</td>
+      <td>${a.amenddate}</td>
+      <td>${a.deptCode} – ${a.deptName}</td>
+      <td>${esc(a.amendment)}</td>
+      <td class="r">${a.lineItems.length}</td>`;
+    tr.onclick    = () => selectAmendRow(tr, a);
+    tr.ondblclick = () => { selectAmendRow(tr, a); confirmFindAmend(); };
+    tbody.appendChild(tr);
+  });
+}
+
+function openFindAmendModal() {
+  document.getElementById('find-amend-search').value = '';
+  filterModal('find-amend-tbody','');
+  findAmendSel = null;
+  const btn = document.getElementById('find-amend-sel-btn');
+  btn.disabled = true;
+  document.querySelectorAll('#find-amend-tbody tr').forEach(r => r.classList.remove('sel'));
+  show('overlay-find-amend', true);
+}
+
+function selectAmendRow(tr, a) {
+  document.querySelectorAll('#find-amend-tbody tr').forEach(r => r.classList.remove('sel'));
+  tr.classList.add('sel');
+  findAmendSel = a;
+  document.getElementById('find-amend-sel-btn').disabled = false;
+}
+
+function confirmFindAmend() {
+  if (!findAmendSel) return;
+  closeOverlay('overlay-find-amend');
+  loadAmend(findAmendSel);
+  const isDel  = currentMode === 'delete';
+  const isView = currentMode === 'view';
+  const ro     = isDel || isView;
+  isReadOnly   = ro;
+  if (isDel)       enableDeleteModeFields();
+  else if (!isView) enableModifyModeFields();
+  showGrid(ro);
+  const amdLbl = 'AMD-' + String(findAmendSel.amendno).padStart(4, '0');
+  if (isDel) {
+    document.getElementById('del-amendno-lbl').textContent = amdLbl;
+    show('del-banner', true);
+  }
+  document.getElementById('band-amendno').textContent = amdLbl;
+  updateToolbar();
+  const msg = 'Amendment ' + amdLbl + ' loaded' + (isView ? ' — View Only' : '');
+  toast(msg, isDel ? 'error' : 'info');
+}
+
+/* ── ITEM PICKER ───────────────────────────────────────────── */
+let itemPickerSel = null;
+
+function buildItemPickerModal() {
+  const tbody = document.getElementById('item-picker-tbody');
+  ITEM_CATALOG.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-family:var(--mono);font-weight:700;font-size:12px">${esc(item.code)}</td>
+      <td style="font-size:12px">${esc(item.name)}</td>
+      <td style="text-align:center;font-size:11px;color:var(--text-400)">${esc(item.uom)}</td>
+      <td style="text-align:right;font-family:var(--mono);font-size:12px">${esc(item.curStock)}</td>`;
+    tr.onclick    = () => selectItemRow(tr, item);
+    tr.ondblclick = () => { selectItemRow(tr, item); confirmItemPick(); };
+    tbody.appendChild(tr);
+  });
+}
+
+function openItemPickerModal() {
+  document.getElementById('item-search').value = '';
+  filterModal('item-picker-tbody', '');
+  itemPickerSel = null;
+  document.getElementById('item-sel-btn').disabled = true;
+  document.querySelectorAll('#item-picker-tbody tr').forEach(r => r.classList.remove('sel'));
+  show('overlay-item-picker', true);
+}
+
+function selectItemRow(tr, item) {
+  document.querySelectorAll('#item-picker-tbody tr').forEach(r => r.classList.remove('sel'));
+  tr.classList.add('sel');
+  itemPickerSel = item;
+  document.getElementById('item-sel-btn').disabled = false;
+}
+
+function confirmItemPick() {
+  if (!itemPickerSel) return;
+  syncFromDOM();
+  const nextSno = workingLines.length + 1;
+  workingLines.push({
+    sno: nextSno,
+    code: itemPickerSel.code,
+    name: itemPickerSel.name,
+    uom: itemPickerSel.uom,
+    curStock: itemPickerSel.curStock,
+    qtyReq: '0.000',
+    rate: '0.0000',
+    appCost: '0.00',
+    qtyApproved: '',
+    qtyOrdered: '',
+    qtyReceived: '',
+    reqDate: '',
+    machine: '',
+    costCentre: '',
+    remarks: '',
+    status: 'Requested'
+  });
+  closeOverlay('overlay-item-picker');
+  renderGrid(false);
+  toast('Item ' + itemPickerSel.code + ' added', 'success');
+}
+
+/* ── UTILITIES ─────────────────────────────────────────────── */
+function show(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('hidden', !v);
+}
+
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function closeOverlay(id) { show(id, false); }
+
+function filterModal(tbodyId, q) {
+  q = q.toLowerCase();
+  for (const r of document.getElementById(tbodyId).rows)
+    r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+}
+
+function showConfirm(icon, title, body, btnCls, btnLbl, cb) {
+  document.getElementById('c-icon').textContent  = icon;
+  document.getElementById('c-title').textContent = title;
+  document.getElementById('c-body').innerHTML    = window.SpinRiseProto ? window.SpinRiseProto.sanitizeConfirmHtml(body) : body;
+  const ok = document.getElementById('c-ok');
+  ok.className = btnCls;
+  ok.textContent = btnLbl;
+  confirmCb = cb;
+  show('confirm-overlay', true);
+}
+
+function closeConfirm() { show('confirm-overlay', false); }
+
+document.getElementById('c-ok').addEventListener('click', () => {
+  closeConfirm();
+  if (confirmCb) { confirmCb(); confirmCb = null; }
+});
+
+function toast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type || 'info');
+  t.textContent = msg;
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+/* ── NAVIGATION ─────────────────────────────────────────────── */
+function navigate(target) {
+  const links = {
+    hub          : '../index.html',
+    foreclosure  : '../SPINRISE_FSD_M01_PRForeclosure_v1_1/SPINRISE_FSD_M01_PRForeclosure_v1_1.html',
+    cancellation : '../SPINRISE_FSD_M01_PRCancellationUndo_v1_1/SPINRISE_FSD_M01_PRCancellationUndo_v1_1.html',
+    amendment       : 'SPINRISE_FSD_M01_PRAmendment_v2_3.html',
+    'first-approval'     : '../SPINRISE_FSD_M01_PRFirstLevelApproval_v1_1/SPINRISE_FSD_M01_PRFirstLevelApproval_v1_1.html',
+    PRFinalLevelApproval : '../SPINRISE_FSD_M01_PRFinalLevelApproval_v1_1/SPINRISE_FSD_M01_PRFinalLevelApproval_v1_2.html'
+  };
+  if (links[target]) window.location.href = links[target];
+}
+
+function toggleGroup(childrenId, groupId) {
+  const ch  = document.getElementById(childrenId);
+  const grp = document.getElementById(groupId);
+  const open = ch.classList.contains('open');
+  ch.classList.toggle('open', !open);
+  grp.classList.toggle('open', !open);
+}
+
+function toggleSider() {
+  siderCollapsed = !siderCollapsed;
+  document.getElementById('sider').classList.toggle('collapsed', siderCollapsed);
+  const icon = document.getElementById('toggle-icon');
+  icon.innerHTML = siderCollapsed
+    ? `<line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/><line x1="1" y1="12" x2="15" y2="12"/><polyline points="6,5 3,8 6,11" stroke-width="1.4"/>`
+    : `<line x1="1" y1="4" x2="15" y2="4"/><line x1="1" y1="8" x2="15" y2="8"/><line x1="1" y1="12" x2="15" y2="12"/><polyline points="10,5 13,8 10,11" stroke-width="1.4"/>`;
+}
+
+function toggleUserMenu() {
+  document.getElementById('user-dropdown').classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.hdr-user'))
+    document.getElementById('user-dropdown').classList.remove('open');
+});
+</script>
+<script src="../assets/js/prototype-system.js"></script>
+</body>
+</html>

@@ -2,11 +2,15 @@
 -- ksp_PO_GetPRLines
 -- Returns eligible PR lines for the PO PR Picker (BR-02).
 -- Filter: DirectApp='Y', Fclosed<>'Y', balance qty > 0,
---         prstatus NOT IN ('O','E','C','Z','X'), PR not cancelled.
+--         prstatus NOT IN ('E','C','Z','X'), PR not cancelled.
+-- NOTE: 'O' deliberately excluded from NOT IN — balance > 0 filter handles fully-ordered
+--       lines (balance = 0). Keeping 'O' breaks partial-qty transfer (PR disappears even
+--       with remaining balance). 'E','C','Z','X' still excluded (enquired/cancelled/closed).
 -- Balance = QTYREQD - QTYORD - Enq_Qty
--- PO_PRL has NO GST columns — CgstPer/SgstPer/IgstPer default to 0.
--- User sets tax codes in the GST modal after loading lines.
--- ⚠ VERIFY: IN_ITEM.hsncode column — may differ.
+-- GST columns (CgstPer/SgstPer/IgstPer/GstTaxCode) sourced from IN_ITEM.
+-- SuggestedRate: last ordered rate from PO_ORDL for this item + divCode (0 if none).
+--   Interim until ksp_PO_GetQuotationRate (SP #22, PO_QUOTL) is confirmed by Sasi.
+-- Returns 19 columns.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.ksp_PO_GetPRLines
 (
@@ -25,7 +29,7 @@ BEGIN
     SELECT
         CAST(l.prno AS VARCHAR(20)) + '|' + CAST(l.prsno AS VARCHAR(10)) + '|' + RTRIM(l.itemcode) AS Id,
         l.prno                                                          AS PrNo,
-        CONVERT(varchar(11), CAST(ISNULL(h.prdate, l.prdate) AS DATE), 106) AS PrDate,
+        CONVERT(varchar(10), CAST(ISNULL(h.prdate, l.prdate) AS DATE), 120) AS PrDate,
         l.prsno                                                         AS PrSno,
         RTRIM(l.itemcode)                                               AS ItemCode,
         RTRIM(ISNULL(i.itemname, ''))                                   AS ItemName,
@@ -34,13 +38,25 @@ BEGIN
         RTRIM(ISNULL(d.depname, ''))                                    AS Department,
         RTRIM(ISNULL(scc.SCCNAME, ''))                                  AS SubCostCentre,
         RTRIM(ISNULL(l.remarks, ''))                                    AS Remarks,
-        RTRIM(ISNULL(i.hsncode, ''))                                    AS HsnCode,   -- ⚠ VERIFY: IN_ITEM.hsncode
-        CAST(0 AS DECIMAL(10,2))                                        AS CgstPer,   -- PO_PRL has no GST columns
-        CAST(0 AS DECIMAL(10,2))                                        AS SgstPer,
-        CAST(0 AS DECIMAL(10,2))                                        AS IgstPer,
-        ''                                                              AS GstTaxCode,
+        RTRIM(ISNULL(i.hsncode, ''))                                    AS HsnCode,
+        ISNULL(i.CGST_PER, 0)                                          AS CgstPer,
+        ISNULL(i.SGST_PER, 0)                                          AS SgstPer,
+        ISNULL(i.IGST_PER, 0)                                          AS IgstPer,
+        RTRIM(ISNULL(i.GSTTAXCODE, ''))                                AS GstTaxCode,
         RTRIM(ISNULL(h.REQNAME, ''))                                    AS RequesterId,
-        RTRIM(ISNULL(e.ename, ''))                                      AS RequesterName
+        RTRIM(ISNULL(e.ename, ''))                                      AS RequesterName,
+        ISNULL((
+            SELECT TOP 1 pol.Rate
+            FROM   dbo.PO_ORDL pol
+            INNER JOIN dbo.PO_ORDH poh
+                ON  poh.DIVCODE = pol.DIVCODE
+                AND poh.PORDNO  = pol.PORDNO
+                AND poh.PORDDT  = pol.PORDDT
+            WHERE  pol.DIVCODE  = @DivCode
+              AND  pol.ITEMCODE = l.itemcode
+              AND  pol.Rate     > 0
+            ORDER BY poh.PORDDT DESC
+        ), 0)                                                           AS SuggestedRate
     FROM dbo.PO_PRL l
     INNER JOIN dbo.PO_PRH h
         ON h.divcode = l.divcode AND h.prno = l.prno
@@ -62,14 +78,14 @@ BEGIN
       AND ISNULL(l.FClosed,   'N') <> 'Y'
       AND ISNULL(l.AmdFlg,    '') <> 'Y'
       AND (ISNULL(l.qtyreqd, 0) - ISNULL(l.qtyord, 0) - ISNULL(l.Enq_Qty, 0)) > 0
-      AND RTRIM(ISNULL(l.prstatus, '')) NOT IN ('O','E','C','Z','X')
+      AND RTRIM(ISNULL(l.prstatus, '')) NOT IN ('E','C','Z','X')
       AND ISNULL(h.cancelflag, '') = ''
       AND (@OrderType IS NULL OR RTRIM(ISNULL(h.PO_GRP, '')) = @OrderType)
       AND (@Search IS NULL
            OR RTRIM(l.itemcode) LIKE @Search + '%'
            OR RTRIM(i.itemname) LIKE '%' + @Search + '%'
            OR CAST(l.prno AS VARCHAR(20)) LIKE @Search + '%')
-    ORDER BY h.prdate, l.prno, l.prsno
+    ORDER BY h.prdate DESC, l.prno DESC, l.prsno
     OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
 END;
 GO

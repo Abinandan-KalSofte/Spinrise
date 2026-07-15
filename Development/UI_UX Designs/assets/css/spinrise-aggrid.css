@@ -1,0 +1,121 @@
+/*
+  SpinRise AG Grid Theme
+  Overrides ag-theme-quartz (AG Grid v35 default) to match the React project design.
+  Requires: ag-grid.css + ag-theme-quartz.css loaded from CDN before this file.
+
+  Usage:
+    <div id="grid" class="ag-theme-quartz sr-grid" style="height:100%;width:100%;"></div>
+*/
+
+.ag-theme-quartz.sr-grid {
+  /* Primary / accent */
+  --ag-accent-color:                  #185FA5;
+
+  /* Surfaces */
+  --ag-background-color:              #ffffff;
+  --ag-odd-row-background-color:      #ffffff;
+
+  /* Text */
+  --ag-foreground-color:              #1A1A1A;
+
+  /* Borders */
+  --ag-border-color:                  #E2E2E2;
+  --ag-row-border-color:              #F0F0F0;
+  --ag-wrapper-border-radius:         0;
+
+  /* Header — dark strip matching the React project's dark header */
+  --ag-header-background-color:       #1e293b;
+  --ag-header-foreground-color:       #ffffff;
+  --ag-header-column-separator-color: rgba(255,255,255,.10);
+  --ag-header-column-resize-handle-color: rgba(255,255,255,.25);
+
+  /* Row interaction */
+  --ag-row-hover-color:               #E6F1FB;
+  --ag-selected-row-background-color: #EBF3FF;
+  --ag-range-selection-border-color:  #185FA5;
+
+  /* Controls */
+  --ag-checkbox-checked-color:        #185FA5;
+  --ag-input-focus-border-color:      #185FA5;
+  --ag-input-focus-box-shadow:        0 0 0 2px rgba(24,95,165,.15);
+
+  /* Typography */
+  --ag-font-family:                   'Inter', 'Segoe UI', system-ui, sans-serif;
+  --ag-font-size:                     12px;
+
+  /* Sizing — matches React project Table config */
+  --ag-row-height:                    34px;
+  --ag-header-height:                 34px;
+  --ag-cell-horizontal-padding:       12px;
+  --ag-cell-widget-spacing:           6px;
+
+  /* Sidebar / tool panel */
+  --ag-side-bar-panel-width:          220px;
+}
+
+/* Header text weight */
+.ag-theme-quartz.sr-grid .ag-header-cell-text {
+  font-size:   11px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+/* Sort icon colour in dark header */
+.ag-theme-quartz.sr-grid .ag-header-icon { color: rgba(255,255,255,.6); }
+.ag-theme-quartz.sr-grid .ag-header-cell:hover .ag-header-icon { color: rgba(255,255,255,.9); }
+
+/* Pinned left column shadow */
+.ag-theme-quartz.sr-grid .ag-pinned-left-cols-container {
+  box-shadow: 2px 0 6px rgba(0,0,0,.06);
+}
+
+/* Selected row — override odd/even so selection always visible */
+.ag-theme-quartz.sr-grid .ag-row-selected {
+  background-color: #EBF3FF !important;
+}
+
+/* Cell number helper */
+.ag-theme-quartz.sr-grid .ag-cell.cell-num {
+  text-align: center;
+  color:      #888888;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+/* Cell mono helper */
+.ag-theme-quartz.sr-grid .ag-cell.cell-mono {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-weight: 600;
+}
+
+/* Cell right-align helper */
+.ag-theme-quartz.sr-grid .ag-cell.cell-right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* Remove outer border on grid (the parent .grid-section handles framing) */
+.ag-theme-quartz.sr-grid.ag-root-wrapper {
+  border: none;
+}
+
+/* Pagination bar styling */
+.ag-theme-quartz.sr-grid .ag-paging-panel {
+  height:         36px;
+  border-top:     1px solid #E2E2E2;
+  font-size:      11px;
+  color:          #4A4A4A;
+  padding:        0 12px;
+}
+
+/* Loading overlay */
+.ag-theme-quartz.sr-grid .ag-overlay-loading-center {
+  font-size:   13px;
+  color:       #4A4A4A;
+  font-weight: 500;
+}
+
+/* No-rows overlay */
+.ag-theme-quartz.sr-grid .ag-overlay-no-rows-center {
+  font-size:   13px;
+  color:       #888888;
+}

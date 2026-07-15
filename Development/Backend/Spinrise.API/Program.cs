@@ -29,6 +29,9 @@ using Spinrise.Infrastructure.Areas.PurchaseOrder.FirstLevelApproval;
 using Spinrise.Application.Areas.PurchaseOrder.PoEntry.Interfaces;
 using Spinrise.Application.Areas.PurchaseOrder.PoEntry.Services;
 using Spinrise.Infrastructure.Areas.PurchaseOrder.PoEntry;
+using Spinrise.Application.Areas.PurchaseOrder.PrReport.Interfaces;
+using Spinrise.Application.Areas.PurchaseOrder.PrReport.Services;
+using Spinrise.Infrastructure.Areas.PurchaseOrder.PrReport;
 using Dapper;
 using Spinrise.Infrastructure.Data;
 
@@ -133,6 +136,11 @@ builder.Services.AddScoped<IFinalLevelApprovalService, FinalLevelApprovalService
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IPoEntryRepository, PoEntryRepository>();
 builder.Services.AddScoped<IPoEntryService, PoEntryService>();
+builder.Services.AddScoped<IPrReportRepository, PrReportRepository>();
+builder.Services.AddScoped<IPrReportService, PrReportService>();
+builder.Services.AddScoped<Spinrise.Reports.Areas.PurchaseOrder.Reports.PrItemwisePdfReport>();
+builder.Services.AddScoped<Spinrise.Reports.Areas.PurchaseOrder.Reports.PrDeptWisePdfReport>();
+builder.Services.AddScoped<Spinrise.Reports.Areas.PurchaseOrder.Reports.PrDateWisePdfReport>();
 
 // ══════════════════════════════════════════════════════════════════════════
 var app = builder.Build();

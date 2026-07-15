@@ -51,6 +51,27 @@ public class PoLineDto
     public string  RequesterName { get; set; } = "";
     public string  Route         { get; set; } = "LOCAL";
     public string  DeleteReason  { get; set; } = "";
+    public decimal DiscPer       { get; set; }
+    public decimal DiscAmt       { get; set; }
+    public decimal PackingPer    { get; set; }
+    public decimal PackingAmt    { get; set; }
+    public decimal FreightPer    { get; set; }
+    public decimal FreightAmt    { get; set; }
+    public decimal InsurancePer  { get; set; }
+    public decimal InsuranceAmt  { get; set; }
+    public decimal CessPer       { get; set; }
+    public decimal CessAmt       { get; set; }
+    public string  AddTaxCode    { get; set; } = "";
+    public decimal AddTaxPer     { get; set; }
+    public decimal AddTaxAmt     { get; set; }
+    public decimal FcaFob        { get; set; }
+    public decimal OtherCharges  { get; set; }
+    public string  DiscApp       { get; set; } = "BEFORE";
+    public string  PackApp       { get; set; } = "BEFORE";
+    public string  FreightPos    { get; set; } = "BEFORE";
+    public string  InsuranceDuty { get; set; } = "BEFORE";
+    public string  CessTaxPos    { get; set; } = "BEFORE";
+    public decimal NetAmount     { get; set; }
 }
 
 public class PoHeaderDto
@@ -88,17 +109,24 @@ public class PoHeaderDto
     public decimal AddTaxPer    { get; set; }
     public string  FileNo       { get; set; } = "";
     public decimal FcaFob       { get; set; }
-    public string  FreightType  { get; set; } = "PAID";
-    public string  DiscApp      { get; set; } = "BEFORE";
-    public string  PackApp      { get; set; } = "BEFORE";
-    public string  FreightApp   { get; set; } = "BEFORE";
-    public string  InsurApp     { get; set; } = "BEFORE";
-    public string  CessApp      { get; set; } = "BEFORE";
+    public string  FreightType          { get; set; } = "PAID";
+    public string  DiscApp              { get; set; } = "BEFORE";
+    public string  PackApp              { get; set; } = "BEFORE";
+    public string  FreightPosition      { get; set; } = "BEFORE";
+    public string  InsurancePosition    { get; set; } = "BEFORE";
+    public string  CessPosition         { get; set; } = "BEFORE";
+    // Charge amounts: PackingAmt/InsuranceAmt stored in DB; others derived from % in SP
+    public decimal PackingAmt          { get; set; }
+    public decimal InsuranceAmt        { get; set; }
+    public decimal DiscountAmt         { get; set; }
+    public decimal CessAmt             { get; set; }
+    public decimal AddTaxAmt           { get; set; }
     // Payment
-    public string  PayMode       { get; set; } = "DIRECT";
-    public string  DirectInstr   { get; set; } = "";
-    public string  BankCode      { get; set; } = "";
-    public string  PaymentTerms  { get; set; } = "";
+    public string  PayMode          { get; set; } = "DIRECT";
+    public string  DirectInstr      { get; set; } = "";
+    public string  BankCode         { get; set; } = "";
+    public string  PaymentTerms     { get; set; } = "";
+    public string  PaymentTermCode  { get; set; } = "";
     public decimal AdvPer        { get; set; }
     public decimal AdvAmt        { get; set; }
     public string  ModeOfPayment { get; set; } = "";

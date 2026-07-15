@@ -65,9 +65,9 @@ BEGIN
 
         -- Approver names (FirstappUser has lowercase 'a' in the actual DB column)
         RTRIM(ISNULL(fau.user_name, ISNULL(l.FirstappUser, '')))  AS FirstAppUser,
-        RTRIM(ISNULL(l.SecondAppUser, ''))                  AS SecondAppUser,
-        RTRIM(ISNULL(l.ThirdAppUser,  ''))                  AS ThirdAppUser,
-        RTRIM(ISNULL(l.FinalAppUser,  ''))                  AS FinalAppUser,
+        RTRIM(ISNULL(sau.user_name,  ISNULL(l.SecondAppUser, '')))  AS SecondAppUser,
+        RTRIM(ISNULL(tau.user_name,  ISNULL(l.ThirdAppUser,  '')))  AS ThirdAppUser,
+        RTRIM(ISNULL(fnau.user_name, ISNULL(l.FinalAppUser,  '')))  AS FinalAppUser,
 
         -- Only DirectAppDate exists; APP1/2/3DATE do not exist in this schema
         CASE WHEN l.DirectAppDate IS NOT NULL
@@ -94,6 +94,15 @@ BEGIN
     OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
                  WHERE RTRIM(user_id) = RTRIM(l.FirstappUser)
                    AND RTRIM(divcode) = RTRIM(h.divcode))                 fau
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(l.SecondAppUser)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))                 sau
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(l.ThirdAppUser)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))                 tau
+    OUTER APPLY (SELECT TOP 1 user_name FROM dbo.PP_PASSWD
+                 WHERE RTRIM(user_id) = RTRIM(l.FinalAppUser)
+                   AND RTRIM(divcode) = RTRIM(h.divcode))                 fnau
     LEFT  JOIN dbo.IN_ITEM        i  ON i.itemcode = l.itemcode
     LEFT  JOIN dbo.MM_MACMAS      m  ON m.DIVCODE  = l.divcode
                                     AND m.MAC_NO   = l.macno
